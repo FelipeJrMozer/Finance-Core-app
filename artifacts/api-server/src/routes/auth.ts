@@ -11,7 +11,7 @@ router.post("/auth/login", (req, res) => {
     id: "1",
     name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (l: string) => l.toUpperCase()),
     email,
-    plan: "Pro",
+    plan: "Family",
   };
   return res.json({ user, token: "demo-token" });
 });

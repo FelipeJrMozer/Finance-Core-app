@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       // Demo mode
       if (email && password) {
-        const u: User = { id: '1', name: 'Alex Silva', email, plan: 'Pro' };
+        const u: User = { id: '1', name: 'Alex Silva', email, plan: 'Family' };
         await persistUser(u);
       } else {
         throw new Error('Invalid credentials');
