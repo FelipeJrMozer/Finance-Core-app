@@ -470,6 +470,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const catMapRef = useRef<Record<string, ApiCategory>>({});
   const openingBalancesRef = useRef<Record<string, number>>({});
+  const transactionsRef = useRef<Transaction[]>([]);
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
@@ -551,9 +552,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setNotifications([]);
       setSettings(null);
       catMapRef.current = {};
+      openingBalancesRef.current = {};
+      transactionsRef.current = [];
       setIsLoading(false);
     }
   }, [isAuthenticated, loadAll]);
+
+  // Keep transactionsRef in sync so callbacks can access latest transactions
+  // without stale closures (needed by updateAccount balance sync).
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
@@ -574,6 +583,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       return { ...acc, balance: opening + txNet };
     });
   }, [accounts, transactions]);
+
+  // Recompute card.used from current transactions so adding/removing card expenses
+  // updates the invoice balance instantly (same pattern as computedAccounts).
+  const computedCreditCards = useMemo(() => {
+    const now = new Date();
+    return creditCards.map((card) => {
+      const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+      const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+      const used = transactions
+        .filter((t) => t.accountId === card.accountId && t.type === 'expense' && t.date >= start && t.date <= end)
+        .reduce((s, t) => s + t.amount, 0);
+      return { ...card, used };
+    });
+  }, [creditCards, transactions]);
 
   const totalBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
   const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
@@ -977,7 +1000,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <FinanceContext.Provider value={{
-      transactions, accounts: computedAccounts, creditCards, investments, budgets, goals,
+      transactions, accounts: computedAccounts, creditCards: computedCreditCards, investments, budgets, goals,
       categories, tags, notifications, settings, isLoading,
       addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
