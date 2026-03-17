@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Switch, Alert, TextInput, Platform, Share, ActivityIndicator
+  Switch, Alert, TextInput, Platform, Share, ActivityIndicator, Linking
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +13,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { ACCENT_PRESETS, AccentId } from '@/constants/colors';
+import {
+  getNotificationPermissionStatus,
+  requestNotificationPermissions,
+} from '@/services/NotificationService';
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -140,7 +144,32 @@ export default function SettingsScreen() {
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || '');
+  const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+
+  useEffect(() => {
+    getNotificationPermissionStatus().then(setNotifPermission);
+  }, []);
+
+  const handleNotifToggle = async (key: 'notifyDARF' | 'notifyBudget' | 'notifyWeekly', value: boolean) => {
+    if (value && notifPermission !== 'granted') {
+      const granted = await requestNotificationPermissions();
+      setNotifPermission(granted ? 'granted' : 'denied');
+      if (!granted) {
+        Alert.alert(
+          'Permissão Negada',
+          'Para receber notificações, acesse Configurações do dispositivo e habilite as notificações para o Finance Core.',
+          [
+            { text: 'Agora não', style: 'cancel' },
+            { text: 'Abrir Configurações', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+    }
+    setNotifySetting(key, value);
+    Haptics.selectionAsync();
+  };
 
   const handleSaveName = () => {
     if (nameInput.trim()) {
@@ -375,29 +404,65 @@ export default function SettingsScreen() {
 
         {/* Notifications */}
         <SectionTitle title="Notificações" />
+
+        {/* Permission status banner */}
+        {Platform.OS !== 'web' && notifPermission !== 'granted' && (
+          <Pressable
+            onPress={async () => {
+              if (notifPermission === 'denied') {
+                Linking.openSettings();
+              } else {
+                const granted = await requestNotificationPermissions();
+                setNotifPermission(granted ? 'granted' : 'denied');
+              }
+            }}
+            style={[styles.permBanner, { backgroundColor: notifPermission === 'denied' ? `${colors.danger}12` : `${colors.warning}12`, borderColor: notifPermission === 'denied' ? `${colors.danger}30` : `${colors.warning}30` }]}
+          >
+            <Feather name={notifPermission === 'denied' ? 'bell-off' : 'bell'} size={16} color={notifPermission === 'denied' ? colors.danger : colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permTitle, { color: notifPermission === 'denied' ? colors.danger : colors.warning, fontFamily: 'Inter_600SemiBold' }]}>
+                {notifPermission === 'denied' ? 'Notificações bloqueadas' : 'Permissão necessária'}
+              </Text>
+              <Text style={[styles.permSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                {notifPermission === 'denied'
+                  ? 'Toque para abrir as Configurações do dispositivo'
+                  : 'Toque para habilitar notificações do Finance Core'}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={theme.textTertiary} />
+          </Pressable>
+        )}
+
+        {Platform.OS !== 'web' && notifPermission === 'granted' && (
+          <View style={[styles.permBanner, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}25` }]}>
+            <Feather name="check-circle" size={16} color={colors.primary} />
+            <Text style={[styles.permTitle, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>Notificações habilitadas</Text>
+          </View>
+        )}
+
         <View style={[styles.group, { borderColor: theme.border }]}>
           <ToggleRow
-            icon="bell"
-            label="Alertas de DARF"
-            subtitle="Lembrete antes do vencimento de DARFs"
+            icon="file-text"
+            label="Alertas de DARF e Assinaturas"
+            subtitle="Lembrete 7 e 3 dias antes do vencimento"
             value={notifyDARF}
-            onChange={(v) => setNotifySetting('notifyDARF', v)}
+            onChange={(v) => handleNotifToggle('notifyDARF', v)}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <ToggleRow
             icon="bar-chart-2"
             label="Alertas de Orçamento"
-            subtitle="Avisa quando atingir 80% do limite"
+            subtitle="Avisa ao atingir 80% e 100% do limite mensal"
             value={notifyBudget}
-            onChange={(v) => setNotifySetting('notifyBudget', v)}
+            onChange={(v) => handleNotifToggle('notifyBudget', v)}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <ToggleRow
             icon="calendar"
             label="Resumo Semanal"
-            subtitle="Relatório de gastos toda segunda-feira"
+            subtitle="Relatório de receitas e gastos toda segunda-feira às 9h"
             value={notifyWeekly}
-            onChange={(v) => setNotifySetting('notifyWeekly', v)}
+            onChange={(v) => handleNotifToggle('notifyWeekly', v)}
           />
         </View>
 
@@ -553,4 +618,10 @@ const styles = StyleSheet.create({
   rowSub: { fontSize: 12, marginTop: 2 },
   divider: { height: 1, marginLeft: 62 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
+  permBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 4,
+  },
+  permTitle: { fontSize: 13 },
+  permSub: { fontSize: 11, marginTop: 2 },
 });

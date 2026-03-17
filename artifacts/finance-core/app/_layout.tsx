@@ -17,10 +17,16 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { FinanceProvider } from "@/context/FinanceContext";
+import { useNotifications } from "@/hooks/useNotifications";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+
+function NotificationGate() {
+  useNotifications();
+  return null;
+}
 
 function RootLayoutNav() {
   const { theme, isDark } = useTheme();
@@ -86,6 +92,7 @@ export default function RootLayout() {
               <FinanceProvider>
                 <GestureHandlerRootView style={{ flex: 1 }}>
                   <KeyboardProvider>
+                    <NotificationGate />
                     <RootLayoutNav />
                   </KeyboardProvider>
                 </GestureHandlerRootView>
