@@ -245,6 +245,36 @@ function transformAccount(raw: Record<string, unknown>): Account {
   };
 }
 
+/**
+ * Returns the billing period {start, end} for a given displayMonth ("YYYY-MM") and closingDay.
+ * e.g. closingDay=5, displayMonth="2026-03" → { start:"2026-02-06", end:"2026-03-05" }
+ */
+function getBillingPeriod(closingDay: number, displayMonth: string): { start: string; end: string } {
+  const [y, m] = displayMonth.split('-').map(Number);
+  const endDate = new Date(y, m - 1, closingDay);
+  const startDate = new Date(y, m - 2, closingDay + 1);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(startDate), end: fmt(endDate) };
+}
+
+/**
+ * Returns the display month ("YYYY-MM") for the current open invoice given closingDay and today.
+ * If today > closingDay: the open invoice belongs to NEXT month's label
+ * If today <= closingDay: the open invoice belongs to THIS month's label
+ */
+function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
+  const d = now.getDate();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (d > closingDay) {
+    // after this month's closing → open invoice shows as next month
+    const next = new Date(y, m, 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
 function transformCard(raw: Record<string, unknown>, transactions: Transaction[]): CreditCard {
   const now = new Date();
   const year = now.getFullYear();
@@ -253,8 +283,16 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
   const dueDay = Number(raw.dueDay) || 10;
   const formatDay = (day: number) =>
     `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  // Compute used from the CURRENT OPEN billing cycle, not all-time
+  const openInvoiceMonth = getCurrentInvoiceMonth(closingDay, now);
+  const { start: billingStart, end: billingEnd } = getBillingPeriod(closingDay, openInvoiceMonth);
   const used = transactions
-    .filter((t) => t.accountId === (raw.accountId as string) && t.type === 'expense')
+    .filter((t) => {
+      if (t.accountId !== (raw.accountId as string)) return false;
+      if (t.type !== 'expense') return false;
+      return t.date >= billingStart && t.date <= billingEnd;
+    })
     .reduce((s, t) => s + t.amount, 0);
   return {
     id: raw.id as string,
@@ -702,7 +740,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (!card) return [];
     return transactions.filter((t) => {
       if (t.accountId !== card.accountId) return false;
-      if (month && !t.date.startsWith(month)) return false;
+      if (t.type === 'transfer') return false;
+      if (month) {
+        // Use billing cycle dates instead of calendar month
+        const { start, end } = getBillingPeriod(card.closingDay, month);
+        return t.date >= start && t.date <= end;
+      }
       return true;
     });
   }, [creditCards, transactions]);

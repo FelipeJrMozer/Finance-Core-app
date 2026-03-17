@@ -16,6 +16,7 @@ import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
 type Tab = 'invoice' | 'installments' | 'details';
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const MONTH_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
 function getMonthLabel(ym: string) {
   const [y, m] = ym.split('-');
@@ -26,6 +27,33 @@ function addMonths(ym: string, delta: number) {
   const [y, m] = ym.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Returns billing period {start, end} for the given display month and closing day */
+function getBillingPeriod(closingDay: number, displayMonth: string): { start: string; end: string } {
+  const [y, m] = displayMonth.split('-').map(Number);
+  const endDate = new Date(y, m - 1, closingDay);
+  const startDate = new Date(y, m - 2, closingDay + 1);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { start: fmt(startDate), end: fmt(endDate) };
+}
+
+/** Returns the display month for the current open invoice */
+function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
+  const d = now.getDate();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  if (d > closingDay) {
+    const next = new Date(y, m, 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+function formatBillingDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-');
+  return `${parseInt(d)} ${MONTH_NAMES[parseInt(m) - 1]}`;
 }
 
 export default function CardDetailScreen() {
@@ -61,7 +89,7 @@ export default function CardDetailScreen() {
   );
 
   const invoiceTxs = useMemo(() =>
-    getCardTransactions(id, selectedMonth).filter((t) => !t.isInvoicePayment),
+    getCardTransactions(id, selectedMonth),
     [id, selectedMonth, transactions]
   );
 
@@ -80,7 +108,7 @@ export default function CardDetailScreen() {
   const maxCatAmount = categoryBreakdown[0]?.[1] || 1;
 
   const installmentTxs = useMemo(() =>
-    getCardTransactions(id).filter((t) => (t.installments || 1) > 1 && !t.isInvoicePayment),
+    getCardTransactions(id).filter((t) => (t.installments || 1) > 1),
     [id, transactions]
   );
 
@@ -297,24 +325,34 @@ export default function CardDetailScreen() {
                 </Text>
               </View>
               <View style={[styles.divider, { backgroundColor: theme.border }]} />
+              {/* Billing period */}
               <View style={styles.invoiceRow}>
                 <View style={styles.invoiceInfo}>
                   <Feather name="calendar" size={14} color={theme.textTertiary} />
                   <Text style={[styles.invoiceInfoText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                    Vence dia {dueDateDay}/{selectedMonth.split('-')[1]}
+                    {(() => {
+                      const { start, end } = getBillingPeriod(card.closingDay, selectedMonth);
+                      return `${formatBillingDate(start)} → ${formatBillingDate(end)}`;
+                    })()}
                   </Text>
                 </View>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: invoiceTotal === 0 ? `${colors.success}20` : `${colors.warning}20` }
-                ]}>
-                  <Text style={[
-                    styles.statusText,
-                    { color: invoiceTotal === 0 ? colors.success : colors.warning, fontFamily: 'Inter_500Medium' }
-                  ]}>
-                    {invoiceTotal === 0 ? 'Sem lançamentos' : 'Em aberto'}
+              </View>
+              <View style={[styles.divider, { backgroundColor: theme.border }]} />
+              {/* Due date */}
+              <View style={styles.invoiceRow}>
+                <View style={styles.invoiceInfo}>
+                  <Feather name="clock" size={14} color={theme.textTertiary} />
+                  <Text style={[styles.invoiceInfoText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                    {selectedMonth === currentMonthStr ? `Vence dia ${dueDateDay}` : `Venceu dia ${dueDateDay}/${selectedMonth.split('-')[1]}`}
                   </Text>
                 </View>
+                {invoiceTxs.length === 0 && (
+                  <View style={[styles.statusBadge, { backgroundColor: `${theme.textTertiary}15` }]}>
+                    <Text style={[styles.statusText, { color: theme.textTertiary, fontFamily: 'Inter_500Medium' }]}>
+                      Sem lançamentos
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 

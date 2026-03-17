@@ -90,6 +90,9 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
 - **Credit Card Features** (`app/card/`):
   - `card/[id].tsx` — detail: Fatura, Parcelas, Detalhes tabs
   - Fatura tab: month navigation with **"Aberta"** badge (current month, primary color) or **"Fechada"** badge (past month, gray)
+  - **Billing cycle (ciclo de faturamento)**: Invoice periods use real billing cycles based on `card.closingDay`, NOT calendar months. e.g. closing day 10 → March invoice = Feb 11–Mar 10. Implemented via `getBillingPeriod(closingDay, displayMonth)` and `getCurrentInvoiceMonth(closingDay, now)` helpers in both `FinanceContext.tsx` and `card/[id].tsx`.
+  - `card.used` is computed from the CURRENT OPEN billing cycle only (not all-time expenses)
+  - Invoice summary shows billing period range ("11 Fev → 10 Mar") and due date
   - `card/add.tsx` — add/edit credit card form with live card preview
 - **Account Features** (`app/account/`):
   - `account/add.tsx` — add/edit; `account/[id].tsx` — detail with stats
