@@ -8,7 +8,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
-import { useFinance, ApiCategory } from '@/context/FinanceContext';
+import { useFinance, ApiCategory, CreditCard } from '@/context/FinanceContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { getCategoryInfo } from '@/components/CategoryBadge';
@@ -30,28 +30,42 @@ function getApiCatIcon(cat: ApiCategory): { icon: string; color: string; label: 
 
 export default function AddTransactionScreen() {
   const { theme, colors } = useTheme();
-  const { addTransaction, updateTransaction, addTransfer, transactions, accounts, categories } = useFinance();
+  const { addTransaction, updateTransaction, addTransfer, transactions, accounts, creditCards, categories } = useFinance();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
   const isEdit = !!id;
   const existing = isEdit ? transactions.find((t) => t.id === id) : undefined;
 
+  const activeAccounts = accounts.filter((a) => !a.archived);
+  const activeCards = creditCards;
+
+  // Detect if existing transaction belongs to a credit card
+  const existingCard = useMemo(() => {
+    if (!existing || existing.type !== 'expense') return undefined;
+    return activeCards.find((c) => c.accountId === existing.accountId);
+  }, [existing, activeCards]);
+
   const [type, setType] = useState<'income' | 'expense' | 'transfer'>(
     existing?.type === 'transfer' ? 'transfer' : existing?.type === 'income' ? 'income' : 'expense'
   );
+
+  // Source mode: account or card (only relevant for expense/income)
+  const [sourceMode, setSourceMode] = useState<'account' | 'card'>(existingCard ? 'card' : 'account');
+  const [selectedCardId, setSelectedCardId] = useState<string>(existingCard?.id || '');
+
   const [description, setDescription] = useState(existing?.description || '');
   const [amount, setAmount] = useState(existing ? existing.amount.toFixed(2) : '');
   const [selectedCategoryId, setSelectedCategoryId] = useState(existing?.categoryId || '');
-  const [accountId, setAccountId] = useState(existing?.accountId || accounts[0]?.id || '');
+  const [accountId, setAccountId] = useState(
+    existingCard ? '' : (existing?.accountId || activeAccounts[0]?.id || '')
+  );
   const [toAccountId, setToAccountId] = useState(existing?.toAccountId || '');
   const [date, setDate] = useState(existing?.date || new Date().toISOString().split('T')[0]);
   const [installments, setInstallments] = useState(existing?.installments?.toString() || '1');
   const [recurring, setRecurring] = useState(existing?.recurring || false);
   const [notes, setNotes] = useState(existing?.notes || '');
   const [loading, setLoading] = useState(false);
-
-  const activeAccounts = accounts.filter((a) => !a.archived);
 
   const apiCatsFiltered = useMemo(() => {
     return categories.filter((c) => !c.archived && (type === 'income' ? c.type === 'income' : c.type === 'expense'));
@@ -69,6 +83,27 @@ export default function AddTransactionScreen() {
     }
   }, [accountId]);
 
+  // When switching source mode, reset selection
+  const handleSetSourceMode = (mode: 'account' | 'card') => {
+    setSourceMode(mode);
+    if (mode === 'account') {
+      setSelectedCardId('');
+      if (!accountId) setAccountId(activeAccounts[0]?.id || '');
+    } else {
+      setAccountId('');
+      if (!selectedCardId) setSelectedCardId(activeCards[0]?.id || '');
+    }
+    Haptics.selectionAsync();
+  };
+
+  const resolvedAccountId = (): string => {
+    if (sourceMode === 'card') {
+      const card = activeCards.find((c) => c.id === selectedCardId);
+      return card?.accountId || '';
+    }
+    return accountId;
+  };
+
   const handleSave = async () => {
     if (!description.trim()) { Alert.alert('Atenção', 'Adicione uma descrição'); return; }
     const amountNum = parseFloat(amount.replace(',', '.'));
@@ -81,19 +116,26 @@ export default function AddTransactionScreen() {
           Alert.alert('Atenção', 'Selecione contas diferentes'); return;
         }
         if (isEdit) {
-          await updateTransaction(id!, { description: description.trim(), amount: amountNum, accountId, toAccountId, date, notes: notes.trim() || undefined });
+          await updateTransaction(id!, {
+            description: description.trim(), amount: amountNum,
+            accountId, toAccountId, date, notes: notes.trim() || undefined,
+          });
         } else {
           await addTransfer(accountId, toAccountId, amountNum, description.trim(), date);
         }
       } else {
+        const effAccountId = resolvedAccountId();
+        if (!effAccountId) { Alert.alert('Atenção', 'Selecione uma conta ou cartão'); return; }
         const selectedCat = categories.find((c) => c.id === selectedCategoryId);
         const txData = {
           description: description.trim(),
           amount: amountNum,
           type: type as 'income' | 'expense',
-          category: selectedCat ? (selectedCat.type === 'income' ? 'income' : selectedCat.name.toLowerCase()) : (type === 'income' ? 'income' : 'other'),
+          category: selectedCat
+            ? (selectedCat.type === 'income' ? 'income' : selectedCat.name.toLowerCase())
+            : (type === 'income' ? 'income' : 'other'),
           categoryId: selectedCategoryId || undefined,
-          accountId,
+          accountId: effAccountId,
           date,
           installments: parseInt(installments) || 1,
           recurring,
@@ -120,7 +162,12 @@ export default function AddTransactionScreen() {
   }) => (
     <Pressable
       testID={`type-${value}`}
-      onPress={() => { setType(value); setSelectedCategoryId(''); Haptics.selectionAsync(); }}
+      onPress={() => {
+        setType(value);
+        setSelectedCategoryId('');
+        if (value === 'transfer') setSourceMode('account');
+        Haptics.selectionAsync();
+      }}
       style={[styles.typeOption, type === value && { backgroundColor: activeColor, borderRadius: 10 }]}
     >
       <Feather name={icon as any} size={15} color={type === value ? '#000' : theme.textSecondary} />
@@ -129,6 +176,24 @@ export default function AddTransactionScreen() {
       </Text>
     </Pressable>
   );
+
+  const CardChip = ({ card }: { card: CreditCard }) => {
+    const selected = selectedCardId === card.id;
+    return (
+      <Pressable
+        onPress={() => { setSelectedCardId(card.id); Haptics.selectionAsync(); }}
+        style={[styles.chip, {
+          backgroundColor: selected ? `${card.color}20` : theme.surfaceElevated,
+          borderColor: selected ? card.color : theme.border,
+        }]}
+      >
+        <Feather name="credit-card" size={13} color={selected ? card.color : theme.textTertiary} />
+        <Text style={[styles.chipText, { color: selected ? card.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+          {card.name}
+        </Text>
+      </Pressable>
+    );
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -139,6 +204,7 @@ export default function AddTransactionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Type selector */}
         <View style={[styles.typeToggle, { backgroundColor: theme.surfaceElevated }]}>
           <Tab value="expense" label="Despesa" icon="arrow-down-circle" activeColor={colors.danger} />
           <Tab value="income" label="Receita" icon="arrow-up-circle" activeColor={colors.primary} />
@@ -153,6 +219,7 @@ export default function AddTransactionScreen() {
 
         <Input label="Data" value={date} onChangeText={setDate} placeholder="AAAA-MM-DD" icon="calendar" />
 
+        {/* Transfer: account pickers */}
         {type === 'transfer' && (
           <>
             <View style={styles.field}>
@@ -160,9 +227,14 @@ export default function AddTransactionScreen() {
               <View style={styles.chipRow}>
                 {activeAccounts.map((acc) => (
                   <Pressable key={acc.id} onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
-                    style={[styles.chip, { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }]}>
+                    style={[styles.chip, {
+                      backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated,
+                      borderColor: accountId === acc.id ? acc.color : theme.border,
+                    }]}>
                     <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                    <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
+                    <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                      {acc.name}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
@@ -179,9 +251,15 @@ export default function AddTransactionScreen() {
               <View style={styles.chipRow}>
                 {activeAccounts.map((acc) => (
                   <Pressable key={acc.id} onPress={() => { setToAccountId(acc.id); Haptics.selectionAsync(); }}
-                    style={[styles.chip, { backgroundColor: toAccountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: toAccountId === acc.id ? acc.color : theme.border, opacity: acc.id === accountId ? 0.35 : 1 }]}>
+                    style={[styles.chip, {
+                      backgroundColor: toAccountId === acc.id ? `${acc.color}20` : theme.surfaceElevated,
+                      borderColor: toAccountId === acc.id ? acc.color : theme.border,
+                      opacity: acc.id === accountId ? 0.35 : 1,
+                    }]}>
                     <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                    <Text style={[styles.chipText, { color: toAccountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
+                    <Text style={[styles.chipText, { color: toAccountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                      {acc.name}
+                    </Text>
                   </Pressable>
                 ))}
               </View>
@@ -189,6 +267,7 @@ export default function AddTransactionScreen() {
           </>
         )}
 
+        {/* Non-transfer: category + source (account or card) */}
         {type !== 'transfer' && (
           <>
             {apiCatsFiltered.length > 0 && (
@@ -202,9 +281,15 @@ export default function AddTransactionScreen() {
                       return (
                         <Pressable key={cat.id} testID={`cat-${cat.id}`}
                           onPress={() => { setSelectedCategoryId(cat.id); Haptics.selectionAsync(); }}
-                          style={[styles.chip, { backgroundColor: selected ? `${info.color}25` : theme.surfaceElevated, borderColor: selected ? info.color : theme.border }]}>
+                          style={[styles.chip, {
+                            backgroundColor: selected ? `${info.color}25` : theme.surfaceElevated,
+                            borderColor: selected ? info.color : theme.border,
+                          }]}>
                           <Feather name={info.icon as any} size={13} color={selected ? info.color : theme.textTertiary} />
-                          <Text style={[styles.chipText, { color: selected ? info.color : theme.textSecondary, fontFamily: selected ? 'Inter_500Medium' : 'Inter_400Regular' }]}>
+                          <Text style={[styles.chipText, {
+                            color: selected ? info.color : theme.textSecondary,
+                            fontFamily: selected ? 'Inter_500Medium' : 'Inter_400Regular',
+                          }]}>
                             {info.label}
                           </Text>
                         </Pressable>
@@ -215,20 +300,78 @@ export default function AddTransactionScreen() {
               </View>
             )}
 
-            {activeAccounts.length > 0 && (
-              <View style={styles.field}>
-                <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Conta</Text>
+            {/* Source section: Conta vs Cartão */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                {type === 'income' ? 'Conta de destino' : 'Origem do pagamento'}
+              </Text>
+
+              {/* Only show card tab for expenses */}
+              {type === 'expense' && activeCards.length > 0 && (
+                <View style={[styles.sourceModeRow, { backgroundColor: theme.surfaceElevated }]}>
+                  <Pressable
+                    onPress={() => handleSetSourceMode('account')}
+                    style={[
+                      styles.sourceModeTab,
+                      sourceMode === 'account' && { backgroundColor: theme.surface, borderRadius: 8 },
+                    ]}
+                  >
+                    <Feather name="layers" size={14} color={sourceMode === 'account' ? colors.primary : theme.textTertiary} />
+                    <Text style={[styles.sourceModeText, {
+                      color: sourceMode === 'account' ? colors.primary : theme.textTertiary,
+                      fontFamily: sourceMode === 'account' ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                    }]}>
+                      Conta
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleSetSourceMode('card')}
+                    style={[
+                      styles.sourceModeTab,
+                      sourceMode === 'card' && { backgroundColor: theme.surface, borderRadius: 8 },
+                    ]}
+                  >
+                    <Feather name="credit-card" size={14} color={sourceMode === 'card' ? colors.primary : theme.textTertiary} />
+                    <Text style={[styles.sourceModeText, {
+                      color: sourceMode === 'card' ? colors.primary : theme.textTertiary,
+                      fontFamily: sourceMode === 'card' ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                    }]}>
+                      Cartão
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Account chips */}
+              {sourceMode === 'account' && activeAccounts.length > 0 && (
                 <View style={styles.chipRow}>
                   {activeAccounts.map((acc) => (
                     <Pressable key={acc.id} onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
-                      style={[styles.chip, { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }]}>
+                      style={[styles.chip, {
+                        backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated,
+                        borderColor: accountId === acc.id ? acc.color : theme.border,
+                      }]}>
                       <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                      <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
+                      <Text style={[styles.chipText, {
+                        color: accountId === acc.id ? acc.color : theme.textSecondary,
+                        fontFamily: 'Inter_500Medium',
+                      }]}>
+                        {acc.name}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
-              </View>
-            )}
+              )}
+
+              {/* Card chips */}
+              {sourceMode === 'card' && activeCards.length > 0 && (
+                <View style={styles.chipRow}>
+                  {activeCards.map((card) => (
+                    <CardChip key={card.id} card={card} />
+                  ))}
+                </View>
+              )}
+            </View>
 
             {type === 'expense' && (
               <Input label="Parcelas" value={installments} onChangeText={setInstallments}
@@ -282,6 +425,9 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 13 },
+  sourceModeRow: { flexDirection: 'row', borderRadius: 10, padding: 3, gap: 2 },
+  sourceModeTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 },
+  sourceModeText: { fontSize: 13 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 12, borderWidth: 1 },
   toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   toggleLabel: { fontSize: 15 },

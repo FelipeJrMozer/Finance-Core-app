@@ -631,6 +631,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         type: t.type,
         date: t.date,
         accountId: t.accountId,
+        toAccountId: t.toAccountId,
         categoryId: t.categoryId,
         notes: t.notes,
         tags: t.tags,

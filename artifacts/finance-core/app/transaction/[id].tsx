@@ -14,7 +14,7 @@ import { formatBRL, formatDate } from '@/utils/formatters';
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme, colors, maskValue } = useTheme();
-  const { transactions, deleteTransaction, advanceInstallment, accounts } = useFinance();
+  const { transactions, deleteTransaction, advanceInstallment, accounts, creditCards } = useFinance();
   const insets = useSafeAreaInsets();
 
   const transaction = transactions.find((t) => t.id === id);
@@ -32,6 +32,11 @@ export default function TransactionDetailScreen() {
   const isIncome = transaction.type === 'income';
   const isTransfer = transaction.type === 'transfer';
   const isInstallment = (transaction.installments || 1) > 1;
+
+  // Check if this expense belongs to a credit card
+  const linkedCard = !isTransfer && transaction.type === 'expense'
+    ? creditCards.find((c) => c.accountId === transaction.accountId)
+    : undefined;
 
   const gradientColors = isTransfer
     ? [colors.info || '#2196F3', '#1565C0']
@@ -66,9 +71,13 @@ export default function TransactionDetailScreen() {
     ]);
   };
 
+  const sourceLabel = isTransfer ? 'Conta de origem' : linkedCard ? 'Cartão' : 'Conta';
+  const sourceValue = linkedCard ? linkedCard.name : (account?.name || 'N/A');
+  const sourceIcon = linkedCard ? 'credit-card' as const : 'layers' as const;
+
   const rows = [
     { label: 'Data', value: formatDate(transaction.date), icon: 'calendar' as const },
-    { label: isTransfer ? 'Conta de origem' : 'Conta', value: account?.name || 'N/A', icon: 'credit-card' as const },
+    { label: sourceLabel, value: sourceValue, icon: sourceIcon },
     ...(isTransfer && toAccount ? [{ label: 'Conta de destino', value: toAccount.name, icon: 'arrow-right-circle' as const }] : []),
     ...(!isTransfer ? [{ label: 'Categoria', value: info.label, icon: 'tag' as const }] : []),
     ...(isInstallment ? [{ label: 'Parcelas', value: `${transaction.currentInstallment || '?'}/${transaction.installments}x de ${maskValue(formatBRL(transaction.amount))}`, icon: 'layers' as const }] : []),
