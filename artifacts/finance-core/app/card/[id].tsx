@@ -31,7 +31,7 @@ function addMonths(ym: string, delta: number) {
 export default function CardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme, colors, maskValue } = useTheme();
-  const { creditCards, accounts, transactions, addCardExpense, payCardInvoice, deleteCreditCard, advanceInstallment, getCardTransactions } = useFinance();
+  const { creditCards, accounts, transactions, addCardExpense, payCardInvoice, deleteCreditCard, deleteTransaction, advanceInstallment, getCardTransactions } = useFinance();
   const insets = useSafeAreaInsets();
 
   const now = new Date();
@@ -341,8 +341,50 @@ export default function CardDetailScreen() {
                 </Text>
                 {invoiceTxs.map((tx) => {
                   const info = getCategoryInfo(tx.category);
+                  const isInstallment = (tx.installments || 1) > 1;
+
+                  const handleTxAction = () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    const opts: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [
+                      { text: 'Cancelar', style: 'cancel' },
+                      {
+                        text: 'Editar',
+                        onPress: () => router.push({ pathname: '/transaction/add', params: { id: tx.id } }),
+                      },
+                    ];
+                    if (isInstallment) {
+                      opts.push({
+                        text: 'Adiantar para este mês',
+                        onPress: () => {
+                          Alert.alert('Adiantar parcela', `Mover "${tx.description}" para o mês atual?`, [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'Adiantar', onPress: () => { advanceInstallment(tx.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } },
+                          ]);
+                        },
+                      });
+                    }
+                    opts.push({
+                      text: 'Excluir',
+                      style: 'destructive',
+                      onPress: () => {
+                        Alert.alert('Excluir lançamento', `Excluir "${tx.description}" da fatura?`, [
+                          { text: 'Cancelar', style: 'cancel' },
+                          { text: 'Excluir', style: 'destructive', onPress: () => { deleteTransaction(tx.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } },
+                        ]);
+                      },
+                    });
+                    Alert.alert(tx.description, 'Escolha uma ação', opts);
+                  };
+
                   return (
-                    <View key={tx.id} style={[styles.txItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <Pressable
+                      key={tx.id}
+                      onPress={handleTxAction}
+                      style={({ pressed }) => [
+                        styles.txItem,
+                        { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
+                      ]}
+                    >
                       <View style={[styles.txIcon, { backgroundColor: `${info.color}20` }]}>
                         <Feather name={info.icon as any} size={16} color={info.color} />
                       </View>
@@ -352,14 +394,17 @@ export default function CardDetailScreen() {
                         </Text>
                         <Text style={[styles.txMeta, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
                           {formatDate(tx.date)}
-                          {(tx.installments || 1) > 1 ? ` • ${tx.currentInstallment || 1}/${tx.installments}x` : ''}
+                          {isInstallment ? ` • ${tx.currentInstallment || 1}/${tx.installments}x` : ''}
                           {tx.recurring ? ' • Recorrente' : ''}
                         </Text>
                       </View>
-                      <Text style={[styles.txAmt, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
-                        -{maskValue(formatBRL(tx.amount))}
-                      </Text>
-                    </View>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <Text style={[styles.txAmt, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
+                          -{maskValue(formatBRL(tx.amount))}
+                        </Text>
+                        <Feather name="more-horizontal" size={12} color={theme.textTertiary} />
+                      </View>
+                    </Pressable>
                   );
                 })}
               </View>

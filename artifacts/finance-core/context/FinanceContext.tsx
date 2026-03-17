@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type TransactionType = 'income' | 'expense';
+export type TransactionType = 'income' | 'expense' | 'transfer';
 export type AccountType = 'checking' | 'savings' | 'investment' | 'credit';
 
 export interface Transaction {
@@ -18,7 +18,9 @@ export interface Transaction {
   receiptUri?: string;
   tags?: string[];
   cardId?: string;
+  toAccountId?: string;
   isInvoicePayment?: boolean;
+  notes?: string;
 }
 
 export interface Account {
@@ -91,6 +93,7 @@ interface FinanceContextType {
   addTransaction: (t: Omit<Transaction, 'id'>) => void;
   updateTransaction: (id: string, t: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
+  addTransfer: (fromAccountId: string, toAccountId: string, amount: number, description: string, date: string) => void;
   addAccount: (a: Omit<Account, 'id'>) => void;
   updateAccount: (id: string, a: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
@@ -291,6 +294,33 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setTransactions((prev) => {
       const next = prev.filter((item) => item.id !== id);
       save(KEYS.transactions, next);
+      return next;
+    });
+  }, []);
+
+  const addTransfer = useCallback((fromAccountId: string, toAccountId: string, amount: number, description: string, date: string) => {
+    const newT: Transaction = {
+      id: uid(),
+      description,
+      amount,
+      type: 'transfer',
+      category: 'transfer',
+      accountId: fromAccountId,
+      toAccountId,
+      date,
+    };
+    setTransactions((prev) => {
+      const next = [newT, ...prev];
+      save(KEYS.transactions, next);
+      return next;
+    });
+    setAccounts((prev) => {
+      const next = prev.map((acc) => {
+        if (acc.id === fromAccountId) return { ...acc, balance: acc.balance - amount };
+        if (acc.id === toAccountId) return { ...acc, balance: acc.balance + amount };
+        return acc;
+      });
+      save(KEYS.accounts, next);
       return next;
     });
   }, []);
@@ -509,7 +539,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   return (
     <FinanceContext.Provider value={{
       transactions, accounts, creditCards, investments, budgets, goals, darfs,
-      addTransaction, updateTransaction, deleteTransaction,
+      addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
       addCreditCard, updateCreditCard, deleteCreditCard,
       addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
