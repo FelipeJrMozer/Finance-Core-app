@@ -224,6 +224,13 @@ export default function MoreScreen() {
             badgeColor={pendingCount > 0 ? colors.warning : undefined}
             onPress={() => router.push('/(more)/pending-transactions')}
           />
+          <MenuItem
+            testID="menu-notification-access"
+            icon="shield"
+            label="Acesso a Notificações e SMS"
+            subtitle="Ative a leitura automática de notificações bancárias"
+            onPress={() => router.push('/(more)/notification-access')}
+          />
         </View>
 
         {/* Budgets Quick View */}

@@ -18,6 +18,8 @@ import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { FinanceProvider } from "@/context/FinanceContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useTransactionIntent } from "@/hooks/useTransactionIntent";
+import { QuickTransactionModal } from "@/components/QuickTransactionModal";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,8 +30,18 @@ function NotificationGate() {
   return null;
 }
 
+function TransactionIntentGate() {
+  const { intent, clearIntent } = useTransactionIntent();
+  return (
+    <QuickTransactionModal
+      intent={intent}
+      onDismiss={clearIntent}
+    />
+  );
+}
+
 function RootLayoutNav() {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
@@ -41,29 +53,32 @@ function RootLayoutNav() {
   }, [isAuthenticated, isLoading]);
 
   return (
-    <Stack screenOptions={{
-      headerBackTitle: "Voltar",
-      headerStyle: { backgroundColor: theme.background },
-      headerTintColor: theme.text,
-      headerShadowVisible: false,
-      contentStyle: { backgroundColor: theme.background },
-    }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="transaction/[id]" options={{ title: 'Transação', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação', presentation: 'formSheet', sheetAllowedDetents: [0.9, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="account/[id]" options={{ title: 'Conta' }} />
-      <Stack.Screen name="account/add" options={{ title: 'Nova Conta', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="investment/[id]" options={{ title: 'Ativo' }} />
-      <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
-      <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
-      <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
-      <Stack.Screen name="family/member" options={{ title: 'Membro', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
-      <Stack.Screen name="subscription/add" options={{ title: 'Assinatura', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
-    </Stack>
+    <>
+      <TransactionIntentGate />
+      <Stack screenOptions={{
+        headerBackTitle: "Voltar",
+        headerStyle: { backgroundColor: theme.background },
+        headerTintColor: theme.text,
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: theme.background },
+      }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="transaction/[id]" options={{ title: 'Transação', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação', presentation: 'formSheet', sheetAllowedDetents: [0.9, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="account/[id]" options={{ title: 'Conta' }} />
+        <Stack.Screen name="account/add" options={{ title: 'Nova Conta', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="investment/[id]" options={{ title: 'Ativo' }} />
+        <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
+        <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
+        <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
+        <Stack.Screen name="family/member" options={{ title: 'Membro', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="subscription/add" options={{ title: 'Assinatura', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
+      </Stack>
+    </>
   );
 }
 

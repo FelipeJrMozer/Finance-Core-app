@@ -21,6 +21,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="family" options={{ title: 'Módulo Familiar' }} />
       <Stack.Screen name="bank-notifications" options={{ title: 'Central de Notificações Bancárias' }} />
       <Stack.Screen name="pending-transactions" options={{ title: 'Aprovações Pendentes' }} />
+      <Stack.Screen name="notification-access" options={{ title: 'Acesso a Notificações' }} />
     </Stack>
   );
 }
