@@ -79,20 +79,9 @@ export default function AccountDetailScreen() {
       </View>
 
       <View style={{ padding: 16, gap: 12 }}>
-        <View style={styles.txHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-            Últimas transações
-          </Text>
-          <Pressable
-            onPress={() => router.push({ pathname: '/account/add', params: { id: account.id } })}
-            style={[styles.editTextBtn, { borderColor: theme.border }]}
-          >
-            <Feather name="settings" size={13} color={colors.primary} />
-            <Text style={[styles.editTextBtnLabel, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
-              Editar conta
-            </Text>
-          </Pressable>
-        </View>
+        <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+          Últimas transações
+        </Text>
         {accountTx.map((t) => (
           <TransactionItem key={t.id} transaction={t} />
         ))}
@@ -122,10 +111,7 @@ const styles = StyleSheet.create({
   statDivider: { width: 1 },
   statLabel: { fontSize: 11 },
   statValue: { fontSize: 15 },
-  txHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 16 },
-  editTextBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  editTextBtnLabel: { fontSize: 12 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { fontSize: 15 },
 });
