@@ -15,7 +15,7 @@ interface TransactionItemProps {
 }
 
 export function TransactionItem({ transaction, onPress, testID }: TransactionItemProps) {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const isIncome = transaction.type === 'income';
 
   return (
@@ -63,7 +63,7 @@ export function TransactionItem({ transaction, onPress, testID }: TransactionIte
           fontFamily: 'Inter_700Bold',
         }
       ]}>
-        {isIncome ? '+' : '-'}{formatBRL(transaction.amount)}
+        {isIncome ? '+' : '-'}{maskValue(formatBRL(transaction.amount))}
       </Text>
     </Pressable>
   );

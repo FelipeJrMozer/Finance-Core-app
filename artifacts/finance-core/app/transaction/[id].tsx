@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { formatBRL, formatDate } from '@/utils/formatters';
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions, deleteTransaction, accounts } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -55,7 +55,7 @@ export default function TransactionDetailScreen() {
       >
         <CategoryBadge category={transaction.category} size="md" />
         <Text style={[styles.heroAmount, { fontFamily: 'Inter_700Bold' }]}>
-          {isIncome ? '+' : '-'}{formatBRL(transaction.amount)}
+          {isIncome ? '+' : '-'}{maskValue(formatBRL(transaction.amount))}
         </Text>
         <Text style={[styles.heroDesc, { fontFamily: 'Inter_500Medium' }]}>
           {transaction.description}
@@ -74,7 +74,7 @@ export default function TransactionDetailScreen() {
           { label: 'Conta', value: account?.name || 'N/A', icon: 'credit-card' as const },
           { label: 'Categoria', value: info.label, icon: 'tag' as const },
           ...(transaction.installments && transaction.installments > 1 ? [
-            { label: 'Parcelas', value: `${transaction.installments}x de ${formatBRL(transaction.amount / transaction.installments)}`, icon: 'layers' as const }
+            { label: 'Parcelas', value: `${transaction.installments}x de ${maskValue(formatBRL(transaction.amount / transaction.installments))}`, icon: 'layers' as const }
           ] : []),
           ...(transaction.recurring ? [
             { label: 'Recorrência', value: 'Mensal', icon: 'repeat' as const }

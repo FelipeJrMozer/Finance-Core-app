@@ -72,7 +72,7 @@ function SimpleBarChart({ data }: { data: { label: string; income: number; expen
 }
 
 function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
-  const { theme } = useTheme();
+  const { theme, maskValue } = useTheme();
   const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
@@ -89,7 +89,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
             {((item.value / total) * 100).toFixed(1)}%
           </Text>
           <Text style={[styles.donutAmount, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-            {formatBRL(item.value)}
+            {maskValue(formatBRL(item.value))}
           </Text>
         </View>
       ))}
@@ -98,13 +98,12 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
 }
 
 export default function ReportsScreen() {
-  const { theme, colors, isDark } = useTheme();
+  const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
-  // Build last 6 months data
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
@@ -123,7 +122,6 @@ export default function ReportsScreen() {
   const totalIncome = currentMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = currentMonthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
-  // Category breakdown
   const categoryData = Object.keys(CATEGORIES)
     .filter((cat) => cat !== 'income')
     .map((cat) => {
@@ -150,12 +148,23 @@ export default function ReportsScreen() {
         colors={isDark ? ['#0A0A0F', '#0D1A14'] : ['#F0FFF4', '#F5F7FA']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
-        <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-          Relatórios
-        </Text>
-        <Text style={[styles.period, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-          {getMonthName(currentMonth)} • Resumo do mês
-        </Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+              Relatórios
+            </Text>
+            <Text style={[styles.period, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+              {getMonthName(currentMonth)} • Resumo do mês
+            </Text>
+          </View>
+          <Pressable
+            testID="toggle-values"
+            onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+          >
+            <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
+          </Pressable>
+        </View>
       </LinearGradient>
 
       <View style={styles.content}>
@@ -169,7 +178,7 @@ export default function ReportsScreen() {
               (+) Receitas
             </Text>
             <Text style={[styles.dreValue, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
-              {formatBRL(totalIncome)}
+              {maskValue(formatBRL(totalIncome))}
             </Text>
           </View>
           <View style={styles.dreRow}>
@@ -177,7 +186,7 @@ export default function ReportsScreen() {
               (-) Despesas
             </Text>
             <Text style={[styles.dreValue, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
-              {formatBRL(totalExpense)}
+              {maskValue(formatBRL(totalExpense))}
             </Text>
           </View>
           <View style={[styles.dreDivider, { backgroundColor: theme.border }]} />
@@ -192,7 +201,7 @@ export default function ReportsScreen() {
                 fontFamily: 'Inter_700Bold'
               }
             ]}>
-              {formatBRL(totalIncome - totalExpense)}
+              {maskValue(formatBRL(totalIncome - totalExpense))}
             </Text>
           </View>
           {totalIncome > 0 && (
@@ -239,9 +248,9 @@ export default function ReportsScreen() {
             return (
               <View key={idx} style={[styles.tableRow, idx % 2 === 0 && { backgroundColor: theme.surfaceElevated }]}>
                 <Text style={[styles.td, { color: theme.text, flex: 1.5, fontFamily: 'Inter_500Medium' }]}>{d.label}</Text>
-                <Text style={[styles.td, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>{formatBRL(d.income, true)}</Text>
-                <Text style={[styles.td, { color: colors.danger, fontFamily: 'Inter_400Regular' }]}>{formatBRL(d.expense, true)}</Text>
-                <Text style={[styles.td, { color: net >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_500Medium' }]}>{formatBRL(net, true)}</Text>
+                <Text style={[styles.td, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>{maskValue(formatBRL(d.income, true))}</Text>
+                <Text style={[styles.td, { color: colors.danger, fontFamily: 'Inter_400Regular' }]}>{maskValue(formatBRL(d.expense, true))}</Text>
+                <Text style={[styles.td, { color: net >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_500Medium' }]}>{maskValue(formatBRL(net, true))}</Text>
               </View>
             );
           })}
@@ -253,8 +262,10 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 4 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   screenTitle: { fontSize: 26 },
-  period: { fontSize: 14 },
+  period: { fontSize: 14, marginTop: 2 },
+  eyeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginTop: 4 },
   content: { padding: 16, gap: 16 },
   section: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
   sectionTitle: { fontSize: 16 },

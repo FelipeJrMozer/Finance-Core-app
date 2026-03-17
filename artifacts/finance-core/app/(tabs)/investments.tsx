@@ -19,7 +19,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 function InvestmentCard({ investment, onPress }: { investment: Investment; onPress: () => void }) {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const invested = investment.quantity * investment.avgPrice;
   const current = investment.quantity * investment.currentPrice;
   const profit = current - invested;
@@ -36,7 +36,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
     >
       <View style={[styles.investCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <View style={[styles.typeTag, { backgroundColor: `${typeColor}20` }]}>
-          <Text style={[styles.typeText, { color: typeColor, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.typeTagText, { color: typeColor, fontFamily: 'Inter_600SemiBold' }]}>
             {TYPE_LABELS[investment.type]}
           </Text>
         </View>
@@ -51,7 +51,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={[styles.currentValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(current)}
+              {maskValue(formatBRL(current))}
             </Text>
             <View style={[
               styles.pctBadge,
@@ -76,7 +76,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
           <View>
             <Text style={[styles.metaLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Investido</Text>
             <Text style={[styles.metaValue, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-              {formatBRL(invested)}
+              {maskValue(formatBRL(invested))}
             </Text>
           </View>
           <View>
@@ -90,7 +90,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
               {profit >= 0 ? 'Lucro' : 'Perda'}
             </Text>
             <Text style={[styles.metaValue, { color: profit >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
-              {formatBRL(profit)}
+              {maskValue(formatBRL(profit))}
             </Text>
           </View>
         </View>
@@ -100,7 +100,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
 }
 
 export default function InvestmentsScreen() {
-  const { theme, colors, isDark } = useTheme();
+  const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { investments, isLoading } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -133,13 +133,22 @@ export default function InvestmentsScreen() {
             <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
               Carteira
             </Text>
-            <Pressable
-              testID="add-investment"
-              onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}
-              style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            >
-              <Feather name="plus" size={20} color="#000" />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                testID="toggle-values"
+                onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+              >
+                <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                testID="add-investment"
+                onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}
+                style={[styles.addBtn, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="plus" size={20} color="#000" />
+              </Pressable>
+            </View>
           </View>
 
           {/* Portfolio Card */}
@@ -149,13 +158,13 @@ export default function InvestmentsScreen() {
           >
             <Text style={[styles.portfolioLabel, { fontFamily: 'Inter_400Regular' }]}>Valor atual</Text>
             <Text style={[styles.portfolioValue, { fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(totalCurrent)}
+              {maskValue(formatBRL(totalCurrent))}
             </Text>
             <View style={styles.portfolioStats}>
               <View>
                 <Text style={[styles.portfolioMeta, { fontFamily: 'Inter_400Regular' }]}>Investido</Text>
                 <Text style={[styles.portfolioMetaVal, { fontFamily: 'Inter_600SemiBold' }]}>
-                  {formatBRL(totalInvested)}
+                  {maskValue(formatBRL(totalInvested))}
                 </Text>
               </View>
               <View style={[styles.dividerV, { backgroundColor: 'rgba(0,0,0,0.2)' }]} />
@@ -164,7 +173,7 @@ export default function InvestmentsScreen() {
                   {totalProfit >= 0 ? 'Lucro' : 'Perda'}
                 </Text>
                 <Text style={[styles.portfolioMetaVal, { fontFamily: 'Inter_600SemiBold' }]}>
-                  {formatBRL(totalProfit)}
+                  {maskValue(formatBRL(totalProfit))}
                 </Text>
               </View>
               <View style={[styles.dividerV, { backgroundColor: 'rgba(0,0,0,0.2)' }]} />
@@ -235,7 +244,9 @@ export default function InvestmentsScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 16 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   screenTitle: { fontSize: 26 },
+  eyeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   portfolioCard: { borderRadius: 20, padding: 20, gap: 16 },
   portfolioLabel: { color: 'rgba(0,0,0,0.7)', fontSize: 14 },
@@ -248,7 +259,7 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13 },
   investCard: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
   typeTag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  typeText: { fontSize: 11 },
+  typeTagText: { fontSize: 11 },
   investTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   ticker: { fontSize: 20 },
   investName: { fontSize: 13, marginTop: 2 },

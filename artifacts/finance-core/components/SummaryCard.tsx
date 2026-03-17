@@ -15,7 +15,7 @@ interface SummaryCardProps {
 }
 
 export function SummaryCard({ label, value, icon, trend, color, onPress, testID }: SummaryCardProps) {
-  const { theme } = useTheme();
+  const { theme, maskValue } = useTheme();
 
   return (
     <Pressable
@@ -35,7 +35,7 @@ export function SummaryCard({ label, value, icon, trend, color, onPress, testID 
           <Feather name={icon} size={18} color={color} />
         </View>
         <Text style={[styles.value, { color: theme.text, fontFamily: 'Inter_700Bold' }]} numberOfLines={1} adjustsFontSizeToFit>
-          {value}
+          {maskValue(value)}
         </Text>
         <Text style={[styles.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
           {label}

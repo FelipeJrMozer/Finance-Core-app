@@ -1,13 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
-import { Button } from '@/components/ui/Button';
 import { formatBRL, formatPercent } from '@/utils/formatters';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -19,7 +17,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function InvestmentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { investments } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -46,7 +44,7 @@ export default function InvestmentDetailScreen() {
         </View>
         <Text style={[styles.ticker, { fontFamily: 'Inter_700Bold' }]}>{inv.ticker}</Text>
         <Text style={[styles.name, { fontFamily: 'Inter_400Regular' }]}>{inv.name}</Text>
-        <Text style={[styles.currentValue, { fontFamily: 'Inter_700Bold' }]}>{formatBRL(current)}</Text>
+        <Text style={[styles.currentValue, { fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(current))}</Text>
         <View style={[styles.returnBadge, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
           <Feather name={pctReturn >= 0 ? 'trending-up' : 'trending-down'} size={14} color="#000" />
           <Text style={[styles.returnText, { fontFamily: 'Inter_600SemiBold' }]}>{formatPercent(pctReturn)}</Text>
@@ -55,14 +53,16 @@ export default function InvestmentDetailScreen() {
 
       <View style={styles.statsGrid}>
         {[
-          { label: 'Investido', value: formatBRL(invested), icon: 'dollar-sign' as const, color: colors.info },
-          { label: 'Lucro/Perda', value: formatBRL(profit), icon: 'activity' as const, color: profit >= 0 ? colors.primary : colors.danger },
-          { label: 'Quantidade', value: `${inv.quantity}`, icon: 'layers' as const, color: typeColor },
-          { label: 'Preço Médio', value: formatBRL(inv.avgPrice), icon: 'bar-chart-2' as const, color: colors.accent },
+          { label: 'Investido', value: formatBRL(invested), icon: 'dollar-sign' as const, color: colors.info, masked: true },
+          { label: 'Lucro/Perda', value: formatBRL(profit), icon: 'activity' as const, color: profit >= 0 ? colors.primary : colors.danger, masked: true },
+          { label: 'Quantidade', value: `${inv.quantity}`, icon: 'layers' as const, color: typeColor, masked: false },
+          { label: 'Preço Médio', value: formatBRL(inv.avgPrice), icon: 'bar-chart-2' as const, color: colors.accent, masked: true },
         ].map((stat) => (
           <View key={stat.label} style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Feather name={stat.icon} size={18} color={stat.color} />
-            <Text style={[styles.statValue, { color: stat.color, fontFamily: 'Inter_700Bold' }]}>{stat.value}</Text>
+            <Text style={[styles.statValue, { color: stat.color, fontFamily: 'Inter_700Bold' }]}>
+              {stat.masked ? maskValue(stat.value) : stat.value}
+            </Text>
             <Text style={[styles.statLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{stat.label}</Text>
           </View>
         ))}

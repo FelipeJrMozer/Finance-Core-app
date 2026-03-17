@@ -54,9 +54,9 @@ function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, te
 }
 
 export default function MoreScreen() {
-  const { theme, colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { theme, colors, isDark, themeMode, setThemeMode, valuesVisible, toggleValuesVisible } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, darfs, transactions, isLoading } = useFinance();
+  const { budgets, goals, darfs, transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
@@ -91,7 +91,7 @@ export default function MoreScreen() {
         colors={isDark ? ['#0A0A0F', '#0D1A14'] : ['#F0FFF4', '#F5F7FA']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
-        <View style={styles.profile}>
+        <View style={styles.profileRow}>
           <View style={[styles.avatarLg, { backgroundColor: colors.primaryGlow, borderColor: `${colors.primary}30` }]}>
             <Text style={[styles.avatarInitial, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
               {user?.name?.charAt(0).toUpperCase() || 'U'}
@@ -112,6 +112,14 @@ export default function MoreScreen() {
               </View>
             )}
           </View>
+          {/* Global eye toggle in profile area */}
+          <Pressable
+            testID="toggle-values-more"
+            onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+          >
+            <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
+          </Pressable>
         </View>
       </LinearGradient>
 
@@ -249,7 +257,7 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24 },
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   avatarLg: {
     width: 64, height: 64, borderRadius: 32,
     alignItems: 'center', justifyContent: 'center', borderWidth: 2,
@@ -260,6 +268,7 @@ const styles = StyleSheet.create({
   profileEmail: { fontSize: 14 },
   planBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 2 },
   planText: { fontSize: 12 },
+  eyeBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   content: { padding: 16, gap: 12 },
   sectionLabel: { fontSize: 11, letterSpacing: 1 },
   menuGroup: { gap: 8 },

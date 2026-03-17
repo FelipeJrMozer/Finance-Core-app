@@ -18,7 +18,7 @@ import { CardSkeleton, TransactionSkeleton } from '@/components/ui/SkeletonLoade
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
 
 export default function DashboardScreen() {
-  const { theme, colors, isDark } = useTheme();
+  const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { user } = useAuth();
   const {
     totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
@@ -26,7 +26,6 @@ export default function DashboardScreen() {
   } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
-  const [balanceVisible, setBalanceVisible] = useState(true);
 
   const recentTransactions = transactions.slice(0, 5);
   const currentMonth = getCurrentMonth();
@@ -66,13 +65,23 @@ export default function DashboardScreen() {
                 Visão Geral
               </Text>
             </View>
-            <Pressable
-              onPress={() => Haptics.selectionAsync()}
-              style={[styles.avatarBtn, { backgroundColor: colors.primaryGlow, borderColor: `${colors.primary}40` }]}
-              testID="profile-avatar"
-            >
-              <Feather name="user" size={20} color={colors.primary} />
-            </Pressable>
+            <View style={styles.headerActions}>
+              {/* Global eye toggle */}
+              <Pressable
+                testID="toggle-all-values"
+                onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                style={[styles.iconBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+              >
+                <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
+              </Pressable>
+              <Pressable
+                onPress={() => Haptics.selectionAsync()}
+                style={[styles.avatarBtn, { backgroundColor: colors.primaryGlow, borderColor: `${colors.primary}40` }]}
+                testID="profile-avatar"
+              >
+                <Feather name="user" size={20} color={colors.primary} />
+              </Pressable>
+            </View>
           </View>
 
           {/* Balance Card */}
@@ -82,24 +91,21 @@ export default function DashboardScreen() {
           >
             <View style={styles.balanceHeader}>
               <Text style={[styles.balanceLabel, { fontFamily: 'Inter_400Regular' }]}>Saldo Total</Text>
-              <Pressable onPress={() => { setBalanceVisible(!balanceVisible); Haptics.selectionAsync(); }} testID="toggle-balance">
-                <Feather name={balanceVisible ? 'eye' : 'eye-off'} size={18} color="rgba(0,0,0,0.7)" />
-              </Pressable>
             </View>
             <Text style={[styles.balanceValue, { fontFamily: 'Inter_700Bold' }]}>
-              {balanceVisible ? formatBRL(totalBalance) : '• • • • • •'}
+              {maskValue(formatBRL(totalBalance))}
             </Text>
             <View style={styles.balanceFooter}>
               <View style={styles.balanceMetric}>
                 <Feather name="arrow-up-circle" size={14} color="rgba(0,0,0,0.7)" />
                 <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
-                  {formatBRL(monthlyIncome, true)}
+                  {maskValue(formatBRL(monthlyIncome, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
                 <Feather name="arrow-down-circle" size={14} color="rgba(0,0,0,0.7)" />
                 <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
-                  {formatBRL(monthlyExpenses, true)}
+                  {maskValue(formatBRL(monthlyExpenses, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
@@ -250,8 +256,10 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 20 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   greeting: { fontSize: 14 },
   headerTitle: { fontSize: 26 },
+  iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   avatarBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   balanceCard: { borderRadius: 20, padding: 20, gap: 8 },
   balanceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

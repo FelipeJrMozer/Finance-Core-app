@@ -13,7 +13,7 @@ interface BudgetProgressProps {
 }
 
 export function BudgetProgress({ category, limit, spent, compact }: BudgetProgressProps) {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const info = getCategoryInfo(category);
   const pct = Math.min(spent / limit, 1);
   const animatedWidth = useRef(new Animated.Value(0)).current;
@@ -66,9 +66,9 @@ export function BudgetProgress({ category, limit, spent, compact }: BudgetProgre
         </View>
         <View style={styles.amounts}>
           <Text style={[styles.spent, { color: barColor, fontFamily: 'Inter_600SemiBold' }]}>
-            {formatBRL(spent)}
+            {maskValue(formatBRL(spent))}
           </Text>
-          <Text style={[styles.limit, { color: theme.textTertiary }]}>/ {formatBRL(limit)}</Text>
+          <Text style={[styles.limitText, { color: theme.textTertiary }]}>/ {maskValue(formatBRL(limit))}</Text>
         </View>
       </View>
       <View style={[styles.bar, { backgroundColor: theme.surfaceElevated, height: 8 }]}>
@@ -86,9 +86,9 @@ export function BudgetProgress({ category, limit, spent, compact }: BudgetProgre
       </View>
       <Text style={[styles.remaining, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
         {pct >= 1 ? (
-          <Text style={{ color: colors.danger }}>Limite ultrapassado em {formatBRL(spent - limit)}</Text>
+          <Text style={{ color: colors.danger }}>Limite ultrapassado em {maskValue(formatBRL(spent - limit))}</Text>
         ) : (
-          `Restam ${formatBRL(limit - spent)}`
+          `Restam ${maskValue(formatBRL(limit - spent))}`
         )}
       </Text>
     </View>
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 14 },
   amounts: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   spent: { fontSize: 14 },
-  limit: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  limitText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   bar: { borderRadius: 4, overflow: 'hidden' },
   fill: { borderRadius: 4 },
   remaining: { fontSize: 12 },

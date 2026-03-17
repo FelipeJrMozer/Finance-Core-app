@@ -14,7 +14,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function AccountsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { accounts, creditCards, updateAccount } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -33,12 +33,20 @@ export default function AccountsScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
             Contas Bancárias
           </Text>
-          <Pressable
-            onPress={() => router.push('/account/add')}
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          >
-            <Feather name="plus" size={18} color="#000" />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+              style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+            >
+              <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={16} color={colors.primary} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/account/add')}
+              style={[styles.addBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="plus" size={18} color="#000" />
+            </Pressable>
+          </View>
         </View>
 
         {activeAccounts.length === 0 ? (
@@ -73,7 +81,7 @@ export default function AccountsScreen() {
                     </Pressable>
                   </View>
                   <Text style={[styles.accountBalance, { color: acc.color, fontFamily: 'Inter_700Bold' }]}>
-                    {formatBRL(acc.balance)}
+                    {maskValue(formatBRL(acc.balance))}
                   </Text>
                 </LinearGradient>
               </View>
@@ -113,14 +121,14 @@ export default function AccountsScreen() {
                   <View style={styles.cardUsage}>
                     <View style={styles.cardAmounts}>
                       <Text style={[styles.cardUsed, { color: usedPct > 0.8 ? colors.danger : theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-                        {formatBRL(card.used)}
+                        {maskValue(formatBRL(card.used))}
                       </Text>
                       <Text style={[styles.cardLimit, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                        / {formatBRL(card.limit)}
+                        / {maskValue(formatBRL(card.limit))}
                       </Text>
                     </View>
                     <Text style={[styles.cardAvail, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>
-                      {formatBRL(card.limit - card.used)} disponível
+                      {maskValue(formatBRL(card.limit - card.used))} disponível
                     </Text>
                   </View>
                   <View style={[styles.usageBar, { backgroundColor: theme.surfaceElevated }]}>
@@ -146,7 +154,9 @@ export default function AccountsScreen() {
 
 const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 18 },
+  eyeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   addBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   list: { gap: 12 },
   accountCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },

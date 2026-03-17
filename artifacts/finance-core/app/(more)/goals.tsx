@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -13,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
 function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) => void }) {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const pct = Math.min(goal.currentAmount / goal.targetAmount, 1);
   const remaining = goal.targetAmount - goal.currentAmount;
   const daysLeft = Math.max(0, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / 86400000));
@@ -40,10 +39,10 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) 
 
       <View style={styles.goalAmounts}>
         <Text style={[styles.goalCurrent, { color: goal.color, fontFamily: 'Inter_700Bold' }]}>
-          {formatBRL(goal.currentAmount)}
+          {maskValue(formatBRL(goal.currentAmount))}
         </Text>
         <Text style={[styles.goalOf, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-          de {formatBRL(goal.targetAmount)}
+          de {maskValue(formatBRL(goal.targetAmount))}
         </Text>
         <Text style={[styles.goalPct, { color: goal.color, fontFamily: 'Inter_600SemiBold' }]}>
           {(pct * 100).toFixed(1)}%
@@ -65,7 +64,7 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) 
       {pct < 1 && (
         <View style={styles.goalFooter}>
           <Text style={[styles.monthlyNeeded, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-            Aportar {formatBRL(monthlyNeeded)}/mês para atingir
+            Aportar {maskValue(formatBRL(monthlyNeeded))}/mês para atingir
           </Text>
           <Pressable
             onPress={() => onContribute(goal)}
@@ -83,7 +82,7 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) 
 }
 
 export default function GoalsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { goals, addContribution, addGoal } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -133,13 +132,12 @@ export default function GoalsScreen() {
       {/* Summary */}
       <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.summary}>
         <Text style={[styles.summaryLabel, { fontFamily: 'Inter_400Regular' }]}>Total Acumulado</Text>
-        <Text style={[styles.summaryValue, { fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalProgress)}</Text>
+        <Text style={[styles.summaryValue, { fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalProgress))}</Text>
         <Text style={[styles.summaryMeta, { fontFamily: 'Inter_400Regular' }]}>
-          de {formatBRL(totalTarget)} em {goals.length} metas
+          de {maskValue(formatBRL(totalTarget))} em {goals.length} metas
         </Text>
       </LinearGradient>
 
-      {/* Goals */}
       <View style={styles.header}>
         <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
           Suas Metas
@@ -152,7 +150,6 @@ export default function GoalsScreen() {
         </Pressable>
       </View>
 
-      {/* Add Goal Form */}
       {showAddGoal && (
         <View style={[styles.addGoalForm, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.formTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Nova Meta</Text>
@@ -166,7 +163,6 @@ export default function GoalsScreen() {
         </View>
       )}
 
-      {/* Contribute Modal */}
       {contributing && (
         <View style={[styles.addGoalForm, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.formTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>

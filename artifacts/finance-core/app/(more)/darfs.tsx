@@ -9,7 +9,7 @@ import { useFinance, DARF } from '@/context/FinanceContext';
 import { formatBRL, formatDate } from '@/utils/formatters';
 
 export default function DARFsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { darfs, markDARFPaid } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -47,7 +47,7 @@ export default function DARFsScreen() {
               {unpaid.length} DARF{unpaid.length > 1 ? 's' : ''} pendente{unpaid.length > 1 ? 's' : ''}
             </Text>
             <Text style={[styles.alertValue, { fontFamily: 'Inter_600SemiBold' }]}>
-              Total: {formatBRL(totalUnpaid)}
+              Total: {maskValue(formatBRL(totalUnpaid))}
             </Text>
           </View>
         </LinearGradient>
@@ -103,7 +103,7 @@ export default function DARFsScreen() {
                   </View>
                   <View style={styles.darfAmounts}>
                     <Text style={[styles.darfAmount, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-                      {formatBRL(darf.amount)}
+                      {maskValue(formatBRL(darf.amount))}
                     </Text>
                     <Text style={[styles.darfDue, { color: isOverdue ? colors.danger : theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
                       Vencimento: {formatDate(darf.dueDate)}
@@ -114,10 +114,7 @@ export default function DARFsScreen() {
                     onPress={() => handleMarkPaid(darf)}
                     style={({ pressed }) => [
                       styles.payBtn,
-                      {
-                        backgroundColor: colors.primary,
-                        opacity: pressed ? 0.8 : 1,
-                      }
+                      { backgroundColor: colors.primary, opacity: pressed ? 0.8 : 1 }
                     ]}
                   >
                     <Feather name="check" size={16} color="#000" />
@@ -154,7 +151,7 @@ export default function DARFsScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.darfAmount, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-                    {formatBRL(darf.amount)}
+                    {maskValue(formatBRL(darf.amount))}
                   </Text>
                 </View>
               </View>
