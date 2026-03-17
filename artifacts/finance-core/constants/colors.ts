@@ -1,3 +1,16 @@
+export const ACCENT_PRESETS = [
+  { id: 'green',  label: 'Verde',   primary: '#00C853', primaryDark: '#00A846', primaryLight: '#4CAF50' },
+  { id: 'blue',   label: 'Azul',    primary: '#2196F3', primaryDark: '#1565C0', primaryLight: '#64B5F6' },
+  { id: 'purple', label: 'Roxo',    primary: '#9C27B0', primaryDark: '#6A0080', primaryLight: '#CE93D8' },
+  { id: 'orange', label: 'Laranja', primary: '#FF6D00', primaryDark: '#E65100', primaryLight: '#FFAB40' },
+  { id: 'teal',   label: 'Ciano',   primary: '#00BCD4', primaryDark: '#0097A7', primaryLight: '#80DEEA' },
+  { id: 'pink',   label: 'Rosa',    primary: '#E91E63', primaryDark: '#AD1457', primaryLight: '#F48FB1' },
+  { id: 'indigo', label: 'Índigo',  primary: '#3F51B5', primaryDark: '#283593', primaryLight: '#9FA8DA' },
+  { id: 'amber',  label: 'Âmbar',   primary: '#FFC107', primaryDark: '#FF8F00', primaryLight: '#FFE082' },
+] as const;
+
+export type AccentId = typeof ACCENT_PRESETS[number]['id'];
+
 export const Colors = {
   primary: '#00C853',
   primaryDark: '#00A846',
@@ -9,6 +22,7 @@ export const Colors = {
   danger: '#FF3D57',
   warning: '#FF9800',
   info: '#2196F3',
+  success: '#00C853',
 
   dark: {
     background: '#0A0A0F',

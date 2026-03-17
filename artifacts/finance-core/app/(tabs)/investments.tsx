@@ -18,6 +18,63 @@ const TYPE_COLORS: Record<string, string> = {
   stocks: '#2196F3', fii: '#9C27B0', reit: '#FF9800', fixed: '#4CAF50', crypto: '#FF6B35', etf: '#00BCD4'
 };
 
+function AllocationChart({ investments }: { investments: Investment[] }) {
+  const { theme } = useTheme();
+  const total = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+  if (total === 0) return null;
+
+  const byType = Object.entries(
+    investments.reduce((acc, inv) => {
+      const v = inv.quantity * inv.currentPrice;
+      acc[inv.type] = (acc[inv.type] || 0) + v;
+      return acc;
+    }, {} as Record<string, number>)
+  ).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <View style={allocStyles.container}>
+      <View style={allocStyles.bar}>
+        {byType.map(([type, value], idx) => (
+          <View
+            key={type}
+            style={{
+              flex: value / total,
+              backgroundColor: TYPE_COLORS[type] || '#999',
+              borderTopLeftRadius: idx === 0 ? 6 : 0,
+              borderBottomLeftRadius: idx === 0 ? 6 : 0,
+              borderTopRightRadius: idx === byType.length - 1 ? 6 : 0,
+              borderBottomRightRadius: idx === byType.length - 1 ? 6 : 0,
+            }}
+          />
+        ))}
+      </View>
+      <View style={allocStyles.legend}>
+        {byType.map(([type, value]) => (
+          <View key={type} style={allocStyles.legendItem}>
+            <View style={[allocStyles.dot, { backgroundColor: TYPE_COLORS[type] }]} />
+            <Text style={[allocStyles.legendLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+              {TYPE_LABELS[type]}
+            </Text>
+            <Text style={[allocStyles.legendPct, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+              {((value / total) * 100).toFixed(1)}%
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const allocStyles = StyleSheet.create({
+  container: { gap: 12 },
+  bar: { height: 12, borderRadius: 6, flexDirection: 'row', overflow: 'hidden' },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  legendLabel: { fontSize: 12 },
+  legendPct: { fontSize: 12 },
+});
+
 function InvestmentCard({ investment, onPress }: { investment: Investment; onPress: () => void }) {
   const { theme, colors, maskValue } = useTheme();
   const invested = investment.quantity * investment.avgPrice;
@@ -101,7 +158,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
 
 export default function InvestmentsScreen() {
   const { theme, colors, isDark, maskValue } = useTheme();
-  const { investments, isLoading } = useFinance();
+  const { investments } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<string>('all');
@@ -114,6 +171,14 @@ export default function InvestmentsScreen() {
   const pctReturn = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
   const filtered = filter === 'all' ? investments : investments.filter((i) => i.type === filter);
+
+  const sortedByReturn = [...investments].sort((a, b) => {
+    const retA = ((a.currentPrice - a.avgPrice) / a.avgPrice) * 100;
+    const retB = ((b.currentPrice - b.avgPrice) / b.avgPrice) * 100;
+    return retB - retA;
+  });
+  const bestPerformer = sortedByReturn[0];
+  const worstPerformer = sortedByReturn[sortedByReturn.length - 1];
 
   const onRefresh = () => { setRefreshing(true); setTimeout(() => setRefreshing(false), 800); };
 
@@ -133,15 +198,13 @@ export default function InvestmentsScreen() {
             <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
               Carteira
             </Text>
-            <View style={styles.headerActions}>
-              <Pressable
-                testID="add-investment"
-                onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}
-                style={[styles.addBtn, { backgroundColor: colors.primary }]}
-              >
-                <Feather name="plus" size={20} color="#000" />
-              </Pressable>
-            </View>
+            <Pressable
+              testID="add-investment"
+              onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}
+              style={[styles.addBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="plus" size={20} color="#000" />
+            </Pressable>
           </View>
 
           {/* Portfolio Card */}
@@ -180,54 +243,100 @@ export default function InvestmentsScreen() {
           </LinearGradient>
         </LinearGradient>
 
-        {/* Type Filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingVertical: 12 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: 'row' }}>
-          {['all', 'stocks', 'fii', 'reit', 'fixed', 'crypto', 'etf'].map((type) => (
-            <Pressable
-              key={type}
-              onPress={() => { setFilter(type); Haptics.selectionAsync(); }}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: filter === type ? colors.primary : theme.surfaceElevated,
-                  borderColor: filter === type ? colors.primary : theme.border,
-                }
-              ]}
-            >
-              <Text style={[
-                styles.filterText,
-                {
-                  color: filter === type ? '#000' : theme.textSecondary,
-                  fontFamily: filter === type ? 'Inter_600SemiBold' : 'Inter_400Regular'
-                }
-              ]}>
-                {type === 'all' ? 'Todos' : TYPE_LABELS[type]}
+        <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 16 }}>
+          {/* Allocation Chart */}
+          {investments.length > 0 && (
+            <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                Alocação por Classe
               </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Investments List */}
-        <View style={{ paddingHorizontal: 16, gap: 12 }}>
-          {filtered.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Feather name="pie-chart" size={48} color={theme.textTertiary} />
-              <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-                Nenhum ativo
-              </Text>
-              <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                Adicione seu primeiro investimento
-              </Text>
+              <AllocationChart investments={investments} />
             </View>
-          ) : (
-            filtered.map((inv) => (
-              <InvestmentCard
-                key={inv.id}
-                investment={inv}
-                onPress={() => router.push({ pathname: '/investment/[id]', params: { id: inv.id } })}
-              />
-            ))
           )}
+
+          {/* Best & Worst Performers */}
+          {investments.length >= 2 && (
+            <View style={styles.perfRow}>
+              {bestPerformer && (
+                <View style={[styles.perfCard, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}>
+                  <View style={styles.perfHeader}>
+                    <Feather name="award" size={14} color={colors.primary} />
+                    <Text style={[styles.perfLabel, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>Melhor</Text>
+                  </View>
+                  <Text style={[styles.perfTicker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+                    {bestPerformer.ticker}
+                  </Text>
+                  <Text style={[styles.perfReturn, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                    {formatPercent(((bestPerformer.currentPrice - bestPerformer.avgPrice) / bestPerformer.avgPrice) * 100)}
+                  </Text>
+                </View>
+              )}
+              {worstPerformer && worstPerformer.id !== bestPerformer?.id && (
+                <View style={[styles.perfCard, { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}30` }]}>
+                  <View style={styles.perfHeader}>
+                    <Feather name="trending-down" size={14} color={colors.danger} />
+                    <Text style={[styles.perfLabel, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>Pior</Text>
+                  </View>
+                  <Text style={[styles.perfTicker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+                    {worstPerformer.ticker}
+                  </Text>
+                  <Text style={[styles.perfReturn, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
+                    {formatPercent(((worstPerformer.currentPrice - worstPerformer.avgPrice) / worstPerformer.avgPrice) * 100)}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Type Filter */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row' }}>
+            {['all', 'stocks', 'fii', 'reit', 'fixed', 'crypto', 'etf'].map((type) => (
+              <Pressable
+                key={type}
+                onPress={() => { setFilter(type); Haptics.selectionAsync(); }}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: filter === type ? colors.primary : theme.surfaceElevated,
+                    borderColor: filter === type ? colors.primary : theme.border,
+                  }
+                ]}
+              >
+                <Text style={[
+                  styles.filterText,
+                  {
+                    color: filter === type ? '#000' : theme.textSecondary,
+                    fontFamily: filter === type ? 'Inter_600SemiBold' : 'Inter_400Regular'
+                  }
+                ]}>
+                  {type === 'all' ? 'Todos' : TYPE_LABELS[type]}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {/* Investments List */}
+          <View style={{ gap: 12, paddingBottom: 16 }}>
+            {filtered.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Feather name="pie-chart" size={48} color={theme.textTertiary} />
+                <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                  Nenhum ativo
+                </Text>
+                <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                  Adicione seu primeiro investimento
+                </Text>
+              </View>
+            ) : (
+              filtered.map((inv) => (
+                <InvestmentCard
+                  key={inv.id}
+                  investment={inv}
+                  onPress={() => router.push({ pathname: '/investment/[id]', params: { id: inv.id } })}
+                />
+              ))
+            )}
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -237,7 +346,6 @@ export default function InvestmentsScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 16 },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   screenTitle: { fontSize: 26 },
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   portfolioCard: { borderRadius: 20, padding: 20, gap: 16 },
@@ -247,6 +355,14 @@ const styles = StyleSheet.create({
   portfolioMeta: { color: 'rgba(0,0,0,0.7)', fontSize: 12 },
   portfolioMetaVal: { color: '#000', fontSize: 15 },
   dividerV: { width: 1, height: 30 },
+  section: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
+  sectionTitle: { fontSize: 16 },
+  perfRow: { flexDirection: 'row', gap: 12 },
+  perfCard: { flex: 1, borderRadius: 14, padding: 14, gap: 6, borderWidth: 1 },
+  perfHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  perfLabel: { fontSize: 12 },
+  perfTicker: { fontSize: 20 },
+  perfReturn: { fontSize: 15 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
   filterText: { fontSize: 13 },
   investCard: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },

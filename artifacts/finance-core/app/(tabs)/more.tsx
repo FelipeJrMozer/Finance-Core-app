@@ -12,19 +12,22 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
 import { BudgetProgress } from '@/components/BudgetProgress';
+import { ACCENT_PRESETS } from '@/constants/colors';
 
 interface MenuItemProps {
   icon: keyof typeof Feather.glyphMap;
   label: string;
   subtitle?: string;
   badge?: string;
-  color?: string;
+  badgeColor?: string;
   onPress: () => void;
   testID?: string;
+  right?: React.ReactNode;
 }
 
-function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, testID }: MenuItemProps) {
-  const { theme } = useTheme();
+function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, right }: MenuItemProps) {
+  const { theme, colors } = useTheme();
+  const bColor = badgeColor || colors.primary;
   return (
     <Pressable
       testID={testID}
@@ -34,8 +37,8 @@ function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, te
         { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
       ]}
     >
-      <View style={[styles.menuIcon, { backgroundColor: `${color}20` }]}>
-        <Feather name={icon} size={20} color={color} />
+      <View style={[styles.menuIcon, { backgroundColor: `${colors.primary}20` }]}>
+        <Feather name={icon} size={20} color={colors.primary} />
       </View>
       <View style={styles.menuContent}>
         <Text style={[styles.menuLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>{label}</Text>
@@ -43,9 +46,10 @@ function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, te
           <Text style={[styles.menuSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{subtitle}</Text>
         )}
       </View>
+      {right}
       {badge && (
-        <View style={[styles.badge, { backgroundColor: `${color}20` }]}>
-          <Text style={[styles.badgeText, { color }]}>{badge}</Text>
+        <View style={[styles.badge, { backgroundColor: `${bColor}20` }]}>
+          <Text style={[styles.badgeText, { color: bColor }]}>{badge}</Text>
         </View>
       )}
       <Feather name="chevron-right" size={16} color={theme.textTertiary} />
@@ -54,9 +58,9 @@ function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, te
 }
 
 export default function MoreScreen() {
-  const { theme, colors, isDark, themeMode, setThemeMode } = useTheme();
+  const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, darfs, transactions } = useFinance();
+  const { budgets, goals, darfs, transactions, totalBalance, investments } = useFinance();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
@@ -67,6 +71,11 @@ export default function MoreScreen() {
 
   const unpaidDarfs = darfs.filter((d) => !d.paid);
   const pendingGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
+
+  const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
+
+  const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+  const netWorth = totalBalance + totalInvestments;
 
   const handleLogout = () => {
     Alert.alert('Sair', 'Deseja realmente sair?', [
@@ -92,8 +101,8 @@ export default function MoreScreen() {
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
         <View style={styles.profileRow}>
-          <View style={[styles.avatarLg, { backgroundColor: colors.primaryGlow, borderColor: `${colors.primary}30` }]}>
-            <Text style={[styles.avatarInitial, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
+          <View style={[styles.avatarLg, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.avatarInitial, { fontFamily: 'Inter_700Bold', color: '#000' }]}>
               {user?.name?.charAt(0).toUpperCase() || 'U'}
             </Text>
           </View>
@@ -106,12 +115,19 @@ export default function MoreScreen() {
             </Text>
             {user?.plan && (
               <View style={[styles.planBadge, { backgroundColor: colors.primaryGlow }]}>
+                <Feather name="star" size={10} color={colors.primary} />
                 <Text style={[styles.planText, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
                   Plano {user.plan}
                 </Text>
               </View>
             )}
           </View>
+          <Pressable
+            onPress={() => router.push('/(more)/settings')}
+            style={[styles.settingsBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+          >
+            <Feather name="settings" size={20} color={colors.primary} />
+          </Pressable>
         </View>
       </LinearGradient>
 
@@ -126,16 +142,14 @@ export default function MoreScreen() {
             icon="cpu"
             label="Assistente IA"
             subtitle="Conselhos financeiros personalizados"
-            color={colors.accent}
             onPress={() => router.push('/chat')}
           />
           <MenuItem
             testID="menu-goals"
             icon="target"
             label="Metas Financeiras"
-            subtitle={`${pendingGoals.length} metas em andamento`}
-            badge={`${pendingGoals.length}`}
-            color={colors.primary}
+            subtitle={`${pendingGoals.length} meta${pendingGoals.length !== 1 ? 's' : ''} em andamento`}
+            badge={pendingGoals.length > 0 ? `${pendingGoals.length}` : undefined}
             onPress={() => router.push('/(more)/goals')}
           />
           <MenuItem
@@ -143,7 +157,6 @@ export default function MoreScreen() {
             icon="credit-card"
             label="Contas e Cartões"
             subtitle="Gerencie suas contas bancárias"
-            color="#3B82F6"
             onPress={() => router.push('/(more)/accounts')}
           />
           <MenuItem
@@ -152,7 +165,7 @@ export default function MoreScreen() {
             label="DARFs e IR"
             subtitle={unpaidDarfs.length > 0 ? `${unpaidDarfs.length} DARF(s) pendente(s)` : 'Sem pendências'}
             badge={unpaidDarfs.length > 0 ? `${unpaidDarfs.length}` : undefined}
-            color={unpaidDarfs.length > 0 ? colors.warning : theme.textSecondary as string}
+            badgeColor={unpaidDarfs.length > 0 ? colors.warning : undefined}
             onPress={() => router.push('/(more)/darfs')}
           />
         </View>
@@ -184,40 +197,20 @@ export default function MoreScreen() {
           </>
         )}
 
-        {/* Settings */}
+        {/* Settings / Config */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
           CONFIGURAÇÕES
         </Text>
         <View style={styles.menuGroup}>
-          <View style={[styles.themePicker, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Feather name="moon" size={20} color={colors.accent} />
-            <Text style={[styles.themeLabel, { color: theme.text, fontFamily: 'Inter_500Medium', flex: 1 }]}>
-              Tema
-            </Text>
-            {(['system', 'light', 'dark'] as const).map((mode) => (
-              <Pressable
-                key={mode}
-                onPress={() => { setThemeMode(mode); Haptics.selectionAsync(); }}
-                style={[
-                  styles.themeOption,
-                  {
-                    backgroundColor: themeMode === mode ? colors.primary : theme.surfaceElevated,
-                    borderColor: themeMode === mode ? colors.primary : theme.border,
-                  }
-                ]}
-              >
-                <Text style={[
-                  styles.themeOptionText,
-                  {
-                    color: themeMode === mode ? '#000' : theme.textSecondary,
-                    fontFamily: 'Inter_500Medium'
-                  }
-                ]}>
-                  {mode === 'system' ? 'Auto' : mode === 'light' ? 'Claro' : 'Escuro'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <MenuItem
+            icon="settings"
+            label="Configurações do App"
+            subtitle={`Tema, cor, notificações • Cor: ${currentPreset.label}`}
+            right={
+              <View style={[styles.colorDot, { backgroundColor: currentPreset.primary }]} />
+            }
+            onPress={() => router.push('/(more)/settings')}
+          />
         </View>
 
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
@@ -252,14 +245,21 @@ const styles = StyleSheet.create({
   profileRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   avatarLg: {
     width: 64, height: 64, borderRadius: 32,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarInitial: { fontSize: 28 },
   profileInfo: { flex: 1, gap: 4 },
   profileName: { fontSize: 20 },
   profileEmail: { fontSize: 14 },
-  planBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 2 },
+  planBadge: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 2
+  },
   planText: { fontSize: 12 },
+  settingsBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1,
+  },
   content: { padding: 16, gap: 12 },
   sectionLabel: { fontSize: 11, letterSpacing: 1 },
   menuGroup: { gap: 8 },
@@ -273,16 +273,10 @@ const styles = StyleSheet.create({
   menuSub: { fontSize: 12, marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   badgeText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  colorDot: { width: 18, height: 18, borderRadius: 9 },
   budgetsCard: { borderRadius: 16, padding: 16, gap: 16, borderWidth: 1 },
   viewMore: { borderRadius: 10, borderWidth: 1, padding: 12, alignItems: 'center' },
   viewMoreText: { fontSize: 14 },
-  themePicker: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    padding: 14, borderRadius: 14, borderWidth: 1,
-  },
-  themeLabel: { fontSize: 15 },
-  themeOption: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
-  themeOptionText: { fontSize: 12 },
   logoutBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 14, borderRadius: 14, borderWidth: 1,
