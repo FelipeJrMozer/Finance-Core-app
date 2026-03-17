@@ -14,6 +14,23 @@ import { TransactionItem } from '@/components/TransactionItem';
 type FilterType = 'all' | 'income' | 'expense' | 'transfer';
 
 const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MONTH_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function getNow() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-');
+  return `${MONTH_FULL[parseInt(m) - 1]} ${y}`;
+}
 
 function formatDateHeader(dateStr: string) {
   const [y, m, d] = dateStr.split('-');
@@ -26,18 +43,21 @@ function formatDateHeader(dateStr: string) {
 
 export default function TransactionsScreen() {
   const { theme, colors } = useTheme();
-  const { transactions, accounts, isLoading } = useFinance();
+  const { transactions, accounts, isLoading, refresh } = useFinance();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [accountFilter, setAccountFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
   const [showAccounts, setShowAccounts] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>(getNow());
 
+  const currentMonthStr = getNow();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
+      if (!t.date.startsWith(selectedMonth)) return false;
       if (filter !== 'all' && t.type !== filter) return false;
       if (accountFilter !== 'all' && t.accountId !== accountFilter) return false;
       if (search.trim()) {
@@ -45,7 +65,7 @@ export default function TransactionsScreen() {
       }
       return true;
     }).sort((a, b) => b.date.localeCompare(a.date));
-  }, [transactions, filter, accountFilter, search]);
+  }, [transactions, filter, accountFilter, search, selectedMonth]);
 
   const sections = useMemo(() => {
     const byDate: Record<string, Transaction[]> = {};
@@ -70,19 +90,61 @@ export default function TransactionsScreen() {
   const summary = useMemo(() => {
     const income = filtered.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expense = filtered.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const transfers = filtered.filter((t) => t.type === 'transfer').length;
-    return { income, expense, transfers };
+    return { income, expense };
   }, [filtered]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+    await refresh();
+    setRefreshing(false);
   };
 
   const activeAccount = accountFilter !== 'all' ? accounts.find((a) => a.id === accountFilter) : null;
 
   const renderHeader = () => (
     <View style={{ gap: 10, paddingBottom: 8 }}>
+      {/* Month Navigation */}
+      <View style={[styles.monthNav, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Pressable
+          onPress={() => { setSelectedMonth(addMonths(selectedMonth, -1)); Haptics.selectionAsync(); }}
+          style={styles.monthBtn}
+          hitSlop={8}
+        >
+          <Feather name="chevron-left" size={20} color={theme.textSecondary} />
+        </Pressable>
+        <Pressable
+          onPress={() => { setSelectedMonth(currentMonthStr); Haptics.selectionAsync(); }}
+          style={styles.monthLabelBtn}
+        >
+          <Text style={[styles.monthLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+            {getMonthLabel(selectedMonth)}
+          </Text>
+          {selectedMonth === currentMonthStr && (
+            <View style={[styles.currentBadge, { backgroundColor: `${colors.primary}20` }]}>
+              <Text style={[styles.currentBadgeText, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                Atual
+              </Text>
+            </View>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            if (selectedMonth < currentMonthStr) {
+              setSelectedMonth(addMonths(selectedMonth, 1));
+              Haptics.selectionAsync();
+            }
+          }}
+          style={styles.monthBtn}
+          hitSlop={8}
+        >
+          <Feather
+            name="chevron-right"
+            size={20}
+            color={selectedMonth < currentMonthStr ? theme.textSecondary : theme.border}
+          />
+        </Pressable>
+      </View>
+
       {/* Search */}
       <View style={[styles.searchContainer, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
         <Feather name="search" size={16} color={theme.textTertiary} />
@@ -175,21 +237,21 @@ export default function TransactionsScreen() {
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Receitas</Text>
             <Text style={[styles.summaryValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              +R$ {summary.income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              +{summary.income.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </Text>
           </View>
           <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Despesas</Text>
             <Text style={[styles.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>
-              -R$ {summary.expense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              -{summary.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </Text>
           </View>
           <View style={[styles.summaryDivider, { backgroundColor: theme.border }]} />
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Saldo</Text>
             <Text style={[styles.summaryValue, { color: (summary.income - summary.expense) >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_700Bold' }]}>
-              R$ {(summary.income - summary.expense).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {(summary.income - summary.expense).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </Text>
           </View>
         </View>
@@ -238,7 +300,7 @@ export default function TransactionsScreen() {
               color: section.dayTotal >= 0 ? colors.primary : colors.danger,
               fontFamily: 'Inter_600SemiBold',
             }]}>
-              {section.dayTotal >= 0 ? '+' : ''}R$ {Math.abs(section.dayTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {section.dayTotal >= 0 ? '+' : ''}{section.dayTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </Text>
           </View>
         )}
@@ -251,7 +313,7 @@ export default function TransactionsScreen() {
               Nenhuma transação
             </Text>
             <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-              {search ? 'Tente buscar com outros termos' : 'Adicione sua primeira transação'}
+              {search ? 'Tente buscar com outros termos' : `Nenhuma transação em ${getMonthLabel(selectedMonth)}`}
             </Text>
           </View>
         )}
@@ -279,6 +341,12 @@ const styles = StyleSheet.create({
   headerSection: { paddingHorizontal: 20, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   screenTitle: { fontSize: 26 },
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  monthNav: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingVertical: 4 },
+  monthBtn: { padding: 10 },
+  monthLabelBtn: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  monthLabel: { fontSize: 16 },
+  currentBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  currentBadgeText: { fontSize: 11 },
   searchContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
   searchInput: { flex: 1, fontSize: 16 },
   filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
@@ -291,7 +359,7 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 12 },
   summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
   summaryLabel: { fontSize: 11 },
-  summaryValue: { fontSize: 13 },
+  summaryValue: { fontSize: 12 },
   summaryDivider: { width: 1, marginVertical: 2 },
   dateHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4, marginTop: 8 },
   dateHeaderText: { fontSize: 13 },

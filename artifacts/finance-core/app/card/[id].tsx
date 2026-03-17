@@ -267,9 +267,20 @@ export default function CardDetailScreen() {
               <Pressable onPress={() => setSelectedMonth(addMonths(selectedMonth, -1))} style={styles.monthBtn}>
                 <Feather name="chevron-left" size={20} color={theme.textSecondary} />
               </Pressable>
-              <Text style={[styles.monthLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-                {getMonthLabel(selectedMonth)}
-              </Text>
+              <View style={styles.monthNavCenter}>
+                <Text style={[styles.monthLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                  {getMonthLabel(selectedMonth)}
+                </Text>
+                <View style={[
+                  styles.invoiceStatusBadge,
+                  { backgroundColor: selectedMonth === currentMonthStr ? `${colors.primary}20` : `${theme.textTertiary}18` }
+                ]}>
+                  <View style={[styles.invoiceStatusDot, { backgroundColor: selectedMonth === currentMonthStr ? colors.primary : theme.textTertiary }]} />
+                  <Text style={[styles.invoiceStatusText, { color: selectedMonth === currentMonthStr ? colors.primary : theme.textTertiary, fontFamily: 'Inter_600SemiBold' }]}>
+                    {selectedMonth === currentMonthStr ? 'Aberta' : 'Fechada'}
+                  </Text>
+                </View>
+              </View>
               <Pressable
                 onPress={() => { if (selectedMonth < currentMonthStr) setSelectedMonth(addMonths(selectedMonth, 1)); }}
                 style={styles.monthBtn}
@@ -861,8 +872,12 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 14 },
   tabText: { fontSize: 14 },
   monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  monthNavCenter: { flex: 1, alignItems: 'center', gap: 6 },
   monthBtn: { padding: 8 },
   monthLabel: { fontSize: 18 },
+  invoiceStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+  invoiceStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  invoiceStatusText: { fontSize: 12 },
   invoiceSummary: { borderRadius: 16, borderWidth: 1, overflow: 'hidden', padding: 16, gap: 12 },
   invoiceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   invoiceLabel: { fontSize: 13 },

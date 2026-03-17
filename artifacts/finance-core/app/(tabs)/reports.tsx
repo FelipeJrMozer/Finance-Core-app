@@ -126,17 +126,31 @@ const hs = StyleSheet.create({
   label: { fontSize: 15 },
 });
 
+const MONTH_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthLabelFull(ym: string): string {
+  const [y, m] = ym.split('-');
+  return `${MONTH_FULL[parseInt(m) - 1]} ${y}`;
+}
+
 export default function ReportsScreen() {
   const { theme, colors, isDark, maskValue } = useTheme();
   const { transactions, accounts, investments, creditCards, budgets } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
   const currentMonth = getCurrentMonth();
   const currentMonthTx = useMemo(() =>
-    transactions.filter((t) => t.date.startsWith(currentMonth)), [transactions, currentMonth]
+    transactions.filter((t) => t.date.startsWith(selectedMonth)), [transactions, selectedMonth]
   );
   const totalIncome = currentMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = currentMonthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -144,10 +158,12 @@ export default function ReportsScreen() {
   const savingsRate = totalIncome > 0 ? (netResult / totalIncome) * 100 : 0;
 
   const today = new Date();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const dayOfMonth = today.getDate();
-  const avgDailyExpense = totalExpense / dayOfMonth;
-  const forecastExpense = avgDailyExpense * daysInMonth;
+  const [selY, selM] = selectedMonth.split('-').map(Number);
+  const isCurrentMonth = selectedMonth === currentMonth;
+  const daysInMonth = new Date(selY, selM, 0).getDate();
+  const dayOfMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  const avgDailyExpense = totalExpense / (dayOfMonth || 1);
+  const forecastExpense = isCurrentMonth ? avgDailyExpense * daysInMonth : totalExpense;
 
   const totalAccounts = accounts.filter((a) => !a.archived).reduce((s, a) => s + a.balance, 0);
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
@@ -216,7 +232,7 @@ export default function ReportsScreen() {
     text: `${((d.value / totalExpense) * 100).toFixed(0)}%`,
   })), [categoryData, totalExpense]);
 
-  const currentBudgets = budgets.filter((b) => b.month === currentMonth);
+  const currentBudgets = budgets.filter((b) => b.month === selectedMonth);
   const budgetData = currentBudgets.map((b) => {
     const spent = currentMonthTx
       .filter((t) => t.category === b.category && t.type === 'expense')
@@ -262,9 +278,35 @@ export default function ReportsScreen() {
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Relatórios</Text>
-          <Text style={[styles.period, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-            {getMonthName(currentMonth)} • Análise financeira
-          </Text>
+          <View style={[styles.monthNav, { backgroundColor: `${theme.surface}80`, borderColor: `${theme.border}60` }]}>
+            <Pressable
+              onPress={() => setSelectedMonth(addMonths(selectedMonth, -1))}
+              style={styles.monthNavBtn}
+              hitSlop={8}
+            >
+              <Feather name="chevron-left" size={18} color={theme.textSecondary} />
+            </Pressable>
+            <Pressable
+              onPress={() => setSelectedMonth(currentMonth)}
+              style={styles.monthNavLabel}
+            >
+              <Text style={[styles.period, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                {getMonthLabelFull(selectedMonth)}
+              </Text>
+              {isCurrentMonth && (
+                <View style={[styles.currentBadge, { backgroundColor: `${colors.primary}25` }]}>
+                  <Text style={[styles.currentBadgeText, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>Atual</Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => { if (selectedMonth < currentMonth) setSelectedMonth(addMonths(selectedMonth, 1)); }}
+              style={styles.monthNavBtn}
+              hitSlop={8}
+            >
+              <Feather name="chevron-right" size={18} color={selectedMonth < currentMonth ? theme.textSecondary : `${theme.border}60`} />
+            </Pressable>
+          </View>
 
           {/* Net Worth Card */}
           <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.nwCard}>
@@ -736,7 +778,12 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 12 },
   screenTitle: { fontSize: 26 },
-  period: { fontSize: 14 },
+  period: { fontSize: 15 },
+  monthNav: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingVertical: 6, marginTop: 8 },
+  monthNavBtn: { padding: 8 },
+  monthNavLabel: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  currentBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7 },
+  currentBadgeText: { fontSize: 11 },
   nwCard: { borderRadius: 20, padding: 18, gap: 8 },
   nwLabel: { color: 'rgba(0,0,0,0.7)', fontSize: 13 },
   nwValue: { color: '#000', fontSize: 30 },

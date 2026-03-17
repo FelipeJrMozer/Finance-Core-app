@@ -75,15 +75,21 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
   - Tags, Notifications, Categories all loaded from API
 - **FinanceContext computed values**: `monthlyIncome`, `monthlyExpenses`, `prevMonthIncome`, `prevMonthExpenses` — both current and previous month computed from the `transactions` array for real trend percentages
 - **AI Chat** (`app/chat.tsx`): Uses real `POST /api/ai/chat` with `{ message, messages, context }`. Passes conversation history and financial context (totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore). Renders markdown responses (bold `**text**`, bullet points `* item`). Powered by Groq via the production backend.
+- **Month Navigation Pattern** (shared across Transactions, Budgets, Reports, Card/Fatura):
+  - `< Month Year >` nav bar with "Atual" badge for current month
+  - Clicking the month label resets to current month; right chevron disabled at current month
+  - Helper functions `addMonths(ym, delta)` and `getMonthLabel(ym)` defined locally in each screen
 - **Screens**:
   - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart; SummaryCards use real month-over-month trends (no hardcoded values)
-  - Transactions (add/edit/delete, uses real API categories, installments, recurring)
-  - Reports (charts by category, income vs expenses, cash flow, health score)
+  - Transactions: month navigation bar at top + type filter chips + account filter + search + summary row (filtered by selected month)
+  - Budgets: month navigation + total spent/limit summary bar; "+" add button only shown for current month
+  - Reports: month navigation in header; all calculations (income, expense, budgets, savings rate, forecast) filtered by selected month; cashflow chart always shows 6-month history
   - Investments (stocks, FIIs, REITs, ETFs, crypto, fixed income)
   - AI Chat (connects to real `/api/ai/chat` endpoint with context + history)
   - Mais → Contas e Cartões, Metas, Orçamentos, **Notificações**, Configurações, Planos
 - **Credit Card Features** (`app/card/`):
   - `card/[id].tsx` — detail: Fatura, Parcelas, Detalhes tabs
+  - Fatura tab: month navigation with **"Aberta"** badge (current month, primary color) or **"Fechada"** badge (past month, gray)
   - `card/add.tsx` — add/edit credit card form with live card preview
 - **Account Features** (`app/account/`):
   - `account/add.tsx` — add/edit; `account/[id].tsx` — detail with stats
