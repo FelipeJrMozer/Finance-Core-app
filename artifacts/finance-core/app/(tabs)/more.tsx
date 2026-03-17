@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert
+  View, Text, StyleSheet, ScrollView, Pressable, Platform
 } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -102,15 +102,16 @@ export default function MoreScreen() {
     return () => clearInterval(interval);
   }, [fetchPendingCount]);
 
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   const handleLogout = () => {
-    Alert.alert('Sair', 'Deseja realmente sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Sair', style: 'destructive', onPress: () => {
-          logout().catch(() => {});
-        }
-      }
-    ]);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    logout().catch(() => {});
   };
 
   return (
@@ -279,19 +280,47 @@ export default function MoreScreen() {
           CONTA
         </Text>
         <View style={styles.menuGroup}>
-          <Pressable
-            testID="logout-btn"
-            onPress={handleLogout}
-            style={({ pressed }) => [
-              styles.logoutBtn,
-              { backgroundColor: `${colors.danger}15`, borderColor: `${colors.danger}30`, opacity: pressed ? 0.8 : 1 }
-            ]}
-          >
-            <Feather name="log-out" size={18} color={colors.danger} />
-            <Text style={[styles.logoutText, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
-              Sair da conta
-            </Text>
-          </Pressable>
+          {!showLogoutModal ? (
+            <Pressable
+              testID="logout-btn"
+              onPress={handleLogout}
+              style={({ pressed }) => [
+                styles.logoutBtn,
+                { backgroundColor: `${colors.danger}15`, borderColor: `${colors.danger}30`, opacity: pressed ? 0.8 : 1 }
+              ]}
+            >
+              <Feather name="log-out" size={18} color={colors.danger} />
+              <Text style={[styles.logoutText, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
+                Sair da conta
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={[styles.logoutConfirm, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+              <Text style={[styles.logoutConfirmTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                Tem certeza que deseja sair?
+              </Text>
+              <View style={styles.logoutConfirmBtns}>
+                <Pressable
+                  style={({ pressed }) => [styles.logoutConfirmCancel, { borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                  onPress={() => setShowLogoutModal(false)}
+                >
+                  <Text style={[styles.logoutConfirmCancelText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                    Cancelar
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID="logout-confirm-btn"
+                  style={({ pressed }) => [styles.logoutConfirmDanger, { backgroundColor: colors.danger, opacity: pressed ? 0.8 : 1 }]}
+                  onPress={confirmLogout}
+                >
+                  <Feather name="log-out" size={15} color="#fff" />
+                  <Text style={[styles.logoutConfirmDangerText, { fontFamily: 'Inter_600SemiBold' }]}>
+                    Sair
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
 
         <Text style={[styles.version, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
@@ -344,5 +373,20 @@ const styles = StyleSheet.create({
     padding: 14, borderRadius: 14, borderWidth: 1,
   },
   logoutText: { fontSize: 15 },
+  logoutConfirm: {
+    borderRadius: 14, borderWidth: 1, padding: 14, gap: 12,
+  },
+  logoutConfirmTitle: { fontSize: 14 },
+  logoutConfirmBtns: { flexDirection: 'row', gap: 8 },
+  logoutConfirmCancel: {
+    flex: 1, borderRadius: 10, borderWidth: 1,
+    paddingVertical: 10, alignItems: 'center',
+  },
+  logoutConfirmCancelText: { fontSize: 14 },
+  logoutConfirmDanger: {
+    flex: 1, borderRadius: 10, paddingVertical: 10,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6,
+  },
+  logoutConfirmDangerText: { fontSize: 14, color: '#fff' },
   version: { textAlign: 'center', fontSize: 12, marginTop: 8 },
 });
