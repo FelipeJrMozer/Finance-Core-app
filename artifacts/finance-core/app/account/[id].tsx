@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 export default function AccountDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme, colors, maskValue } = useTheme();
-  const { accounts, transactions } = useFinance();
+  const { accounts, transactions, deleteTransaction } = useFinance();
   const insets = useSafeAreaInsets();
 
   const account = accounts.find((a) => a.id === id);
@@ -83,7 +84,11 @@ export default function AccountDetailScreen() {
           Últimas transações
         </Text>
         {accountTx.map((t) => (
-          <TransactionItem key={t.id} transaction={t} />
+          <TransactionItem
+            key={t.id}
+            transaction={t}
+            onPress={(tx) => router.push({ pathname: '/transaction/[id]', params: { id: tx.id } })}
+          />
         ))}
         {accountTx.length === 0 && (
           <View style={styles.empty}>

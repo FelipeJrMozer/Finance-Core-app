@@ -393,7 +393,12 @@ export default function CardDetailScreen() {
                   return (
                     <Pressable
                       key={tx.id}
-                      onPress={handleTxAction}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        router.push({ pathname: '/transaction/[id]', params: { id: tx.id } });
+                      }}
+                      onLongPress={handleTxAction}
+                      delayLongPress={450}
                       style={({ pressed }) => [
                         styles.txItem,
                         { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
@@ -412,11 +417,17 @@ export default function CardDetailScreen() {
                           {tx.recurring ? ' • Recorrente' : ''}
                         </Text>
                       </View>
-                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Text style={[styles.txAmt, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>
                           -{maskValue(formatBRL(tx.amount))}
                         </Text>
-                        <Feather name="more-horizontal" size={12} color={theme.textTertiary} />
+                        <Pressable
+                          onPress={(e) => { e.stopPropagation?.(); handleTxAction(); }}
+                          hitSlop={8}
+                          style={[styles.txMoreBtn, { backgroundColor: theme.surfaceElevated }]}
+                        >
+                          <Feather name="more-horizontal" size={14} color={theme.textTertiary} />
+                        </Pressable>
                       </View>
                     </Pressable>
                   );
@@ -877,6 +888,7 @@ const styles = StyleSheet.create({
   txDesc: { fontSize: 14 },
   txMeta: { fontSize: 11, marginTop: 2 },
   txAmt: { fontSize: 14 },
+  txMoreBtn: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', paddingVertical: 48, gap: 10 },
   emptyText: { fontSize: 15 },
   installCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 12 },
