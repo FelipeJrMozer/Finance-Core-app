@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform
 } from 'react-native';
@@ -60,7 +60,7 @@ function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, r
 export default function MoreScreen() {
   const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, darfs, transactions, totalBalance, investments, familyMembers, subscriptions } = useFinance();
+  const { budgets, goals, transactions, totalBalance, investments } = useFinance();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
@@ -69,38 +69,10 @@ export default function MoreScreen() {
   const getBudgetSpent = (category: string) =>
     monthlyTx.filter((t) => t.category === category && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
-  const unpaidDarfs = darfs.filter((d) => !d.paid);
-  const activeSubscriptions = subscriptions.filter((s) => s.active);
-  const monthlySubTotal = activeSubscriptions.reduce((sum, s) => {
-    const mult = s.billingCycle === 'monthly' ? 1 : s.billingCycle === 'quarterly' ? 1 / 3 : 1 / 12;
-    return sum + s.amount * mult;
-  }, 0);
   const pendingGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
-
   const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
-
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const netWorth = totalBalance + totalInvestments;
-
-  const [pendingCount, setPendingCount] = useState(0);
-
-  const fetchPendingCount = useCallback(async () => {
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-    if (!apiUrl) return;
-    try {
-      const res = await fetch(`${apiUrl}/api/pending-transactions`);
-      if (res.ok) {
-        const data = await res.json();
-        setPendingCount((data.transactions ?? []).length);
-      }
-    } catch { }
-  }, []);
-
-  useEffect(() => {
-    fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 30000);
-    return () => clearInterval(interval);
-  }, [fetchPendingCount]);
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -154,10 +126,20 @@ export default function MoreScreen() {
             <Feather name="settings" size={20} color={colors.primary} />
           </Pressable>
         </View>
+
+        {/* Net Worth quick view */}
+        <View style={[styles.netWorthCard, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }]}>
+          <Text style={[styles.netWorthLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+            Patrimônio total
+          </Text>
+          <Text style={[styles.netWorthValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+            {formatBRL(netWorth)}
+          </Text>
+        </View>
       </LinearGradient>
 
       <View style={styles.content}>
-        {/* Quick Access */}
+        {/* Recursos */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
           RECURSOS
         </Text>
@@ -185,62 +167,22 @@ export default function MoreScreen() {
             onPress={() => router.push('/(more)/accounts')}
           />
           <MenuItem
-            testID="menu-darf"
-            icon="file-text"
-            label="Imposto de Renda (IRPF)"
-            subtitle={unpaidDarfs.length > 0 ? `${unpaidDarfs.length} DARF(s) pendente(s)` : 'Declaração, DARFs e Calculadoras'}
-            badge={unpaidDarfs.length > 0 ? `${unpaidDarfs.length}` : undefined}
-            badgeColor={unpaidDarfs.length > 0 ? colors.warning : undefined}
-            onPress={() => router.push('/(more)/ir')}
-          />
-          <MenuItem
-            testID="menu-family"
-            icon="users"
-            label="Módulo Familiar"
-            subtitle={familyMembers.length > 0 ? `${familyMembers.length} membro${familyMembers.length !== 1 ? 's' : ''} no grupo` : 'Nenhum membro adicionado'}
-            badge={familyMembers.length > 0 ? `${familyMembers.length}` : undefined}
-            onPress={() => router.push('/(more)/family')}
-          />
-          <MenuItem
             testID="menu-subscriptions"
             icon="award"
-            label="Assinaturas"
-            subtitle={user?.plan && user.plan !== 'Free' ? `Plano ${user.plan} • Ativo` : 'Nenhum plano ativo'}
+            label="Planos e Assinaturas"
+            subtitle={user?.plan && user.plan !== 'Free' ? `Plano ${user.plan} ativo` : 'Ver planos disponíveis'}
             onPress={() => router.push('/(more)/subscriptions')}
-          />
-          <MenuItem
-            testID="menu-bank-notifications"
-            icon="bell"
-            label="Central de Notificações Bancárias"
-            subtitle="Importe SMS e notificações do banco para lançar movimentações"
-            onPress={() => router.push('/(more)/bank-notifications')}
-          />
-          <MenuItem
-            testID="menu-pending-transactions"
-            icon="message-circle"
-            label="Aprovações Pendentes (WhatsApp/IA)"
-            subtitle={pendingCount > 0 ? `${pendingCount} lançamento${pendingCount !== 1 ? 's' : ''} aguardando aprovação` : 'Lançamentos enviados via WhatsApp com IA'}
-            badge={pendingCount > 0 ? `${pendingCount}` : undefined}
-            badgeColor={pendingCount > 0 ? colors.warning : undefined}
-            onPress={() => router.push('/(more)/pending-transactions')}
-          />
-          <MenuItem
-            testID="menu-notification-access"
-            icon="shield"
-            label="Acesso a Notificações e SMS"
-            subtitle="Ative a leitura automática de notificações bancárias"
-            onPress={() => router.push('/(more)/notification-access')}
           />
         </View>
 
-        {/* Budgets Quick View */}
+        {/* Orçamentos */}
         {budgets.filter((b) => b.month === currentMonth).length > 0 && (
           <>
             <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
               ORÇAMENTOS DO MÊS
             </Text>
             <View style={[styles.budgetsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              {budgets.filter((b) => b.month === currentMonth).map((b) => (
+              {budgets.filter((b) => b.month === currentMonth).slice(0, 4).map((b) => (
                 <BudgetProgress
                   key={b.id}
                   category={b.category}
@@ -260,7 +202,7 @@ export default function MoreScreen() {
           </>
         )}
 
-        {/* Settings / Config */}
+        {/* Configurações */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
           CONFIGURAÇÕES
         </Text>
@@ -351,6 +293,12 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
   },
+  netWorthCard: {
+    marginTop: 16, borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 16, paddingVertical: 12,
+  },
+  netWorthLabel: { fontSize: 12, marginBottom: 2 },
+  netWorthValue: { fontSize: 22 },
   content: { padding: 16, gap: 12 },
   sectionLabel: { fontSize: 11, letterSpacing: 1 },
   menuGroup: { gap: 8 },

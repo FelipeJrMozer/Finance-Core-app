@@ -442,9 +442,9 @@ export default function SettingsScreen() {
 
         <View style={[styles.group, { borderColor: theme.border }]}>
           <ToggleRow
-            icon="file-text"
-            label="Alertas de DARF e Assinaturas"
-            subtitle="Lembrete 7 e 3 dias antes do vencimento"
+            icon="bell"
+            label="Alertas de Contas e Vencimentos"
+            subtitle="Lembrete 7 e 3 dias antes do vencimento de faturas"
             value={notifyDARF}
             onChange={(v) => handleNotifToggle('notifyDARF', v)}
           />

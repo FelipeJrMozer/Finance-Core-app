@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiFetch, initApiSession, clearApiSession, BASE_URL } from '@/services/api';
-import { Platform } from 'react-native';
+import { apiFetch, initApiSession, saveTokens, clearTokens, getApiBaseUrl } from '@/services/api';
 
 export interface User {
   id: string;
@@ -26,9 +25,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const USER_KEY = 'pf_user';
 
 function mapApiUser(raw: Record<string, string>): User {
+  const name = [raw.firstName, raw.lastName].filter(Boolean).join(' ')
+    || raw.name
+    || raw.email?.split('@')[0]
+    || 'Usuário';
   return {
     id: raw.id || '1',
-    name: [raw.firstName, raw.lastName].filter(Boolean).join(' ') || raw.name || raw.email?.split('@')[0] || 'Usuário',
+    name,
     email: raw.email,
     avatar: raw.profileImageUrl || undefined,
     plan: raw.plan || undefined,
@@ -52,10 +55,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const fresh = mapApiUser(raw);
             setUser(fresh);
             await AsyncStorage.setItem(USER_KEY, JSON.stringify(fresh));
-          } else {
+          } else if (res.status === 401) {
+            await clearTokens();
             await AsyncStorage.removeItem(USER_KEY);
             setUser(null);
-            await clearApiSession();
           }
         } catch {}
       }
@@ -71,37 +74,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await apiFetch('/api/auth/login', {
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/api/auth/mobile/login`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(text || 'Email ou senha incorretos');
     }
-    const raw = await res.json();
-    const u = mapApiUser(raw);
+    const data = await res.json();
+    await saveTokens(data.accessToken, data.refreshToken);
+    const u = mapApiUser(data.user || { email });
     await persistUser(u);
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     const [firstName, ...rest] = name.trim().split(' ');
     const lastName = rest.join(' ');
-    const res = await apiFetch('/api/auth/register', {
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/api/auth/mobile/register`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ firstName, lastName, email, password }),
-    });
-    if (!res.ok) throw new Error('Falha ao criar conta');
-    const raw = await res.json();
-    const u = mapApiUser({ ...raw, name });
+    }).catch(() => null);
+
+    if (!res || !res.ok) {
+      const fallback = await fetch(`${base}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, lastName, email, password }),
+      });
+      if (!fallback.ok) throw new Error('Falha ao criar conta');
+      const d2 = await fallback.json();
+      if (d2.accessToken) await saveTokens(d2.accessToken, d2.refreshToken);
+      const u2 = mapApiUser({ ...d2.user, name });
+      await persistUser(u2);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.accessToken) await saveTokens(data.accessToken, data.refreshToken);
+    const u = mapApiUser({ ...data.user, name });
     await persistUser(u);
   }, []);
 
   const logout = useCallback(async () => {
     try {
-      await apiFetch('/api/auth/logout', { method: 'POST' });
+      await apiFetch('/api/auth/mobile/logout', { method: 'POST' });
     } catch {}
-    await clearApiSession();
+    await clearTokens();
     await persistUser(null);
   }, []);
 
@@ -123,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       logout,
       updateUser,
-      apiUrl: BASE_URL,
+      apiUrl: getApiBaseUrl(),
     }}>
       {children}
     </AuthContext.Provider>

@@ -1,0 +1,63 @@
+O backend já está preparado para o mobile! Veja como conectar o seu app Expo/React Native:
+
+1. URL Base da API
+
+No seu app mobile, defina a URL do backend:
+
+// Em desenvolvimento (Replit preview)
+const API_URL = "https://e40a0440-53f5-42d5-8fb3-df30383fea87-00-2cv9csfio050e.kirk.replit.dev";
+// Em produção (após publicar)
+const API_URL = "https://pilarfinanceiro.app.br";
+2. Login — obter os tokens
+
+const response = await fetch(`${API_URL}/api/auth/mobile/login`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "usuario@email.com", password: "senha" }),
+});
+const { user, accessToken, refreshToken } = await response.json();
+// Salvar no SecureStore (Expo)
+await SecureStore.setItemAsync("accessToken", accessToken);
+await SecureStore.setItemAsync("refreshToken", refreshToken);
+3. Fazer requisições autenticadas
+
+Todas as rotas protegidas esperam o token no header Authorization:
+
+const token = await SecureStore.getItemAsync("accessToken");
+const response = await fetch(`${API_URL}/api/transactions`, {
+  headers: {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+  },
+});
+4. Renovar o token quando expirar
+
+const refreshToken = await SecureStore.getItemAsync("refreshToken");
+const response = await fetch(`${API_URL}/api/auth/mobile/refresh`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ refreshToken }),
+});
+const { accessToken: newAccess, refreshToken: newRefresh } = await response.json();
+await SecureStore.setItemAsync("accessToken", newAccess);
+await SecureStore.setItemAsync("refreshToken", newRefresh);
+5. Logout
+
+await fetch(`${API_URL}/api/auth/mobile/logout`, {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ refreshToken }),
+});
+await SecureStore.deleteItemAsync("accessToken");
+await SecureStore.deleteItemAsync("refreshToken");
+Resumo do que o backend oferece para o mobile:
+
+Endpoint	O que faz
+POST /api/auth/mobile/login	Login com email/senha → retorna tokens
+POST /api/auth/mobile/refresh	Renova tokens
+POST /api/auth/mobile/logout	Revoga tokens
+Todas as outras /api/*	Funcionam com Bearer token no header
+Os tokens de acesso duram 30 dias e os de refresh 90 dias, então o usuário raramente precisará fazer login novamente. Quer que eu ajude com alguma parte específica da integração?

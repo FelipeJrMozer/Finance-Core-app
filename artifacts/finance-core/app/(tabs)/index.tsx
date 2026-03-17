@@ -150,7 +150,7 @@ const hgStyles = StyleSheet.create({
 // ── Upcoming Bills ──────────────────────────────────────
 function UpcomingBills() {
   const { theme, colors } = useTheme();
-  const { creditCards, darfs } = useFinance();
+  const { creditCards } = useFinance();
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
@@ -163,14 +163,6 @@ function UpcomingBills() {
       dueDate: c.dueDate,
       icon: 'credit-card' as const,
       color: c.color || colors.primary,
-    })),
-    ...darfs.filter((d) => !d.paid).map((d) => ({
-      id: d.id,
-      label: 'DARF',
-      amount: d.amount,
-      dueDate: d.dueDate,
-      icon: 'file-text' as const,
-      color: colors.warning,
     })),
   ]
     .filter((b) => b.dueDate >= todayStr)

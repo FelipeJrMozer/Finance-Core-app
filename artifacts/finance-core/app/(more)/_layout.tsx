@@ -14,14 +14,9 @@ export default function MoreSubLayout() {
     }}>
       <Stack.Screen name="accounts" options={{ title: 'Contas e Cartões' }} />
       <Stack.Screen name="goals" options={{ title: 'Metas Financeiras' }} />
-      <Stack.Screen name="darfs" options={{ title: 'DARFs e IR' }} />
-      <Stack.Screen name="ir" options={{ title: 'Imposto de Renda' }} />
       <Stack.Screen name="budgets" options={{ title: 'Orçamentos' }} />
       <Stack.Screen name="settings" options={{ title: 'Configurações' }} />
-      <Stack.Screen name="family" options={{ title: 'Módulo Familiar' }} />
-      <Stack.Screen name="bank-notifications" options={{ title: 'Central de Notificações Bancárias' }} />
-      <Stack.Screen name="pending-transactions" options={{ title: 'Aprovações Pendentes' }} />
-      <Stack.Screen name="notification-access" options={{ title: 'Acesso a Notificações' }} />
+      <Stack.Screen name="subscriptions" options={{ title: 'Planos e Assinaturas' }} />
     </Stack>
   );
 }
