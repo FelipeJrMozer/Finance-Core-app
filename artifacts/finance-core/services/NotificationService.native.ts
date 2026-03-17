@@ -36,7 +36,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('finance-core', {
-      name: 'Finance Core',
+      name: 'Pilar Financeiro',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#0096C7',
@@ -259,7 +259,7 @@ export async function scheduleWeeklySummary(
   await Notifications.scheduleNotificationAsync({
     identifier: `weekly-summary-next`,
     content: {
-      title: '📊 Resumo Semanal — Finance Core',
+      title: '📊 Resumo Semanal — Pilar Financeiro',
       body: `Receitas: ${formatBRL(monthlyIncome)} | Gastos: ${formatBRL(monthlyExpenses)} | ${summaryLine}`,
       data: { screen: '/(tabs)' },
       ...(Platform.OS === 'android' && { channelId: 'weekly-summary' }),

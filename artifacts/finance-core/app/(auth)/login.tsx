@@ -58,7 +58,7 @@ export default function LoginScreen() {
             </View>
           </LinearGradient>
           <Text style={[styles.title, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-            Finance Core
+            Pilar Financeiro
           </Text>
           <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
             Controle total das suas finanças

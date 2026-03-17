@@ -54,7 +54,7 @@ export default function NotificationAccessScreen() {
   const openNotificationAccess = () => {
     if (Platform.OS === 'android') {
       Linking.openSettings().catch(() =>
-        Alert.alert('Ação necessária', 'Abra: Configurações → Apps → Acesso especial → Acesso a notificações → Finance Core')
+        Alert.alert('Ação necessária', 'Abra: Configurações → Apps → Acesso especial → Acesso a notificações → Pilar Financeiro')
       );
     } else {
       Alert.alert(
@@ -67,7 +67,7 @@ export default function NotificationAccessScreen() {
   const openSmsPermission = () => {
     if (Platform.OS === 'android') {
       Linking.openSettings().catch(() =>
-        Alert.alert('Ação necessária', 'Abra: Configurações → Apps → Finance Core → Permissões → SMS')
+        Alert.alert('Ação necessária', 'Abra: Configurações → Apps → Pilar Financeiro → Permissões → SMS')
       );
     }
   };
@@ -84,7 +84,7 @@ export default function NotificationAccessScreen() {
           Detecção Automática de Transações
         </Text>
         <Text style={[styles.heroDesc, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-          Com o APK personalizado instalado, o Finance Core monitora notificações de todos os seus apps bancários e SMS em tempo real — sem precisar abrir o app.
+          Com o APK personalizado instalado, o Pilar Financeiro monitora notificações de todos os seus apps bancários e SMS em tempo real — sem precisar abrir o app.
         </Text>
       </View>
 
@@ -105,7 +105,7 @@ export default function NotificationAccessScreen() {
       <Step
         number={1}
         title="Instale o APK personalizado"
-        description="Para ler notificações de outros apps, o Finance Core precisa de um build personalizado (não o Expo Go). Você receberá um arquivo .apk para instalar diretamente no celular."
+        description="Para ler notificações de outros apps, o Pilar Financeiro precisa de um build personalizado (não o Expo Go). Você receberá um arquivo .apk para instalar diretamente no celular."
         done={buildDone}
         action={{
           label: buildDone ? '✓ APK instalado' : 'Já instalei o APK',
@@ -116,7 +116,7 @@ export default function NotificationAccessScreen() {
       <Step
         number={2}
         title="Ative o Acesso a Notificações"
-        description="No Android: Configurações → Apps → Acesso especial de apps → Acesso a notificações → ative Finance Core. Isso permite ler qualquer notificação que aparecer na barra de status."
+        description="No Android: Configurações → Apps → Acesso especial de apps → Acesso a notificações → ative Pilar Financeiro. Isso permite ler qualquer notificação que aparecer na barra de status."
         done={notifDone}
         action={{
           label: Platform.OS === 'android' ? 'Abrir Configurações' : 'Passo para Android',
@@ -130,7 +130,7 @@ export default function NotificationAccessScreen() {
       <Step
         number={3}
         title="Permita leitura de SMS"
-        description="Vá em Configurações → Apps → Finance Core → Permissões → SMS e ative 'Ler mensagens'. Isso permite capturar alertas bancários por SMS."
+        description="Vá em Configurações → Apps → Pilar Financeiro → Permissões → SMS e ative 'Ler mensagens'. Isso permite capturar alertas bancários por SMS."
         done={smsDone}
         action={{
           label: Platform.OS === 'android' ? 'Abrir Configurações' : 'Passo para Android',
@@ -149,7 +149,7 @@ export default function NotificationAccessScreen() {
       {[
         { icon: 'eye', title: 'Monitoramento contínuo', desc: 'O serviço em segundo plano verifica cada notificação recebida de qualquer app bancário instalado.' },
         { icon: 'dollar-sign', title: 'Detecção de valores', desc: 'Quando detecta padrões como "R$ 47,90", "compra aprovada", "PIX recebido" etc., dispara um alerta.' },
-        { icon: 'bell', title: 'Notificação Finance Core', desc: 'Você recebe uma notificação do nosso app com o botão "Registrar Transação".' },
+        { icon: 'bell', title: 'Notificação Pilar Financeiro', desc: 'Você recebe uma notificação do nosso app com o botão "Registrar Transação".' },
         { icon: 'zap', title: 'Formulário pré-preenchido', desc: 'Ao tocar na notificação, o app abre com valor, tipo e categoria já sugeridos pela IA.' },
         { icon: 'check-circle', title: 'Você confirma', desc: 'Revise os dados em segundos e confirme. A transação é registrada automaticamente.' },
       ].map((item, i) => (

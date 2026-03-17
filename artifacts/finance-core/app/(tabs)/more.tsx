@@ -296,7 +296,7 @@ export default function MoreScreen() {
         </View>
 
         <Text style={[styles.version, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-          Finance Core v1.0.0
+          Pilar Financeiro v1.0.0
         </Text>
       </View>
     </ScrollView>

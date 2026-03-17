@@ -158,7 +158,7 @@ export default function SettingsScreen() {
       if (!granted) {
         Alert.alert(
           'Permissão Negada',
-          'Para receber notificações, acesse Configurações do dispositivo e habilite as notificações para o Finance Core.',
+          'Para receber notificações, acesse Configurações do dispositivo e habilite as notificações para o Pilar Financeiro.',
           [
             { text: 'Agora não', style: 'cancel' },
             { text: 'Abrir Configurações', onPress: () => Linking.openSettings() },
@@ -193,7 +193,7 @@ export default function SettingsScreen() {
     try {
       await Share.share({
         message: csv,
-        title: 'Finance Core — Exportação de Transações',
+        title: 'Pilar Financeiro — Exportação de Transações',
       });
     } catch {
       Alert.alert('Erro', 'Não foi possível exportar os dados.');
@@ -426,7 +426,7 @@ export default function SettingsScreen() {
               <Text style={[styles.permSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
                 {notifPermission === 'denied'
                   ? 'Toque para abrir as Configurações do dispositivo'
-                  : 'Toque para habilitar notificações do Finance Core'}
+                  : 'Toque para habilitar notificações do Pilar Financeiro'}
               </Text>
             </View>
             <Feather name="chevron-right" size={16} color={theme.textTertiary} />
@@ -537,7 +537,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="info"
             label="Versão do App"
-            subtitle="Finance Core v1.0.0 • Build 2026.03"
+            subtitle="Pilar Financeiro v1.0.0 • Build 2026.03"
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow

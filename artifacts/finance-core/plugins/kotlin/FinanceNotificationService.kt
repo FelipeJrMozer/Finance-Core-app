@@ -17,7 +17,7 @@ class FinanceNotificationService : NotificationListenerService() {
 
     companion object {
         private const val CHANNEL_ID = "finance_core_alerts"
-        private const val CHANNEL_NAME = "Finance Core – Transações Detectadas"
+        private const val CHANNEL_NAME = "Pilar Financeiro – Transações Detectadas"
         private const val NOTIFICATION_ID_BASE = 900000
 
         // Regex: matches "R$ 1.234,56" or "R$1234.56" or "1.234,56 reais" etc.
@@ -100,7 +100,7 @@ class FinanceNotificationService : NotificationListenerService() {
     ) {
         val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Build deep link that opens Finance Core with pre-filled data
+        // Build deep link that opens Pilar Financeiro with pre-filled data
         val encodedText = URLEncoder.encode(rawText.take(500), "UTF-8")
         val encodedAmount = URLEncoder.encode(amount, "UTF-8")
         val deepLink = "finance-core://transaction?text=$encodedText&amount=$encodedAmount&source=notification"
@@ -123,7 +123,7 @@ class FinanceNotificationService : NotificationListenerService() {
 
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("💰 Finance Core – $shortAmount")
+            .setContentTitle("💰 Pilar Financeiro – $shortAmount")
             .setContentText(notifText)
             .setStyle(Notification.BigTextStyle().bigText(notifText))
             .setContentIntent(pendingIntent)

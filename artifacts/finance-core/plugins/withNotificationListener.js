@@ -1,4 +1,4 @@
-// Expo Config Plugin — Finance Core Notification & SMS Listener
+// Expo Config Plugin — Pilar Financeiro Notification & SMS Listener
 // Adds FinanceNotificationService + FinanceSmsReceiver to Android native build.
 // Applied automatically during `expo prebuild` or `eas build`.
 
@@ -26,7 +26,7 @@ function withManifest(config) {
     const notifService = {
       $: {
         'android:name': `${pkgName}.notificationlistener.FinanceNotificationService`,
-        'android:label': 'Finance Core Listener',
+        'android:label': 'Pilar Financeiro Listener',
         'android:exported': 'true',
         'android:permission': 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE',
       },

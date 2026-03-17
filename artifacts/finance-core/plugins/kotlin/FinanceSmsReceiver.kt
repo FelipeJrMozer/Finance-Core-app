@@ -92,7 +92,7 @@ class FinanceSmsReceiver : BroadcastReceiver() {
 
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("📱 Finance Core – SMS $shortAmount")
+            .setContentTitle("📱 Pilar Financeiro – SMS $shortAmount")
             .setContentText(notifText)
             .setStyle(Notification.BigTextStyle().bigText(body.take(300)))
             .setContentIntent(pendingIntent)
@@ -116,7 +116,7 @@ class FinanceSmsReceiver : BroadcastReceiver() {
             if (manager.getNotificationChannel(CHANNEL_ID) != null) return
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Finance Core – Transações Detectadas",
+                "Pilar Financeiro – Transações Detectadas",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alertas de transações detectadas automaticamente via SMS"
