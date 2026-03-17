@@ -97,23 +97,55 @@ export default function TransactionDetailScreen() {
       {/* Hero */}
       <LinearGradient colors={gradientColors as [string, string]} style={styles.hero}>
         {isTransfer ? (
-          <View style={styles.transferIconWrap}>
-            <Feather name="repeat" size={36} color="rgba(0,0,0,0.7)" />
-          </View>
+          <>
+            <Text style={[styles.heroAmount, { fontFamily: 'Inter_700Bold', marginTop: 0 }]}>
+              {maskValue(formatBRL(transaction.amount))}
+            </Text>
+            <View style={[styles.heroBadge, { backgroundColor: 'rgba(0,0,0,0.2)', marginTop: 0 }]}>
+              <Text style={[styles.heroBadgeText, { fontFamily: 'Inter_600SemiBold' }]}>Transferência</Text>
+            </View>
+            {/* Route card */}
+            <View style={[styles.transferRouteCard, { backgroundColor: 'rgba(0,0,0,0.18)' }]}>
+              <View style={styles.transferRouteCol}>
+                <Text style={[styles.transferRouteLabel, { fontFamily: 'Inter_400Regular' }]}>De</Text>
+                {account && <View style={[styles.transferRouteDot, { backgroundColor: account.color }]} />}
+                <Text style={[styles.transferRouteName, { fontFamily: 'Inter_600SemiBold' }]} numberOfLines={2}>
+                  {account?.name || '—'}
+                </Text>
+              </View>
+              <View style={styles.transferRouteArrow}>
+                <Feather name="arrow-right" size={20} color="rgba(255,255,255,0.8)" />
+              </View>
+              <View style={[styles.transferRouteCol, { alignItems: 'flex-end' }]}>
+                <Text style={[styles.transferRouteLabel, { fontFamily: 'Inter_400Regular' }]}>Para</Text>
+                {toAccount && <View style={[styles.transferRouteDot, { backgroundColor: toAccount.color }]} />}
+                <Text style={[styles.transferRouteName, { fontFamily: 'Inter_600SemiBold', textAlign: 'right' }]} numberOfLines={2}>
+                  {toAccount?.name || '—'}
+                </Text>
+              </View>
+            </View>
+            {transaction.description && transaction.description !== 'Transferência' && (
+              <Text style={[styles.heroDesc, { fontFamily: 'Inter_400Regular', fontSize: 14 }]}>
+                {transaction.description}
+              </Text>
+            )}
+          </>
         ) : (
-          <CategoryBadge category={transaction.category} size="md" />
+          <>
+            <CategoryBadge category={transaction.category} size="md" />
+            <Text style={[styles.heroAmount, { fontFamily: 'Inter_700Bold' }]}>
+              {isIncome ? '+' : '-'}{maskValue(formatBRL(transaction.amount))}
+            </Text>
+            <Text style={[styles.heroDesc, { fontFamily: 'Inter_500Medium' }]}>
+              {transaction.description}
+            </Text>
+            <View style={[styles.heroBadge, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
+              <Text style={[styles.heroBadgeText, { fontFamily: 'Inter_400Regular' }]}>
+                {isIncome ? 'Receita' : 'Despesa'} • {info.label}
+              </Text>
+            </View>
+          </>
         )}
-        <Text style={[styles.heroAmount, { fontFamily: 'Inter_700Bold' }]}>
-          {isTransfer ? '' : isIncome ? '+' : '-'}{maskValue(formatBRL(transaction.amount))}
-        </Text>
-        <Text style={[styles.heroDesc, { fontFamily: 'Inter_500Medium' }]}>
-          {transaction.description}
-        </Text>
-        <View style={[styles.heroBadge, { backgroundColor: 'rgba(0,0,0,0.2)' }]}>
-          <Text style={[styles.heroBadgeText, { fontFamily: 'Inter_400Regular' }]}>
-            {isTransfer ? 'Transferência' : isIncome ? 'Receita' : 'Despesa'}{!isTransfer ? ` • ${info.label}` : ''}
-          </Text>
-        </View>
       </LinearGradient>
 
       {/* Details */}
@@ -169,6 +201,12 @@ const styles = StyleSheet.create({
   editBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   hero: { borderRadius: 20, padding: 24, alignItems: 'center', gap: 8 },
   transferIconWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center' },
+  transferRouteCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 14, width: '100%', marginTop: 4 },
+  transferRouteCol: { flex: 1, gap: 4 },
+  transferRouteLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  transferRouteDot: { width: 8, height: 8, borderRadius: 4 },
+  transferRouteName: { color: '#fff', fontSize: 15 },
+  transferRouteArrow: { paddingHorizontal: 12 },
   heroAmount: { color: '#000', fontSize: 42, marginTop: 8 },
   heroDesc: { color: 'rgba(0,0,0,0.8)', fontSize: 18 },
   heroBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 4 },
