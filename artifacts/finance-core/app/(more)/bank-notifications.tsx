@@ -203,9 +203,18 @@ export default function BankNotificationsScreen() {
   const [useCard, setUseCard] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [aiParsing, setAiParsing] = useState(false);
+  const [usedAI, setUsedAI] = useState(false);
 
   const activeAccounts = accounts.filter((a) => !a.archived);
   const activeCards = creditCards;
+
+  const AI_CAT_MAP: Record<string, string> = {
+    'Alimentação': 'food', 'Transporte': 'transport', 'Moradia': 'housing',
+    'Saúde': 'health', 'Lazer': 'entertainment', 'Educação': 'education',
+    'Compras': 'clothing', 'Renda': 'income', 'Transferência': 'other',
+    'Serviços': 'other', 'Outro': 'other',
+  };
 
   useEffect(() => {
     loadHistory().then((h) => { setHistory(h); setLoadingHistory(false); });
@@ -243,8 +252,50 @@ export default function BankNotificationsScreen() {
     }
   };
 
+  const handleAIParse = async (text: string) => {
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (!apiUrl || !text.trim()) return;
+    setAiParsing(true);
+    setUsedAI(false);
+    try {
+      const res = await fetch(`${apiUrl}/api/ai/parse-transaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, source: 'manual' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const p = data.parsed;
+        if (p && p.isTransaction && p.amount > 0) {
+          const aiParsed: ParsedBankMessage = {
+            bank: p.bank ?? 'Banco',
+            amount: p.amount,
+            type: p.type,
+            description: p.description,
+            merchant: p.merchant ?? '',
+            rawText: text,
+            category: AI_CAT_MAP[p.category] ?? 'other',
+            parsedAt: new Date().toISOString(),
+          };
+          setParsed(aiParsed);
+          setParseError('');
+          setFormType(aiParsed.type);
+          setFormDesc(aiParsed.description);
+          setFormAmount(aiParsed.amount.toFixed(2).replace('.', ','));
+          setFormCategory(aiParsed.category);
+          setShowForm(true);
+          setUsedAI(true);
+          return;
+        }
+      }
+    } catch { }
+    finally { setAiParsing(false); }
+    attemptParse(text);
+  };
+
   const handleTextChange = (text: string) => {
     setRawText(text);
+    setUsedAI(false);
     if (text.trim().length > 10) {
       attemptParse(text);
     } else {
@@ -411,9 +462,31 @@ export default function BankNotificationsScreen() {
             />
 
             {rawText.length > 0 && (
-              <Pressable onPress={() => { setRawText(''); setParsed(null); setParseError(''); setShowForm(false); }}>
-                <Text style={[{ color: colors.danger, fontSize: 12, fontFamily: 'Inter_500Medium', textAlign: 'right' }]}>Limpar</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                {process.env.EXPO_PUBLIC_API_URL ? (
+                  <Pressable
+                    onPress={() => handleAIParse(rawText)}
+                    disabled={aiParsing}
+                    style={[styles.pasteBtn, {
+                      backgroundColor: `#7C3AED18`,
+                      borderColor: '#7C3AED40',
+                      opacity: aiParsing ? 0.6 : 1,
+                    }]}
+                  >
+                    {aiParsing ? (
+                      <ActivityIndicator size="small" color="#7C3AED" />
+                    ) : (
+                      <Feather name="cpu" size={14} color="#7C3AED" />
+                    )}
+                    <Text style={[styles.pasteBtnText, { color: '#7C3AED', fontFamily: 'Inter_600SemiBold' }]}>
+                      {aiParsing ? 'Analisando…' : 'Analisar com IA'}
+                    </Text>
+                  </Pressable>
+                ) : <View />}
+                <Pressable onPress={() => { setRawText(''); setParsed(null); setParseError(''); setShowForm(false); setUsedAI(false); }}>
+                  <Text style={[{ color: colors.danger, fontSize: 12, fontFamily: 'Inter_500Medium' }]}>Limpar</Text>
+                </Pressable>
+              </View>
             )}
           </View>
 
@@ -451,9 +524,9 @@ export default function BankNotificationsScreen() {
                   {parsed.merchant}
                 </Text>
                 <View style={[styles.parsedStrip, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Feather name="check-circle" size={12} color="rgba(255,255,255,0.8)" />
+                  <Feather name={usedAI ? 'cpu' : 'check-circle'} size={12} color="rgba(255,255,255,0.8)" />
                   <Text style={[{ color: 'rgba(255,255,255,0.8)', fontSize: 11, fontFamily: 'Inter_400Regular' }]}>
-                    Mensagem identificada automaticamente
+                    {usedAI ? 'Analisado por Inteligência Artificial' : 'Mensagem identificada automaticamente'}
                   </Text>
                 </View>
               </LinearGradient>

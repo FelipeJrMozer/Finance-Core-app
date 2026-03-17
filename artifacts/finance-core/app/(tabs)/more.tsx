@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Alert
 } from 'react-native';
@@ -81,6 +81,26 @@ export default function MoreScreen() {
 
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const netWorth = totalBalance + totalInvestments;
+
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const fetchPendingCount = useCallback(async () => {
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (!apiUrl) return;
+    try {
+      const res = await fetch(`${apiUrl}/api/pending-transactions`);
+      if (res.ok) {
+        const data = await res.json();
+        setPendingCount((data.transactions ?? []).length);
+      }
+    } catch { }
+  }, []);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchPendingCount]);
 
   const handleLogout = () => {
     Alert.alert('Sair', 'Deseja realmente sair?', [
@@ -194,6 +214,15 @@ export default function MoreScreen() {
             label="Central de Notificações Bancárias"
             subtitle="Importe SMS e notificações do banco para lançar movimentações"
             onPress={() => router.push('/(more)/bank-notifications')}
+          />
+          <MenuItem
+            testID="menu-pending-transactions"
+            icon="message-circle"
+            label="Aprovações Pendentes (WhatsApp/IA)"
+            subtitle={pendingCount > 0 ? `${pendingCount} lançamento${pendingCount !== 1 ? 's' : ''} aguardando aprovação` : 'Lançamentos enviados via WhatsApp com IA'}
+            badge={pendingCount > 0 ? `${pendingCount}` : undefined}
+            badgeColor={pendingCount > 0 ? colors.warning : undefined}
+            onPress={() => router.push('/(more)/pending-transactions')}
           />
         </View>
 
