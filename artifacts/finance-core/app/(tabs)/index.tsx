@@ -13,9 +13,10 @@ import { useFinance } from '@/context/FinanceContext';
 import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
-import { CardSkeleton, TransactionSkeleton } from '@/components/ui/SkeletonLoader';
+import { TransactionSkeleton, CardSkeleton } from '@/components/ui/SkeletonLoader';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
 
+// ── Weekly sparkline ──────────────────────────────────────
 function WeeklyChart() {
   const { theme, colors } = useTheme();
   const { transactions } = useFinance();
@@ -32,45 +33,204 @@ function WeeklyChart() {
   });
 
   const maxExpense = Math.max(...days.map((d) => d.expense), 1);
+  const total7Days = days.reduce((s, d) => s + d.expense, 0);
 
   return (
-    <View style={wStyles.container}>
-      <View style={wStyles.bars}>
+    <View style={wStyles.wrap}>
+      <View style={wStyles.container}>
         {days.map((day, idx) => {
           const barPct = day.expense > 0 ? (day.expense / maxExpense) : 0.03;
           return (
             <View key={idx} style={wStyles.barCol}>
+              {day.expense > 0 && (
+                <Text style={[wStyles.barAmt, { color: day.isToday ? colors.primary : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                  {formatBRL(day.expense, true)}
+                </Text>
+              )}
               <View style={[wStyles.barBg, { backgroundColor: theme.surfaceElevated }]}>
                 <View
-                  style={[
-                    wStyles.barFill,
-                    {
-                      backgroundColor: day.isToday ? colors.primary : `${colors.primary}60`,
-                      height: `${barPct * 100}%`,
-                    }
-                  ]}
+                  style={[wStyles.barFill, {
+                    backgroundColor: day.isToday ? colors.primary : `${colors.primary}55`,
+                    height: `${barPct * 100}%`,
+                  }]}
                 />
               </View>
-              <Text style={[wStyles.dayLabel, { color: day.isToday ? colors.primary : theme.textTertiary, fontFamily: day.isToday ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
+              <Text style={[wStyles.dayLabel, {
+                color: day.isToday ? colors.primary : theme.textTertiary,
+                fontFamily: day.isToday ? 'Inter_600SemiBold' : 'Inter_400Regular'
+              }]}>
                 {day.dayName}
               </Text>
             </View>
           );
         })}
       </View>
+      <View style={wStyles.footer}>
+        <Text style={[wStyles.footerLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Total 7 dias</Text>
+        <Text style={[wStyles.footerVal, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{formatBRL(total7Days)}</Text>
+      </View>
     </View>
   );
 }
 
 const wStyles = StyleSheet.create({
-  container: { height: 80, paddingTop: 4 },
-  bars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  barCol: { flex: 1, alignItems: 'center', gap: 4 },
-  barBg: { flex: 1, width: '70%', borderRadius: 4, overflow: 'hidden', justifyContent: 'flex-end' },
-  barFill: { width: '100%', borderRadius: 4, minHeight: 3 },
+  wrap: { gap: 8 },
+  container: { height: 90, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  barCol: { flex: 1, alignItems: 'center', gap: 3 },
+  barAmt: { fontSize: 7 },
+  barBg: { flex: 1, width: '75%', borderRadius: 4, overflow: 'hidden', justifyContent: 'flex-end' },
+  barFill: { width: '100%', borderRadius: 4, minHeight: 4 },
   dayLabel: { fontSize: 9 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  footerLabel: { fontSize: 12 },
+  footerVal: { fontSize: 14 },
 });
 
+// ── Health Score Gauge ──────────────────────────────────────
+function HealthGauge({ score }: { score: number }) {
+  const { theme, colors } = useTheme();
+  const pct = Math.min(score / 1000, 1);
+  const getColor = () => {
+    if (pct >= 0.7) return colors.primary;
+    if (pct >= 0.4) return colors.warning;
+    return colors.danger;
+  };
+  const getLabel = () => {
+    if (pct >= 0.8) return 'Excelente';
+    if (pct >= 0.6) return 'Boa';
+    if (pct >= 0.4) return 'Regular';
+    return 'Atenção';
+  };
+
+  const segments = 20;
+  const filled = Math.round(pct * segments);
+  const color = getColor();
+
+  return (
+    <View style={hgStyles.container}>
+      <View style={hgStyles.segments}>
+        {Array.from({ length: segments }, (_, i) => (
+          <View
+            key={i}
+            style={[
+              hgStyles.segment,
+              {
+                backgroundColor: i < filled ? color : theme.surfaceElevated,
+                opacity: i < filled ? 1 : 0.4,
+              }
+            ]}
+          />
+        ))}
+      </View>
+      <View style={hgStyles.scoreRow}>
+        <View>
+          <Text style={[hgStyles.scoreNum, { color, fontFamily: 'Inter_700Bold' }]}>{score}</Text>
+          <Text style={[hgStyles.scoreMax, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>/1000</Text>
+        </View>
+        <View style={[hgStyles.labelPill, { backgroundColor: `${color}20` }]}>
+          <Feather name="award" size={13} color={color} />
+          <Text style={[hgStyles.labelText, { color, fontFamily: 'Inter_600SemiBold' }]}>{getLabel()}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const hgStyles = StyleSheet.create({
+  container: { gap: 10 },
+  segments: { flexDirection: 'row', gap: 3 },
+  segment: { flex: 1, height: 8, borderRadius: 4 },
+  scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  scoreNum: { fontSize: 32 },
+  scoreMax: { fontSize: 13 },
+  labelPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  labelText: { fontSize: 14 },
+});
+
+// ── Upcoming Bills ──────────────────────────────────────
+function UpcomingBills() {
+  const { theme, colors } = useTheme();
+  const { creditCards, darfs } = useFinance();
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  const upcoming = [
+    ...creditCards.map((c) => ({
+      id: c.id,
+      label: c.name,
+      amount: c.used,
+      dueDate: c.dueDate,
+      icon: 'credit-card' as const,
+      color: c.color || colors.primary,
+    })),
+    ...darfs.filter((d) => !d.paid).map((d) => ({
+      id: d.id,
+      label: 'DARF',
+      amount: d.amount,
+      dueDate: d.dueDate,
+      icon: 'file-text' as const,
+      color: colors.warning,
+    })),
+  ]
+    .filter((b) => b.dueDate >= todayStr)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 3);
+
+  if (upcoming.length === 0) return null;
+
+  const getDaysUntil = (dateStr: string) => {
+    const diff = new Date(dateStr).getTime() - today.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  return (
+    <View style={[ubStyles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={ubStyles.header}>
+        <Feather name="clock" size={16} color={colors.warning} />
+        <Text style={[ubStyles.title, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+          Próximos Vencimentos
+        </Text>
+      </View>
+      {upcoming.map((bill) => {
+        const days = getDaysUntil(bill.dueDate);
+        const urgent = days <= 5;
+        return (
+          <View key={bill.id} style={[ubStyles.bill, { borderColor: theme.border }]}>
+            <View style={[ubStyles.billIcon, { backgroundColor: `${bill.color}20` }]}>
+              <Feather name={bill.icon} size={14} color={bill.color} />
+            </View>
+            <View style={ubStyles.billInfo}>
+              <Text style={[ubStyles.billLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
+                {bill.label}
+              </Text>
+              <Text style={[ubStyles.billDate, { color: urgent ? colors.danger : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                {days === 0 ? 'Vence hoje!' : `Vence em ${days} dia${days !== 1 ? 's' : ''}`}
+              </Text>
+            </View>
+            <Text style={[ubStyles.billAmount, { color: urgent ? colors.danger : theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+              {formatBRL(bill.amount, true)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const ubStyles = StyleSheet.create({
+  card: { borderRadius: 16, padding: 14, gap: 10, borderWidth: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 15 },
+  bill: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8, borderTopWidth: 1 },
+  billIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  billInfo: { flex: 1 },
+  billLabel: { fontSize: 14 },
+  billDate: { fontSize: 12, marginTop: 1 },
+  billAmount: { fontSize: 14 },
+});
+
+// ── Quick Actions ──────────────────────────────────────
 function QuickActions() {
   const { colors } = useTheme();
   const actions = [
@@ -107,6 +267,7 @@ const qaStyles = StyleSheet.create({
   label: { fontSize: 11, textAlign: 'center' },
 });
 
+// ── Main Screen ──────────────────────────────────────
 export default function DashboardScreen() {
   const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { user } = useAuth();
@@ -142,17 +303,17 @@ export default function DashboardScreen() {
     clothing: 'Compras', investment: 'Investimento', other: 'Outros'
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  };
-
+  const topBudgets = budgets.filter((b) => b.month === currentMonth).slice(0, 3);
   const getBudgetSpent = (category: string) =>
     monthlyTx.filter((t) => t.category === category && t.type === 'expense')
       .reduce((s, t) => s + t.amount, 0);
 
-  const topBudgets = budgets.filter((b) => b.month === currentMonth).slice(0, 3);
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -163,7 +324,7 @@ export default function DashboardScreen() {
       >
         {/* Header */}
         <LinearGradient
-          colors={isDark ? ['#0A0A0F', '#0D1A14'] : ['#F0FFF4', '#F5F7FA']}
+          colors={isDark ? ['#0A0A0F', '#091520'] : ['#EBF8FF', '#F5F7FA']}
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <View style={styles.headerTop}>
@@ -206,19 +367,19 @@ export default function DashboardScreen() {
             </Text>
             <View style={styles.balanceFooter}>
               <View style={styles.balanceMetric}>
-                <Feather name="arrow-up-circle" size={14} color="rgba(0,0,0,0.7)" />
+                <Feather name="arrow-up-circle" size={13} color="rgba(0,0,0,0.7)" />
                 <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
                   {maskValue(formatBRL(monthlyIncome, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
-                <Feather name="arrow-down-circle" size={14} color="rgba(0,0,0,0.7)" />
+                <Feather name="arrow-down-circle" size={13} color="rgba(0,0,0,0.7)" />
                 <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
                   {maskValue(formatBRL(monthlyExpenses, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
-                <Feather name="activity" size={14} color="rgba(0,0,0,0.7)" />
+                <Feather name="activity" size={13} color="rgba(0,0,0,0.7)" />
                 <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
                   {savingsRate.toFixed(0)}% poupado
                 </Text>
@@ -231,12 +392,12 @@ export default function DashboardScreen() {
           {/* Quick Actions */}
           <QuickActions />
 
-          {/* Net Worth + Summary row */}
+          {/* Net Worth + Summary */}
           {isLoading ? (
             <View style={styles.summaryRow}><CardSkeleton /><CardSkeleton /></View>
           ) : (
             <>
-              {/* Net Worth Card */}
+              {/* Net Worth */}
               <View style={[styles.netWorthCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.netWorthHeader}>
                   <View>
@@ -249,19 +410,22 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.netWorthBreakdown}>
                     <View style={styles.nwRow}>
+                      <View style={[styles.nwDot, { backgroundColor: colors.primary }]} />
                       <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Contas</Text>
                       <Text style={[styles.nwVal, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
                         {maskValue(formatBRL(totalBalance, true))}
                       </Text>
                     </View>
                     <View style={styles.nwRow}>
-                      <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Investimentos</Text>
+                      <View style={[styles.nwDot, { backgroundColor: colors.info }]} />
+                      <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Invest.</Text>
                       <Text style={[styles.nwVal, { color: colors.info, fontFamily: 'Inter_500Medium' }]}>
                         {maskValue(formatBRL(totalInvestments, true))}
                       </Text>
                     </View>
                     <View style={styles.nwRow}>
-                      <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Crédito usado</Text>
+                      <View style={[styles.nwDot, { backgroundColor: colors.danger }]} />
+                      <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Crédito</Text>
                       <Text style={[styles.nwVal, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
                         -{maskValue(formatBRL(totalCreditUsed, true))}
                       </Text>
@@ -272,41 +436,48 @@ export default function DashboardScreen() {
 
               {/* Summary Cards */}
               <View style={styles.summaryRow}>
-                <SummaryCard
-                  label="Receitas"
-                  value={formatBRL(monthlyIncome, true)}
-                  icon="arrow-up"
-                  color={colors.primary}
-                  trend={5.2}
-                  testID="income-card"
-                />
-                <SummaryCard
-                  label="Despesas"
-                  value={formatBRL(monthlyExpenses, true)}
-                  icon="arrow-down"
-                  color={colors.danger}
-                  trend={-3.1}
-                  testID="expenses-card"
-                />
+                <SummaryCard label="Receitas" value={formatBRL(monthlyIncome, true)} icon="arrow-up" color={colors.primary} trend={5.2} testID="income-card" />
+                <SummaryCard label="Despesas" value={formatBRL(monthlyExpenses, true)} icon="arrow-down" color={colors.danger} trend={-3.1} testID="expenses-card" />
               </View>
               <View style={styles.summaryRow}>
-                <SummaryCard
-                  label="Resultado"
-                  value={formatBRL(netResult, true)}
-                  icon="activity"
-                  color={netResult >= 0 ? colors.primary : colors.danger}
-                  testID="net-card"
-                />
-                <SummaryCard
-                  label="Saúde"
-                  value={`${healthScore}/1000`}
-                  icon="shield"
-                  color={colors.accent}
-                  testID="health-card"
-                />
+                <SummaryCard label="Resultado" value={formatBRL(netResult, true)} icon="activity" color={netResult >= 0 ? colors.primary : colors.danger} testID="net-card" />
+                <SummaryCard label="Invest." value={formatBRL(totalInvestments, true)} icon="trending-up" color={colors.info} testID="invest-card" />
               </View>
             </>
           )}
+
+          {/* Financial Health Gauge */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                Saúde Financeira
+              </Text>
+              <Feather name="shield" size={16} color={theme.textTertiary} />
+            </View>
+            <HealthGauge score={healthScore} />
+            <View style={styles.healthFactors}>
+              {[
+                { label: 'Taxa de poupança', ok: savingsRate >= 20, val: `${savingsRate.toFixed(0)}%` },
+                { label: 'Metas ativas', ok: true, val: 'Sim' },
+                { label: 'Orçamentos', ok: true, val: 'Sim' },
+                { label: 'Investimentos', ok: totalInvestments > 0, val: totalInvestments > 0 ? 'Sim' : 'Não' },
+              ].map((f, idx) => (
+                <View key={idx} style={styles.healthFactor}>
+                  <Feather
+                    name={f.ok ? 'check-circle' : 'alert-circle'}
+                    size={13}
+                    color={f.ok ? colors.primary : colors.warning}
+                  />
+                  <Text style={[styles.factorLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                    {f.label}
+                  </Text>
+                  <Text style={[styles.factorVal, { color: f.ok ? colors.primary : colors.warning, fontFamily: 'Inter_500Medium' }]}>
+                    {f.val}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           {/* 7-Day Spending Chart */}
           <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -319,12 +490,17 @@ export default function DashboardScreen() {
             <WeeklyChart />
           </View>
 
+          {/* Upcoming Bills */}
+          <UpcomingBills />
+
           {/* Insights */}
           {(topExpenseCategory || savingsRate > 0) && (
             <View style={[styles.insightsCard, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}>
-              <Text style={[styles.insightsTitle, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
-                💡 Insights do Mês
-              </Text>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.insightsTitle, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                  💡 Insights do Mês
+                </Text>
+              </View>
               <View style={styles.insightsList}>
                 {savingsRate >= 20 && (
                   <View style={styles.insightRow}>
@@ -372,19 +548,11 @@ export default function DashboardScreen() {
                   Orçamento do Mês
                 </Text>
                 <Pressable onPress={() => router.push('/(tabs)/more')} testID="see-budgets">
-                  <Text style={[styles.seeAll, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
-                    Ver tudo
-                  </Text>
+                  <Text style={[styles.seeAll, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>Ver tudo</Text>
                 </Pressable>
               </View>
               {topBudgets.map((b) => (
-                <BudgetProgress
-                  key={b.id}
-                  category={b.category}
-                  limit={b.limit}
-                  spent={getBudgetSpent(b.category)}
-                  compact
-                />
+                <BudgetProgress key={b.id} category={b.category} limit={b.limit} spent={getBudgetSpent(b.category)} compact />
               ))}
             </View>
           )}
@@ -396,30 +564,29 @@ export default function DashboardScreen() {
                 Últimas Transações
               </Text>
               <Pressable onPress={() => router.push('/(tabs)/transactions')} testID="see-all-transactions">
-                <Text style={[styles.seeAll, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
-                  Ver todas
-                </Text>
+                <Text style={[styles.seeAll, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>Ver todas</Text>
               </Pressable>
             </View>
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => <TransactionSkeleton key={i} />)
-            ) : recentTransactions.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Feather name="inbox" size={40} color={theme.textTertiary} />
-                <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                  Nenhuma transação ainda
-                </Text>
-              </View>
-            ) : (
-              recentTransactions.map((t) => (
-                <TransactionItem
-                  key={t.id}
-                  transaction={t}
-                  onPress={(tx) => router.push({ pathname: '/transaction/[id]', params: { id: tx.id } })}
-                  testID={`transaction-${t.id}`}
-                />
-              ))
-            )}
+            {isLoading
+              ? Array.from({ length: 3 }).map((_, i) => <TransactionSkeleton key={i} />)
+              : recentTransactions.length === 0
+                ? (
+                  <View style={styles.emptyState}>
+                    <Feather name="inbox" size={40} color={theme.textTertiary} />
+                    <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                      Nenhuma transação ainda
+                    </Text>
+                  </View>
+                )
+                : recentTransactions.map((t) => (
+                  <TransactionItem
+                    key={t.id}
+                    transaction={t}
+                    onPress={(tx) => router.push({ pathname: '/transaction/[id]', params: { id: tx.id } })}
+                    testID={`transaction-${t.id}`}
+                  />
+                ))
+            }
           </View>
         </View>
       </ScrollView>
@@ -433,12 +600,7 @@ export default function DashboardScreen() {
         }}
         style={({ pressed }) => [
           styles.fab,
-          {
-            backgroundColor: colors.primary,
-            bottom: insets.bottom + 80,
-            opacity: pressed ? 0.9 : 1,
-            transform: [{ scale: pressed ? 0.95 : 1 }],
-          }
+          { backgroundColor: colors.primary, bottom: insets.bottom + 80, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }
         ]}
       >
         <Feather name="plus" size={24} color="#000" />
@@ -459,23 +621,28 @@ const styles = StyleSheet.create({
   balanceCard: { borderRadius: 20, padding: 20, gap: 8 },
   balanceLabel: { color: 'rgba(0,0,0,0.7)', fontSize: 14 },
   balanceValue: { color: '#000', fontSize: 36 },
-  balanceFooter: { flexDirection: 'row', gap: 16, marginTop: 4, flexWrap: 'wrap' },
+  balanceFooter: { flexDirection: 'row', gap: 14, marginTop: 4, flexWrap: 'wrap' },
   balanceMetric: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  balanceMeta: { color: 'rgba(0,0,0,0.7)', fontSize: 13 },
+  balanceMeta: { color: 'rgba(0,0,0,0.7)', fontSize: 12 },
   content: { padding: 16, gap: 16 },
   summaryRow: { flexDirection: 'row', gap: 12 },
   netWorthCard: { borderRadius: 16, padding: 16, borderWidth: 1 },
-  netWorthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  netWorthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   netWorthLabel: { fontSize: 13, marginBottom: 4 },
   netWorthValue: { fontSize: 28 },
-  netWorthBreakdown: { gap: 4, alignItems: 'flex-end' },
-  nwRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  nwLbl: { fontSize: 12 },
+  netWorthBreakdown: { gap: 6 },
+  nwRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  nwDot: { width: 6, height: 6, borderRadius: 3 },
+  nwLbl: { fontSize: 12, flex: 1 },
   nwVal: { fontSize: 13 },
   section: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 16 },
   seeAll: { fontSize: 14 },
+  healthFactors: { gap: 8 },
+  healthFactor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  factorLabel: { flex: 1, fontSize: 13 },
+  factorVal: { fontSize: 13 },
   insightsCard: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
   insightsTitle: { fontSize: 15 },
   insightsList: { gap: 10 },
@@ -486,7 +653,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute', right: 20, width: 56, height: 56,
     borderRadius: 28, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#00C853', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
 });

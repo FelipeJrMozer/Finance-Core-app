@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Switch, Alert, TextInput, Platform
+  Switch, Alert, TextInput, Platform, Share, ActivityIndicator
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useFinance } from '@/context/FinanceContext';
 import { ACCENT_PRESETS, AccentId } from '@/constants/colors';
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -29,7 +32,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 function SettingsRow({
-  icon, label, subtitle, right, danger = false, onPress
+  icon, label, subtitle, right, danger = false, onPress, disabled = false
 }: {
   icon: keyof typeof Feather.glyphMap;
   label: string;
@@ -37,14 +40,19 @@ function SettingsRow({
   right?: React.ReactNode;
   danger?: boolean;
   onPress?: () => void;
+  disabled?: boolean;
 }) {
   const { theme, colors } = useTheme();
   return (
     <Pressable
-      onPress={() => { if (onPress) { Haptics.selectionAsync(); onPress(); } }}
+      onPress={() => { if (!disabled && onPress) { Haptics.selectionAsync(); onPress(); } }}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
+        {
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
+          opacity: disabled ? 0.5 : pressed ? 0.8 : 1
+        }
       ]}
     >
       <View style={[styles.rowIcon, { backgroundColor: danger ? `${colors.danger}15` : `${colors.primary}15` }]}>
@@ -92,6 +100,33 @@ function ToggleRow({
   );
 }
 
+function SyncBadge() {
+  const { isSyncingColors, colors } = useTheme();
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
+  if (!apiUrl) {
+    return (
+      <View style={[styles.syncBadge, { backgroundColor: '#FF980020' }]}>
+        <Feather name="cloud-off" size={11} color="#FF9800" />
+        <Text style={[styles.syncText, { color: '#FF9800' }]}>Modo offline</Text>
+      </View>
+    );
+  }
+  if (isSyncingColors) {
+    return (
+      <View style={[styles.syncBadge, { backgroundColor: `${colors.primary}20` }]}>
+        <ActivityIndicator size={10} color={colors.primary} />
+        <Text style={[styles.syncText, { color: colors.primary }]}>Sincronizando…</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.syncBadge, { backgroundColor: `${colors.primary}20` }]}>
+      <Feather name="cloud" size={11} color={colors.primary} />
+      <Text style={[styles.syncText, { color: colors.primary }]}>Sincronizado com web</Text>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const {
     theme, colors, isDark, themeMode, setThemeMode,
@@ -100,10 +135,12 @@ export default function SettingsScreen() {
     notifyDARF, notifyBudget, notifyWeekly, setNotifySetting,
   } = useTheme();
   const { user, updateUser } = useAuth();
+  const { transactions, accounts, investments } = useFinance();
   const insets = useSafeAreaInsets();
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || '');
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
 
   const handleSaveName = () => {
     if (nameInput.trim()) {
@@ -111,6 +148,27 @@ export default function SettingsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     setEditingName(false);
+  };
+
+  const handleExportCSV = async () => {
+    const header = 'Data,Descrição,Tipo,Categoria,Valor,Conta\n';
+    const rows = transactions
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((t) => {
+        const account = accounts.find((a) => a.id === t.accountId)?.name || '';
+        return `${t.date},"${t.description}",${t.type === 'income' ? 'Receita' : 'Despesa'},${t.category},${t.amount.toFixed(2)},"${account}"`;
+      })
+      .join('\n');
+
+    const csv = header + rows;
+    try {
+      await Share.share({
+        message: csv,
+        title: 'Finance Core — Exportação de Transações',
+      });
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar os dados.');
+    }
   };
 
   const handleClearData = () => {
@@ -125,22 +183,24 @@ export default function SettingsScreen() {
             const keys = ['fc_transactions', 'fc_accounts', 'fc_credit_cards', 'fc_investments', 'fc_budgets', 'fc_goals', 'fc_darfs'];
             await Promise.all(keys.map((k: string) => AsyncStorage.removeItem(k)));
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            Alert.alert('Concluído', 'Dados removidos. Reinicie o app para ver o estado inicial.');
+            Alert.alert('Concluído', 'Dados removidos. Reinicie o app para carregar o estado inicial.');
           }
         }
       ]
     );
   };
 
+  const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 32, gap: 4 }}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 40, gap: 4 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Profile Card */}
       <LinearGradient
-        colors={isDark ? ['#0A0A0F', '#0D1A14'] : ['#F0FFF4', '#F5F7FA']}
+        colors={isDark ? ['#0A0A0F', '#091520'] : ['#EBF8FF', '#F5F7FA']}
         style={styles.profileCard}
       >
         <View style={[styles.avatarXL, { backgroundColor: colors.primary }]}>
@@ -160,7 +220,7 @@ export default function SettingsScreen() {
               onSubmitEditing={handleSaveName}
             />
             <View style={styles.nameActions}>
-              <Pressable onPress={() => setEditingName(false)} style={[styles.nameBtn, { borderColor: theme.border }]}>
+              <Pressable onPress={() => setEditingName(false)} style={[styles.nameBtn, { borderColor: theme.border, borderWidth: 1 }]}>
                 <Text style={[styles.nameBtnText, { color: theme.textSecondary }]}>Cancelar</Text>
               </Pressable>
               <Pressable onPress={handleSaveName} style={[styles.nameBtn, { backgroundColor: colors.primary }]}>
@@ -187,11 +247,29 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             )}
+            <SyncBadge />
           </View>
         )}
       </LinearGradient>
 
       <View style={styles.content}>
+        {/* Web Color Sync Info */}
+        {apiUrl ? (
+          <View style={[styles.syncInfo, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}>
+            <Feather name="refresh-cw" size={14} color={colors.primary} />
+            <Text style={[styles.syncInfoText, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>
+              Cor sincronizada com o sistema web — quando você troca a cor no web, o app atualiza automaticamente a cada 30s.
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.syncInfo, { backgroundColor: '#FF980012', borderColor: '#FF980030' }]}>
+            <Feather name="cloud-off" size={14} color="#FF9800" />
+            <Text style={[styles.syncInfoText, { color: '#FF9800', fontFamily: 'Inter_400Regular' }]}>
+              Configure EXPO_PUBLIC_API_URL para sincronizar a cor com o sistema web.
+            </Text>
+          </View>
+        )}
+
         {/* Appearance */}
         <SectionTitle title="Aparência" />
 
@@ -230,7 +308,14 @@ export default function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.cardHeader}>
             <Feather name="droplet" size={18} color={colors.primary} />
-            <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>Cor do Sistema</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+                Tema de Cores
+              </Text>
+              <Text style={[styles.cardSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                {currentPreset.label} — {currentPreset.desc}
+              </Text>
+            </View>
           </View>
           <View style={styles.colorGrid}>
             {ACCENT_PRESETS.map(preset => {
@@ -247,7 +332,7 @@ export default function SettingsScreen() {
                       backgroundColor: preset.primary,
                       borderWidth: selected ? 3 : 0,
                       borderColor: '#fff',
-                      transform: [{ scale: selected ? 1.15 : 1 }],
+                      transform: [{ scale: selected ? 1.18 : 1 }],
                     }
                   ]}>
                     {selected && <Feather name="check" size={14} color="#000" />}
@@ -258,6 +343,11 @@ export default function SettingsScreen() {
                   ]}>
                     {preset.label}
                   </Text>
+                  {selected && (
+                    <Text style={[styles.inUseLabel, { color: preset.primary, fontFamily: 'Inter_500Medium' }]}>
+                      Em uso
+                    </Text>
+                  )}
                 </Pressable>
               );
             })}
@@ -270,17 +360,16 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="eye-off"
             label="Ocultar Valores"
-            subtitle="Exibe pontos ao invés de valores"
+            subtitle="Exibe pontos ao invés de valores monetários"
             value={!valuesVisible}
             onChange={() => toggleValuesVisible()}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          <ToggleRow
+          <SettingsRow
             icon="lock"
             label="Autenticação Biométrica"
-            subtitle="Requer Face ID ou impressão digital"
-            value={false}
-            onChange={() => Alert.alert('Em breve', 'Esta funcionalidade será adicionada em uma próxima atualização.')}
+            subtitle="Face ID ou impressão digital — Em breve"
+            disabled
           />
         </View>
 
@@ -290,7 +379,7 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="bell"
             label="Alertas de DARF"
-            subtitle="Lembrete de vencimento de DARF"
+            subtitle="Lembrete antes do vencimento de DARFs"
             value={notifyDARF}
             onChange={(v) => setNotifySetting('notifyDARF', v)}
           />
@@ -298,7 +387,7 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="bar-chart-2"
             label="Alertas de Orçamento"
-            subtitle="Avisa quando ultrapassar 80% do limite"
+            subtitle="Avisa quando atingir 80% do limite"
             value={notifyBudget}
             onChange={(v) => setNotifySetting('notifyBudget', v)}
           />
@@ -317,23 +406,36 @@ export default function SettingsScreen() {
         <View style={[styles.group, { borderColor: theme.border }]}>
           <SettingsRow
             icon="link"
-            label="Conectar Banco"
-            subtitle="Open Finance • Em breve"
-            onPress={() => Alert.alert('Open Finance', 'Integração com bancos via Open Finance chegando em breve!')}
+            label="Open Finance"
+            subtitle={apiUrl ? 'Conectar banco via API' : 'Configure a API para ativar'}
+            onPress={() => Alert.alert(
+              'Open Finance',
+              apiUrl
+                ? `Conectar ao Open Finance via ${apiUrl}\n\nFuncionalidade em desenvolvimento.`
+                : 'Configure EXPO_PUBLIC_API_URL para usar integrações bancárias.'
+            )}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="trending-up"
-            label="Corretora"
-            subtitle="Importar carteira automaticamente • Em breve"
-            onPress={() => Alert.alert('Corretora', 'Importação automática de carteira chegando em breve!')}
+            label="Importar Corretora"
+            subtitle="Importar carteira automaticamente"
+            onPress={() => Alert.alert('Corretora', 'Importe sua carteira de investimentos automaticamente.\n\nFuncionalidade em desenvolvimento — disponível em breve.')}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="cloud"
-            label="Sincronizar com Web"
-            subtitle={`API: ${process.env.EXPO_PUBLIC_API_URL || 'Modo demo (sem API)'}`}
-            onPress={() => Alert.alert('Sincronização', 'Configure EXPO_PUBLIC_API_URL para sincronizar com o servidor web.')}
+            label="Status da Sincronização"
+            subtitle={apiUrl ? `API: ${apiUrl}` : 'Modo offline (demo)'}
+            right={
+              <View style={[styles.statusDot, { backgroundColor: apiUrl ? '#00C853' : '#FF9800' }]} />
+            }
+            onPress={() => Alert.alert(
+              'Sincronização Web',
+              apiUrl
+                ? `Conectado à API: ${apiUrl}\n\nA cor e o tema são sincronizados automaticamente a cada 30 segundos. Ao trocar a cor no sistema web, o app mobile atualiza sozinho.`
+                : 'O app está em modo offline (demo).\n\nPara sincronizar com o sistema web, configure a variável EXPO_PUBLIC_API_URL.'
+            )}
           />
         </View>
 
@@ -343,21 +445,22 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="download"
             label="Exportar CSV"
-            subtitle="Exportar transações em planilha"
-            onPress={() => Alert.alert('Exportar', 'Funcionalidade de exportação CSV em desenvolvimento.')}
+            subtitle={`${transactions.length} transações disponíveis para exportar`}
+            onPress={handleExportCSV}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="upload-cloud"
             label="Backup na Nuvem"
-            subtitle="Salvar dados com segurança"
-            onPress={() => Alert.alert('Backup', 'Backup em nuvem chegando em breve!')}
+            subtitle={apiUrl ? 'Sincronizado com o servidor' : 'Requer conexão com API'}
+            disabled={!apiUrl}
+            onPress={() => Alert.alert('Backup', 'Backup em nuvem disponível quando conectado à API.')}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="trash-2"
-            label="Limpar Dados"
-            subtitle="Remove todas as transações e configurações"
+            label="Limpar Todos os Dados"
+            subtitle="Remove transações, contas e configurações"
             danger
             onPress={handleClearData}
           />
@@ -366,24 +469,33 @@ export default function SettingsScreen() {
         {/* About */}
         <SectionTitle title="Sobre" />
         <View style={[styles.group, { borderColor: theme.border }]}>
-          <SettingsRow icon="info" label="Versão do App" subtitle="Finance Core v1.0.0" />
+          <SettingsRow
+            icon="info"
+            label="Versão do App"
+            subtitle="Finance Core v1.0.0 • Build 2026.03"
+          />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="file-text"
             label="Termos de Uso"
-            onPress={() => Alert.alert('Termos', 'Termos de uso disponíveis em breve.')}
+            onPress={async () => {
+              await WebBrowser.openBrowserAsync('https://financecore.app/terms');
+            }}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="shield"
             label="Política de Privacidade"
-            onPress={() => Alert.alert('Privacidade', 'Política de privacidade disponível em breve.')}
+            onPress={async () => {
+              await WebBrowser.openBrowserAsync('https://financecore.app/privacy');
+            }}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="star"
             label="Avaliar o App"
-            onPress={() => Alert.alert('Obrigado!', 'Sua avaliação é muito importante para nós.')}
+            subtitle="Sua avaliação nos ajuda a crescer"
+            onPress={() => Alert.alert('Obrigado!', 'Você seria redirecionado para a loja de aplicativos para nos avaliar.')}
           />
         </View>
       </View>
@@ -393,10 +505,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   profileCard: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28, alignItems: 'center', gap: 16 },
-  avatarXL: {
-    width: 88, height: 88, borderRadius: 44,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  avatarXL: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   avatarLetter: { fontSize: 40, color: '#000' },
   profileInfo: { alignItems: 'center', gap: 6 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -407,36 +516,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginTop: 4
   },
   planText: { fontSize: 13 },
+  syncBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 4 },
+  syncText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   nameEdit: { width: '100%', gap: 12, paddingHorizontal: 8 },
   nameInput: {
     borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
-    fontSize: 18, textAlign: 'center',
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8, fontSize: 18, textAlign: 'center',
   },
   nameActions: { flexDirection: 'row', gap: 10 },
-  nameBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-    borderWidth: 1,
-  },
+  nameBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   nameBtnText: { fontSize: 15 },
   content: { padding: 16, gap: 8 },
+  syncInfo: { flexDirection: 'row', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, alignItems: 'flex-start' },
+  syncInfoText: { flex: 1, fontSize: 13, lineHeight: 18 },
   sectionTitle: { fontSize: 11, letterSpacing: 1, paddingTop: 8, paddingBottom: 4, paddingHorizontal: 4 },
   card: { borderRadius: 16, padding: 16, gap: 16, borderWidth: 1 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   cardTitle: { fontSize: 15 },
+  cardSub: { fontSize: 12, marginTop: 2 },
   themeOptions: { flexDirection: 'row', gap: 8 },
   themeOpt: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
   },
   themeOptText: { fontSize: 13 },
-  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' },
-  colorItem: { width: '22%', alignItems: 'center', gap: 6 },
-  colorSwatch: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  colorLabel: { fontSize: 11, textAlign: 'center' },
+  colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, justifyContent: 'space-between' },
+  colorItem: { width: '22%', alignItems: 'center', gap: 4 },
+  colorSwatch: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  colorLabel: { fontSize: 10, textAlign: 'center' },
+  inUseLabel: { fontSize: 9, textAlign: 'center' },
   group: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -444,4 +552,5 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 15 },
   rowSub: { fontSize: 12, marginTop: 2 },
   divider: { height: 1, marginLeft: 62 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
 });

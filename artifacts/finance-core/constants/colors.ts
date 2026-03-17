@@ -1,21 +1,71 @@
 export const ACCENT_PRESETS = [
-  { id: 'green',  label: 'Verde',   primary: '#00C853', primaryDark: '#00A846', primaryLight: '#4CAF50' },
-  { id: 'blue',   label: 'Azul',    primary: '#2196F3', primaryDark: '#1565C0', primaryLight: '#64B5F6' },
-  { id: 'purple', label: 'Roxo',    primary: '#9C27B0', primaryDark: '#6A0080', primaryLight: '#CE93D8' },
-  { id: 'orange', label: 'Laranja', primary: '#FF6D00', primaryDark: '#E65100', primaryLight: '#FFAB40' },
-  { id: 'teal',   label: 'Ciano',   primary: '#00BCD4', primaryDark: '#0097A7', primaryLight: '#80DEEA' },
-  { id: 'pink',   label: 'Rosa',    primary: '#E91E63', primaryDark: '#AD1457', primaryLight: '#F48FB1' },
-  { id: 'indigo', label: 'Índigo',  primary: '#3F51B5', primaryDark: '#283593', primaryLight: '#9FA8DA' },
-  { id: 'amber',  label: 'Âmbar',   primary: '#FFC107', primaryDark: '#FF8F00', primaryLight: '#FFE082' },
+  {
+    id: 'ocean',
+    label: 'Azul Oceano',
+    desc: 'Padrão — azul oceano vibrante',
+    primary: '#0096C7',
+    primaryDark: '#005F99',
+    primaryLight: '#48CAE4',
+  },
+  {
+    id: 'green',
+    label: 'Verde Esmeralda',
+    desc: 'Verde financeiro e natural',
+    primary: '#00C853',
+    primaryDark: '#00A846',
+    primaryLight: '#4CAF50',
+  },
+  {
+    id: 'royalblue',
+    label: 'Azul Royal',
+    desc: 'Azul profundo e profissional',
+    primary: '#1976D2',
+    primaryDark: '#1565C0',
+    primaryLight: '#64B5F6',
+  },
+  {
+    id: 'purple',
+    label: 'Roxo Real',
+    desc: 'Roxo elegante e moderno',
+    primary: '#9C27B0',
+    primaryDark: '#7B1FA2',
+    primaryLight: '#CE93D8',
+  },
+  {
+    id: 'orange',
+    label: 'Laranja Vibrante',
+    desc: 'Laranja energético e caloroso',
+    primary: '#FF6D00',
+    primaryDark: '#E65100',
+    primaryLight: '#FFAB40',
+  },
+  {
+    id: 'red',
+    label: 'Vermelho Intenso',
+    desc: 'Vermelho forte e impactante',
+    primary: '#EF5350',
+    primaryDark: '#C62828',
+    primaryLight: '#EF9A9A',
+  },
+  {
+    id: 'neutral',
+    label: 'Neutro Elegante',
+    desc: 'Cinza sofisticado e minimalista',
+    primary: '#78909C',
+    primaryDark: '#546E7A',
+    primaryLight: '#B0BEC5',
+  },
 ] as const;
 
 export type AccentId = typeof ACCENT_PRESETS[number]['id'];
 
+export const DEFAULT_ACCENT_ID: AccentId = 'ocean';
+
 export const Colors = {
-  primary: '#00C853',
-  primaryDark: '#00A846',
-  primaryLight: '#4CAF50',
-  primaryGlow: 'rgba(0, 200, 83, 0.15)',
+  primary: '#0096C7',
+  primaryDark: '#005F99',
+  primaryLight: '#48CAE4',
+  primaryGlow: 'rgba(0, 150, 199, 0.15)',
 
   accent: '#00E5FF',
   accentWarm: '#FFD600',
@@ -55,7 +105,7 @@ export const Colors = {
   chart: {
     green: '#00C853',
     red: '#FF3D57',
-    blue: '#2196F3',
+    blue: '#0096C7',
     purple: '#9C27B0',
     orange: '#FF9800',
     teal: '#009688',
@@ -70,7 +120,7 @@ export const Colors = {
     education: '#DDA0DD',
     clothing: '#FFA07A',
     investment: '#98FB98',
-    income: '#00C853',
+    income: '#0096C7',
     other: '#95A5A6',
   }
 };
