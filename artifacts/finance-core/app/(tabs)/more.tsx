@@ -196,16 +196,16 @@ export default function MoreScreen() {
             testID="menu-family"
             icon="users"
             label="Módulo Familiar"
-            subtitle={`${familyMembers.length} membro${familyMembers.length !== 1 ? 's' : ''} • ${activeSubscriptions.length} assinatura${activeSubscriptions.length !== 1 ? 's' : ''} ativas`}
+            subtitle={familyMembers.length > 0 ? `${familyMembers.length} membro${familyMembers.length !== 1 ? 's' : ''} no grupo` : 'Nenhum membro adicionado'}
             badge={familyMembers.length > 0 ? `${familyMembers.length}` : undefined}
             onPress={() => router.push('/(more)/family')}
           />
           <MenuItem
             testID="menu-subscriptions"
-            icon="refresh-cw"
+            icon="award"
             label="Assinaturas"
-            subtitle={activeSubscriptions.length > 0 ? `${activeSubscriptions.length} ativas • R$ ${monthlySubTotal.toFixed(2).replace('.', ',')}/mês` : 'Nenhuma assinatura ativa'}
-            onPress={() => router.push('/(more)/family')}
+            subtitle={user?.plan && user.plan !== 'Free' ? `Plano ${user.plan} • Ativo` : 'Nenhum plano ativo'}
+            onPress={() => router.push('/(more)/subscriptions')}
           />
           <MenuItem
             testID="menu-bank-notifications"
