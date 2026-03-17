@@ -106,9 +106,8 @@ export default function MoreScreen() {
     Alert.alert('Sair', 'Deseja realmente sair?', [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Sair', style: 'destructive', onPress: async () => {
-          await logout();
-          router.replace('/(auth)/login');
+        text: 'Sair', style: 'destructive', onPress: () => {
+          logout().catch(() => {});
         }
       }
     ]);
