@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Finance Core"
+version = "1.0.0"
+id = "artifacts/finance-core"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+localPort = 18103
+name = "expo"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/finance-core run dev"
+
+[services.env]
+PORT = "18103"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/finance-core", "run", "build"]
+run = ["pnpm", "--filter", "@workspace/finance-core", "run", "serve"]
