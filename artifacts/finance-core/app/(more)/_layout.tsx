@@ -15,6 +15,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="accounts" options={{ title: 'Contas e Cartões' }} />
       <Stack.Screen name="goals" options={{ title: 'Metas Financeiras' }} />
       <Stack.Screen name="darfs" options={{ title: 'DARFs e IR' }} />
+      <Stack.Screen name="ir" options={{ title: 'Imposto de Renda' }} />
       <Stack.Screen name="budgets" options={{ title: 'Orçamentos' }} />
       <Stack.Screen name="settings" options={{ title: 'Configurações' }} />
       <Stack.Screen name="family" options={{ title: 'Módulo Familiar' }} />

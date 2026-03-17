@@ -80,6 +80,34 @@ export interface DARF {
   dueDate: string;
   paid: boolean;
   paidDate?: string;
+  codigoReceita?: string;
+  baseCalculo?: number;
+  taxRate?: number;
+  multa?: number;
+  juros?: number;
+  notes?: string;
+}
+
+export type RendimentoType = 'salario' | 'freelance' | 'aluguel' | 'dividendo' | 'pensao' | 'outros';
+
+export interface IRRendimento {
+  id: string;
+  description: string;
+  type: RendimentoType;
+  amount: number;
+  isMonthly: boolean;
+  retidoFonte: number;
+  year: number;
+}
+
+export type DeducaoType = 'inss' | 'previdencia' | 'educacao' | 'saude' | 'dependente' | 'pensao_alimenticia' | 'outros';
+
+export interface IRDeducao {
+  id: string;
+  type: DeducaoType;
+  description: string;
+  amount: number;
+  year: number;
 }
 
 export type FamilyRole = 'titular' | 'conjuge' | 'filho' | 'dependente' | 'outro';
@@ -119,6 +147,8 @@ interface FinanceContextType {
   budgets: Budget[];
   goals: Goal[];
   darfs: DARF[];
+  rendimentosIR: IRRendimento[];
+  deducoesIR: IRDeducao[];
   familyMembers: FamilyMember[];
   subscriptions: Subscription[];
   addTransaction: (t: Omit<Transaction, 'id'>) => void;
@@ -142,6 +172,12 @@ interface FinanceContextType {
   addBudget: (b: Omit<Budget, 'id'>) => void;
   updateBudget: (id: string, b: Partial<Budget>) => void;
   markDARFPaid: (id: string) => void;
+  addDARF: (d: Omit<DARF, 'id'>) => void;
+  deleteDARF: (id: string) => void;
+  addRendimento: (r: Omit<IRRendimento, 'id'>) => void;
+  deleteRendimento: (id: string) => void;
+  addDeducao: (d: Omit<IRDeducao, 'id'>) => void;
+  deleteDeducao: (id: string) => void;
   getCardTransactions: (cardId: string, month?: string) => Transaction[];
   addFamilyMember: (m: Omit<FamilyMember, 'id'>) => void;
   updateFamilyMember: (id: string, m: Partial<FamilyMember>) => void;
@@ -168,6 +204,8 @@ const KEYS = {
   budgets: 'fc_budgets',
   goals: 'fc_goals',
   darfs: 'fc_darfs',
+  rendimentosIR: 'fc_rendimentos_ir',
+  deducoesIR: 'fc_deducoes_ir',
   familyMembers: 'fc_family_members',
   subscriptions: 'fc_subscriptions',
 };
@@ -270,7 +308,24 @@ function generateDemoData() {
     { id: 'sub8', name: 'Microsoft 365', amount: 599.00, billingCycle: 'annual', nextBillingDate: `${now.getFullYear() + 1}-03-15`, category: 'technology', color: '#0078D4', icon: 'grid', memberId: 'fm1', sharedWith: ['fm2'], active: true },
   ];
 
-  return { accounts, creditCards, transactions, investments, budgets, goals, darfs, familyMembers, subscriptions };
+  const year = now.getFullYear();
+
+  const rendimentosIR: IRRendimento[] = [
+    { id: 'r1', description: 'Salário — Empresa ABC', type: 'salario', amount: 8500, isMonthly: true, retidoFonte: 1250, year },
+    { id: 'r2', description: 'Freelance Design', type: 'freelance', amount: 2000, isMonthly: false, retidoFonte: 0, year },
+    { id: 'r3', description: 'Aluguel — Apartamento Centro', type: 'aluguel', amount: 1800, isMonthly: true, retidoFonte: 270, year },
+    { id: 'r4', description: 'Dividendos FIIs', type: 'dividendo', amount: 3840, isMonthly: false, retidoFonte: 0, year },
+  ];
+
+  const deducoesIR: IRDeducao[] = [
+    { id: 'd1', type: 'inss', description: 'INSS descontado em folha', amount: 9240, year },
+    { id: 'd2', type: 'saude', description: 'Plano de saúde — Unimed', amount: 4800, year },
+    { id: 'd3', type: 'educacao', description: 'Pós-graduação — FGV', amount: 3500, year },
+    { id: 'd4', type: 'dependente', description: 'Pedro Silva (filho)', amount: 2275.08, year },
+    { id: 'd5', type: 'previdencia', description: 'Previdência privada PGBL', amount: 6000, year },
+  ];
+
+  return { accounts, creditCards, transactions, investments, budgets, goals, darfs, rendimentosIR, deducoesIR, familyMembers, subscriptions };
 }
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
@@ -281,6 +336,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [darfs, setDarfs] = useState<DARF[]>([]);
+  const [rendimentosIR, setRendimentosIR] = useState<IRRendimento[]>([]);
+  const [deducoesIR, setDeducoesIR] = useState<IRDeducao[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -288,7 +345,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [t, a, cc, inv, b, g, d, fm, subs] = await Promise.all([
+        const [t, a, cc, inv, b, g, d, rIR, dIR, fm, subs] = await Promise.all([
           AsyncStorage.getItem(KEYS.transactions),
           AsyncStorage.getItem(KEYS.accounts),
           AsyncStorage.getItem(KEYS.creditCards),
@@ -296,6 +353,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEYS.budgets),
           AsyncStorage.getItem(KEYS.goals),
           AsyncStorage.getItem(KEYS.darfs),
+          AsyncStorage.getItem(KEYS.rendimentosIR),
+          AsyncStorage.getItem(KEYS.deducoesIR),
           AsyncStorage.getItem(KEYS.familyMembers),
           AsyncStorage.getItem(KEYS.subscriptions),
         ]);
@@ -309,6 +368,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           setBudgets(demo.budgets);
           setGoals(demo.goals);
           setDarfs(demo.darfs);
+          setRendimentosIR(demo.rendimentosIR);
+          setDeducoesIR(demo.deducoesIR);
           setFamilyMembers(demo.familyMembers);
           setSubscriptions(demo.subscriptions);
           await Promise.all([
@@ -319,6 +380,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             AsyncStorage.setItem(KEYS.budgets, JSON.stringify(demo.budgets)),
             AsyncStorage.setItem(KEYS.goals, JSON.stringify(demo.goals)),
             AsyncStorage.setItem(KEYS.darfs, JSON.stringify(demo.darfs)),
+            AsyncStorage.setItem(KEYS.rendimentosIR, JSON.stringify(demo.rendimentosIR)),
+            AsyncStorage.setItem(KEYS.deducoesIR, JSON.stringify(demo.deducoesIR)),
             AsyncStorage.setItem(KEYS.familyMembers, JSON.stringify(demo.familyMembers)),
             AsyncStorage.setItem(KEYS.subscriptions, JSON.stringify(demo.subscriptions)),
           ]);
@@ -330,6 +393,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (b) setBudgets(JSON.parse(b));
           if (g) setGoals(JSON.parse(g));
           if (d) setDarfs(JSON.parse(d));
+          if (rIR) setRendimentosIR(JSON.parse(rIR));
+          if (dIR) setDeducoesIR(JSON.parse(dIR));
           if (fm) setFamilyMembers(JSON.parse(fm));
           if (subs) setSubscriptions(JSON.parse(subs));
         }
@@ -589,6 +654,57 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const addDARF = useCallback((d: Omit<DARF, 'id'>) => {
+    const newD = { ...d, id: uid() };
+    setDarfs((prev) => {
+      const next = [newD, ...prev];
+      save(KEYS.darfs, next);
+      return next;
+    });
+  }, []);
+
+  const deleteDARF = useCallback((id: string) => {
+    setDarfs((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.darfs, next);
+      return next;
+    });
+  }, []);
+
+  const addRendimento = useCallback((r: Omit<IRRendimento, 'id'>) => {
+    const newR = { ...r, id: uid() };
+    setRendimentosIR((prev) => {
+      const next = [newR, ...prev];
+      save(KEYS.rendimentosIR, next);
+      return next;
+    });
+  }, []);
+
+  const deleteRendimento = useCallback((id: string) => {
+    setRendimentosIR((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.rendimentosIR, next);
+      return next;
+    });
+  }, []);
+
+  const addDeducao = useCallback((d: Omit<IRDeducao, 'id'>) => {
+    const newD = { ...d, id: uid() };
+    setDeducoesIR((prev) => {
+      const next = [newD, ...prev];
+      save(KEYS.deducoesIR, next);
+      return next;
+    });
+  }, []);
+
+  const deleteDeducao = useCallback((id: string) => {
+    setDeducoesIR((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.deducoesIR, next);
+      return next;
+    });
+  }, []);
+
   const addFamilyMember = useCallback((m: Omit<FamilyMember, 'id'>) => {
     const newM = { ...m, id: uid() };
     setFamilyMembers((prev) => {
@@ -668,13 +784,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   return (
     <FinanceContext.Provider value={{
       transactions, accounts, creditCards, investments, budgets, goals, darfs,
+      rendimentosIR, deducoesIR,
       familyMembers, subscriptions,
       addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
       addCreditCard, updateCreditCard, deleteCreditCard,
       addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
       addInvestment, updateInvestment, addGoal, updateGoal, addContribution,
-      addBudget, updateBudget, markDARFPaid,
+      addBudget, updateBudget, markDARFPaid, addDARF, deleteDARF,
+      addRendimento, deleteRendimento, addDeducao, deleteDeducao,
       addFamilyMember, updateFamilyMember, deleteFamilyMember,
       addSubscription, updateSubscription, deleteSubscription, toggleSubscription,
       totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,

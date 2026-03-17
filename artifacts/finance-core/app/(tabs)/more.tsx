@@ -167,11 +167,11 @@ export default function MoreScreen() {
           <MenuItem
             testID="menu-darf"
             icon="file-text"
-            label="DARFs e IR"
-            subtitle={unpaidDarfs.length > 0 ? `${unpaidDarfs.length} DARF(s) pendente(s)` : 'Sem pendências'}
+            label="Imposto de Renda (IRPF)"
+            subtitle={unpaidDarfs.length > 0 ? `${unpaidDarfs.length} DARF(s) pendente(s)` : 'Declaração, DARFs e Calculadoras'}
             badge={unpaidDarfs.length > 0 ? `${unpaidDarfs.length}` : undefined}
             badgeColor={unpaidDarfs.length > 0 ? colors.warning : undefined}
-            onPress={() => router.push('/(more)/darfs')}
+            onPress={() => router.push('/(more)/ir')}
           />
           <MenuItem
             testID="menu-family"
