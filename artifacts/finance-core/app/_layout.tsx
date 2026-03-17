@@ -52,6 +52,8 @@ function RootLayoutNav() {
       <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
       <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
       <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
+      <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
+      <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
       <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
     </Stack>
   );

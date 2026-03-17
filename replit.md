@@ -51,6 +51,31 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ## Packages
 
+### `artifacts/finance-core` (`@workspace/finance-core`)
+
+React Native + Expo (managed workflow) personal finance mobile app targeting Google Play and Apple App Store.
+
+- **Tech**: Expo Router, Context API, AsyncStorage, TypeScript
+- **Theme**: "Azul Oceano" (`#0096C7`) default accent; 7 presets sync with web via API
+- **Auth**: Demo mode (click Entrar) or API-backed; `EXPO_PUBLIC_API_URL` env controls mode
+- **API sync**: `GET/PUT /api/preferences` — mobile syncs accent color with web, polls every 30s
+- **Screens**:
+  - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart
+  - Transactions (add, edit, delete, installments, recurring)
+  - Reports (charts by category, income vs expenses)
+  - Investments (stocks, FIIs, ETFs, crypto, fixed income)
+  - Mais → Contas e Cartões, Metas, DARFs, Orçamentos, Configurações
+- **Credit Card Features** (`app/card/`):
+  - `card/[id].tsx` — detail screen with 3 tabs: Fatura (invoice), Parcelas (installments), Detalhes (details)
+  - Fatura tab: month navigator, invoice total, category spending chart (horizontal bars), transaction list, FAB to add expense + pay invoice
+  - Parcelas tab: installment purchases with "Adiantar para este mês" button
+  - Detalhes tab: card limits/dates info, edit + delete buttons
+  - `card/add.tsx` — add/edit credit card form with live card preview
+- **Account Features** (`app/account/`):
+  - `account/add.tsx` supports both add (new) and edit (id param) modes with delete option
+  - `account/[id].tsx` — detail with income/expenses stats, edit button in header
+- **FinanceContext**: `addCardExpense`, `payCardInvoice`, `advanceInstallment`, `getCardTransactions`, `deleteCreditCard`, `deleteAccount`; Transaction has optional `cardId` field
+
 ### `artifacts/api-server` (`@workspace/api-server`)
 
 Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
@@ -58,6 +83,8 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- `src/routes/auth.ts` — demo auth: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`
+- `src/routes/preferences.ts` — `GET/PUT /api/preferences` persists accent/theme to `preferences.json`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)

@@ -13,9 +13,12 @@ export interface Transaction {
   accountId: string;
   date: string;
   installments?: number;
+  currentInstallment?: number;
   recurring?: boolean;
   receiptUri?: string;
   tags?: string[];
+  cardId?: string;
+  isInvoicePayment?: boolean;
 }
 
 export interface Account {
@@ -90,8 +93,13 @@ interface FinanceContextType {
   deleteTransaction: (id: string) => void;
   addAccount: (a: Omit<Account, 'id'>) => void;
   updateAccount: (id: string, a: Partial<Account>) => void;
+  deleteAccount: (id: string) => void;
   addCreditCard: (c: Omit<CreditCard, 'id'>) => void;
   updateCreditCard: (id: string, c: Partial<CreditCard>) => void;
+  deleteCreditCard: (id: string) => void;
+  addCardExpense: (cardId: string, t: Omit<Transaction, 'id' | 'cardId'>) => void;
+  payCardInvoice: (cardId: string, amount: number, accountId: string) => void;
+  advanceInstallment: (transactionId: string) => void;
   addInvestment: (i: Omit<Investment, 'id'>) => void;
   updateInvestment: (id: string, i: Partial<Investment>) => void;
   addGoal: (g: Omit<Goal, 'id'>) => void;
@@ -100,6 +108,7 @@ interface FinanceContextType {
   addBudget: (b: Omit<Budget, 'id'>) => void;
   updateBudget: (id: string, b: Partial<Budget>) => void;
   markDARFPaid: (id: string) => void;
+  getCardTransactions: (cardId: string, month?: string) => Transaction[];
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -125,6 +134,9 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2,
 function generateDemoData() {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonth = now.getMonth() === 0
+    ? `${now.getFullYear() - 1}-12`
+    : `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
 
   const accounts: Account[] = [
     { id: '1', name: 'Conta Corrente', type: 'checking', balance: 8420.50, institution: 'Nubank', color: '#8B5CF6', archived: false },
@@ -133,8 +145,8 @@ function generateDemoData() {
   ];
 
   const creditCards: CreditCard[] = [
-    { id: '1', name: 'Nubank Ultravioleta', institution: 'Nubank', limit: 15000, used: 3200, dueDate: '2026-04-10', closingDate: '2026-04-03', color: '#8B5CF6' },
-    { id: '2', name: 'Bradesco Visa Infinite', institution: 'Bradesco', limit: 20000, used: 8500, dueDate: '2026-04-15', closingDate: '2026-04-08', color: '#3B82F6' },
+    { id: 'c1', name: 'Nubank Ultravioleta', institution: 'Nubank', limit: 15000, used: 3847.80, dueDate: '2026-04-10', closingDate: '2026-04-03', color: '#8B5CF6' },
+    { id: 'c2', name: 'Bradesco Visa Infinite', institution: 'Bradesco', limit: 20000, used: 2340.00, dueDate: '2026-04-15', closingDate: '2026-04-08', color: '#3B82F6' },
   ];
 
   const transactions: Transaction[] = [
@@ -148,8 +160,23 @@ function generateDemoData() {
     { id: '8', description: 'Restaurante', amount: 89, type: 'expense', category: 'food', accountId: '1', date: `${currentMonth}-12` },
     { id: '9', description: 'Conta de Luz', amount: 180, type: 'expense', category: 'housing', accountId: '1', date: `${currentMonth}-15` },
     { id: '10', description: 'Spotify', amount: 19.90, type: 'expense', category: 'entertainment', accountId: '1', date: `${currentMonth}-10`, recurring: true },
-    { id: '11', description: 'iPhone 15 Pro', amount: 1200, type: 'expense', category: 'clothing', accountId: '2', date: `${currentMonth}-11`, installments: 12 },
+    { id: '11', description: 'iPhone 15 Pro', amount: 1200, type: 'expense', category: 'clothing', accountId: '2', date: `${currentMonth}-11`, installments: 12, currentInstallment: 3, cardId: 'c1' },
     { id: '12', description: 'Dividendos MXRF11', amount: 320, type: 'income', category: 'investment', accountId: '3', date: `${currentMonth}-14` },
+    { id: 'cc1', description: 'Supermercado Extra', amount: 387.50, type: 'expense', category: 'food', accountId: '1', date: `${currentMonth}-04`, cardId: 'c1' },
+    { id: 'cc2', description: 'Netflix', amount: 55.90, type: 'expense', category: 'entertainment', accountId: '1', date: `${currentMonth}-01`, cardId: 'c1', recurring: true },
+    { id: 'cc3', description: 'Farmácia', amount: 124.40, type: 'expense', category: 'health', accountId: '1', date: `${currentMonth}-06`, cardId: 'c1' },
+    { id: 'cc4', description: 'Posto de Gasolina', amount: 280.00, type: 'expense', category: 'transport', accountId: '1', date: `${currentMonth}-09`, cardId: 'c1' },
+    { id: 'cc5', description: 'Amazon - Livros', amount: 159.90, type: 'expense', category: 'education', accountId: '1', date: `${currentMonth}-11`, cardId: 'c1', installments: 3, currentInstallment: 1 },
+    { id: 'cc6', description: 'Rappi - Restaurante', amount: 89.00, type: 'expense', category: 'food', accountId: '1', date: `${currentMonth}-13`, cardId: 'c1' },
+    { id: 'cc7', description: 'Decathlon - Tênis', amount: 320.00, type: 'expense', category: 'clothing', accountId: '1', date: `${currentMonth}-07`, cardId: 'c1', installments: 2, currentInstallment: 1 },
+    { id: 'cc8', description: 'iFood - Jantar', amount: 75.10, type: 'expense', category: 'food', accountId: '1', date: `${currentMonth}-15`, cardId: 'c1' },
+    { id: 'cd1', description: 'Uber', amount: 38.00, type: 'expense', category: 'transport', accountId: '1', date: `${currentMonth}-03`, cardId: 'c2' },
+    { id: 'cd2', description: 'Booking.com', amount: 1200.00, type: 'expense', category: 'leisure', accountId: '1', date: `${currentMonth}-08`, cardId: 'c2', installments: 6, currentInstallment: 2 },
+    { id: 'cd3', description: 'Apple One', amount: 49.90, type: 'expense', category: 'entertainment', accountId: '1', date: `${currentMonth}-01`, cardId: 'c2', recurring: true },
+    { id: 'cd4', description: 'Zara', amount: 289.90, type: 'expense', category: 'clothing', accountId: '1', date: `${currentMonth}-10`, cardId: 'c2' },
+    { id: 'cd5', description: 'Dentista', amount: 350.00, type: 'expense', category: 'health', accountId: '1', date: `${currentMonth}-05`, cardId: 'c2', installments: 3, currentInstallment: 1 },
+    { id: 'cprev1', description: 'Amazon - Fone de Ouvido', amount: 499.00, type: 'expense', category: 'education', accountId: '1', date: `${currentMonth}-20`, cardId: 'c1', installments: 5, currentInstallment: 2 },
+    { id: 'cprev2', description: 'SHEIN', amount: 189.00, type: 'expense', category: 'clothing', accountId: '1', date: `${currentMonth}-22`, cardId: 'c2', installments: 4, currentInstallment: 1 },
   ];
 
   const investments: Investment[] = [
@@ -285,6 +312,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const deleteAccount = useCallback((id: string) => {
+    setAccounts((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.accounts, next);
+      return next;
+    });
+  }, []);
+
   const addCreditCard = useCallback((c: Omit<CreditCard, 'id'>) => {
     const newC = { ...c, id: uid() };
     setCreditCards((prev) => {
@@ -301,6 +336,84 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  const deleteCreditCard = useCallback((id: string) => {
+    setCreditCards((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.creditCards, next);
+      return next;
+    });
+  }, []);
+
+  const addCardExpense = useCallback((cardId: string, t: Omit<Transaction, 'id' | 'cardId'>) => {
+    const newT: Transaction = { ...t, id: uid(), cardId };
+    setTransactions((prev) => {
+      const next = [newT, ...prev];
+      save(KEYS.transactions, next);
+      return next;
+    });
+    setCreditCards((prev) => {
+      const next = prev.map((card) =>
+        card.id === cardId ? { ...card, used: card.used + t.amount } : card
+      );
+      save(KEYS.creditCards, next);
+      return next;
+    });
+  }, []);
+
+  const payCardInvoice = useCallback((cardId: string, amount: number, accountId: string) => {
+    const paymentTx: Transaction = {
+      id: uid(),
+      description: `Fatura Cartão`,
+      amount,
+      type: 'expense',
+      category: 'housing',
+      accountId,
+      date: new Date().toISOString().split('T')[0],
+      isInvoicePayment: true,
+    };
+    setTransactions((prev) => {
+      const next = [paymentTx, ...prev];
+      save(KEYS.transactions, next);
+      return next;
+    });
+    setAccounts((prev) => {
+      const next = prev.map((acc) =>
+        acc.id === accountId ? { ...acc, balance: acc.balance - amount } : acc
+      );
+      save(KEYS.accounts, next);
+      return next;
+    });
+    setCreditCards((prev) => {
+      const next = prev.map((card) =>
+        card.id === cardId ? { ...card, used: Math.max(0, card.used - amount) } : card
+      );
+      save(KEYS.creditCards, next);
+      return next;
+    });
+  }, []);
+
+  const advanceInstallment = useCallback((transactionId: string) => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setTransactions((prev) => {
+      const next = prev.map((item) => {
+        if (item.id !== transactionId) return item;
+        const day = item.date.split('-')[2] || '15';
+        return { ...item, date: `${currentMonth}-${day}` };
+      });
+      save(KEYS.transactions, next);
+      return next;
+    });
+  }, []);
+
+  const getCardTransactions = useCallback((cardId: string, month?: string) => {
+    return transactions.filter((t) => {
+      if (t.cardId !== cardId) return false;
+      if (month) return t.date.startsWith(month);
+      return true;
+    });
+  }, [transactions]);
 
   const addInvestment = useCallback((i: Omit<Investment, 'id'>) => {
     const newI = { ...i, id: uid() };
@@ -397,7 +510,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     <FinanceContext.Provider value={{
       transactions, accounts, creditCards, investments, budgets, goals, darfs,
       addTransaction, updateTransaction, deleteTransaction,
-      addAccount, updateAccount, addCreditCard, updateCreditCard,
+      addAccount, updateAccount, deleteAccount,
+      addCreditCard, updateCreditCard, deleteCreditCard,
+      addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
       addInvestment, updateInvestment, addGoal, updateGoal, addContribution,
       addBudget, updateBudget, markDARFPaid,
       totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
