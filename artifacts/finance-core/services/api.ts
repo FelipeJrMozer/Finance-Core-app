@@ -11,7 +11,7 @@ let _isRefreshing = false;
 let _refreshQueue: Array<(token: string | null) => void> = [];
 
 export function getApiBaseUrl() {
-  return process.env.EXPO_PUBLIC_API_URL || 'https://pilarfinanceiro.replit.app';
+  return (process.env.EXPO_PUBLIC_API_URL || 'https://pilarfinanceiro.replit.app').replace(/\/$/, '');
 }
 
 export async function initApiSession() {
@@ -26,6 +26,11 @@ export async function saveTokens(accessToken: string, refreshToken: string) {
   await AsyncStorage.setItem(KEYS.refreshToken, refreshToken);
 }
 
+export async function updateAccessToken(accessToken: string) {
+  _accessToken = accessToken;
+  await AsyncStorage.setItem(KEYS.accessToken, accessToken);
+}
+
 export async function clearTokens() {
   _accessToken = null;
   _refreshToken = null;
@@ -33,17 +38,19 @@ export async function clearTokens() {
   await AsyncStorage.removeItem(KEYS.refreshToken);
 }
 
-export function getAccessToken() {
-  return _accessToken;
-}
+export function getAccessToken() { return _accessToken; }
+export function getRefreshToken() { return _refreshToken; }
 
 async function tryRefresh(): Promise<string | null> {
   if (!_refreshToken) return null;
   const base = getApiBaseUrl();
   try {
-    const res = await fetch(`${base}/api/auth/mobile/refresh`, {
+    const res = await fetch(`${base}/api/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
       body: JSON.stringify({ refreshToken: _refreshToken }),
     });
     if (!res.ok) {
@@ -51,8 +58,14 @@ async function tryRefresh(): Promise<string | null> {
       return null;
     }
     const data = await res.json();
-    await saveTokens(data.accessToken, data.refreshToken);
-    return data.accessToken;
+    const newAccess: string = data.accessToken;
+    if (!newAccess) { await clearTokens(); return null; }
+    await updateAccessToken(newAccess);
+    if (data.refreshToken) {
+      _refreshToken = data.refreshToken;
+      await AsyncStorage.setItem(KEYS.refreshToken, data.refreshToken);
+    }
+    return newAccess;
   } catch {
     await clearTokens();
     return null;
@@ -63,6 +76,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   const base = getApiBaseUrl();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -76,12 +90,8 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     if (_isRefreshing) {
       return new Promise((resolve) => {
         _refreshQueue.push(async (token) => {
-          if (!token) {
-            resolve(res);
-            return;
-          }
-          const retryHeaders = { ...headers, Authorization: `Bearer ${token}` };
-          resolve(fetch(`${base}${path}`, { ...options, headers: retryHeaders }));
+          if (!token) { resolve(res); return; }
+          resolve(fetch(`${base}${path}`, { ...options, headers: { ...headers, Authorization: `Bearer ${token}` } }));
         });
       });
     }
@@ -89,14 +99,11 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     _isRefreshing = true;
     const newToken = await tryRefresh();
     _isRefreshing = false;
-
     _refreshQueue.forEach((cb) => cb(newToken));
     _refreshQueue = [];
 
     if (!newToken) return res;
-
-    const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
-    return fetch(`${base}${path}`, { ...options, headers: retryHeaders });
+    return fetch(`${base}${path}`, { ...options, headers: { ...headers, Authorization: `Bearer ${newToken}` } });
   }
 
   return res;
@@ -108,7 +115,9 @@ export async function apiGet<T>(path: string): Promise<T> {
     const text = await res.text().catch(() => '');
     throw new Error(`GET ${path} ${res.status}: ${text.slice(0, 200)}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || text === 'null') return [] as unknown as T;
+  return JSON.parse(text);
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
@@ -120,7 +129,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     const text = await res.text().catch(() => '');
     throw new Error(text.slice(0, 300) || `POST ${path} ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || text === 'null') return {} as T;
+  return JSON.parse(text);
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
@@ -132,7 +143,23 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
     const text = await res.text().catch(() => '');
     throw new Error(text.slice(0, 300) || `PATCH ${path} ${res.status}`);
   }
-  return res.json();
+  const text = await res.text();
+  if (!text || text === 'null') return {} as T;
+  return JSON.parse(text);
+}
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const res = await apiFetch(path, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(text.slice(0, 300) || `PUT ${path} ${res.status}`);
+  }
+  const text = await res.text();
+  if (!text || text === 'null') return {} as T;
+  return JSON.parse(text);
 }
 
 export async function apiDelete(path: string): Promise<void> {

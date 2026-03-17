@@ -25,7 +25,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const USER_KEY = 'pf_user';
 
 function mapApiUser(raw: Record<string, string>): User {
-  const name = [raw.firstName, raw.lastName].filter(Boolean).join(' ')
+  const name = [raw.firstName, raw.lastName].filter(Boolean).join(' ').trim()
     || raw.name
     || raw.email?.split('@')[0]
     || 'Usuário';
@@ -34,8 +34,26 @@ function mapApiUser(raw: Record<string, string>): User {
     name,
     email: raw.email,
     avatar: raw.profileImageUrl || undefined,
-    plan: raw.plan || undefined,
+    plan: (raw as unknown as Record<string, string>).plan || undefined,
   };
+}
+
+async function doLogin(email: string, password: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let msg = 'Email ou senha incorretos';
+    try { msg = JSON.parse(text).message || msg; } catch {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  const user = mapApiUser(data.user || { email });
+  return { user, accessToken: data.accessToken, refreshToken: data.refreshToken };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -74,56 +92,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = useCallback(async (email: string, password: string) => {
-    const base = getApiBaseUrl();
-    const res = await fetch(`${base}/api/auth/mobile/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || 'Email ou senha incorretos');
-    }
-    const data = await res.json();
-    await saveTokens(data.accessToken, data.refreshToken);
-    const u = mapApiUser(data.user || { email });
+    const { user: u, accessToken, refreshToken } = await doLogin(email, password);
+    await saveTokens(accessToken, refreshToken);
     await persistUser(u);
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     const [firstName, ...rest] = name.trim().split(' ');
-    const lastName = rest.join(' ');
+    const lastName = rest.join(' ') || '';
     const base = getApiBaseUrl();
-    const res = await fetch(`${base}/api/auth/mobile/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName, lastName, email, password }),
-    }).catch(() => null);
 
-    if (!res || !res.ok) {
-      const fallback = await fetch(`${base}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstName, lastName, email, password }),
-      });
-      if (!fallback.ok) throw new Error('Falha ao criar conta');
-      const d2 = await fallback.json();
-      if (d2.accessToken) await saveTokens(d2.accessToken, d2.refreshToken);
-      const u2 = mapApiUser({ ...d2.user, name });
-      await persistUser(u2);
-      return;
+    const res = await fetch(`${base}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ firstName, lastName, email, password }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      let msg = 'Falha ao criar conta';
+      try { msg = JSON.parse(text).message || msg; } catch {}
+      throw new Error(msg);
     }
 
-    const data = await res.json();
-    if (data.accessToken) await saveTokens(data.accessToken, data.refreshToken);
-    const u = mapApiUser({ ...data.user, name });
-    await persistUser(u);
+    const { user: loginUser, accessToken, refreshToken } = await doLogin(email, password);
+    await saveTokens(accessToken, refreshToken);
+    await persistUser(loginUser);
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      await apiFetch('/api/auth/mobile/logout', { method: 'POST' });
-    } catch {}
+    try { await apiFetch('/api/auth/logout', { method: 'POST' }); } catch {}
     await clearTokens();
     await persistUser(null);
   }, []);

@@ -44,9 +44,13 @@ export default function AddInvestmentScreen() {
       return;
     }
     setLoading(true);
-    addInvestment({ name, ticker: ticker.toUpperCase(), type, quantity: qty, avgPrice: avg, currentPrice: curr, currency: 'BRL' });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    try {
+      await addInvestment({ name, ticker: ticker.toUpperCase(), type, quantity: qty, avgPrice: avg, currentPrice: curr, currency: 'BRL' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

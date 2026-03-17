@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type TransactionType = 'income' | 'expense' | 'transfer';
-export type AccountType = 'checking' | 'savings' | 'investment' | 'credit' | 'wallet';
+export type AccountType = 'checking' | 'savings' | 'wallet' | 'investment' | 'credit';
 
 export interface Transaction {
   id: string;
@@ -24,9 +25,10 @@ export interface Transaction {
   isPaid?: boolean;
   tags?: string[];
   notes?: string;
-  receiptUri?: string;
+  attachmentUrl?: string;
   currency?: string;
   transferGroupId?: string;
+  recurrenceType?: string | null;
 }
 
 export interface Account {
@@ -61,13 +63,14 @@ export interface Investment {
   id: string;
   name: string;
   ticker: string;
-  type: 'stocks' | 'fii' | 'reit' | 'fixed' | 'crypto' | 'etf' | 'acoes';
+  type: 'stocks' | 'fii' | 'reit' | 'fixed' | 'crypto' | 'etf';
   quantity: number;
   avgPrice: number;
   currentPrice: number;
   currency: 'BRL' | 'USD';
   purchaseDate?: string;
   status?: string;
+  institution?: string;
 }
 
 export interface Budget {
@@ -81,12 +84,12 @@ export interface Budget {
 export interface Goal {
   id: string;
   name: string;
+  description?: string;
   targetAmount: number;
   currentAmount: number;
   deadline: string;
   icon: string;
   color: string;
-  description?: string;
 }
 
 export interface ApiCategory {
@@ -96,22 +99,71 @@ export interface ApiCategory {
   type: 'income' | 'expense';
   color: string | null;
   parentId: string | null;
+  isDefault?: boolean;
+  archived?: boolean;
+}
+
+export interface AppSettings {
+  id?: string;
+  currency: string;
+  language: string;
+  theme: string;
+  emailNotifications: boolean;
+  monthlyReports: boolean;
+  budgetAlerts: boolean;
+  billsEnabled?: boolean;
+  sinkingFundsEnabled?: boolean;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  amount?: number;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
 }
 
 // ── Category Mapping ──────────────────────────────────────────────────────────
 
 const NAME_TO_KEY: Record<string, string> = {
-  salário: 'income', renda: 'income', 'outras receitas': 'income', receita: 'income', dividendo: 'income',
-  alimentação: 'food', mercado: 'food', restaurante: 'food', refeição: 'food',
-  casa: 'housing', moradia: 'housing', aluguel: 'housing', água: 'housing', luz: 'housing', energia: 'housing',
-  internet: 'internet', telefone: 'internet',
-  transporte: 'transport', carro: 'transport', combustível: 'transport', mecanica: 'transport', mechânica: 'transport', uber: 'transport',
-  saúde: 'health', médico: 'health', farmácia: 'health', dentista: 'health',
-  educação: 'education', escola: 'education', curso: 'education',
-  entretenimento: 'entertainment', lazer: 'leisure', streaming: 'entertainment',
-  roupas: 'clothing', roupa: 'clothing', vestuário: 'clothing',
-  investimento: 'investment', carteira: 'investment',
-  'outras despesas': 'other', outros: 'other', geral: 'other',
+  salário: 'income', renda: 'income', 'outras receitas': 'income', receita: 'income',
+  dividendo: 'income', proventos: 'income', 'renda extra': 'income',
+  alimentação: 'food', mercado: 'food', restaurante: 'food', refeição: 'food', lanche: 'food',
+  casa: 'housing', moradia: 'housing', aluguel: 'housing', água: 'housing',
+  luz: 'housing', energia: 'housing', condomínio: 'housing', iptu: 'housing',
+  internet: 'internet', telefone: 'internet', celular: 'internet',
+  transporte: 'transport', carro: 'transport', combustível: 'transport',
+  mecanica: 'transport', mecânica: 'transport', uber: 'transport', ônibus: 'transport',
+  saúde: 'health', médico: 'health', farmácia: 'health', dentista: 'health', plano: 'health',
+  educação: 'education', escola: 'education', curso: 'education', faculdade: 'education',
+  entretenimento: 'entertainment', cinema: 'entertainment', streaming: 'entertainment',
+  lazer: 'leisure', viagem: 'leisure', hobby: 'leisure',
+  roupas: 'clothing', roupa: 'clothing', vestuário: 'clothing', calçado: 'clothing',
+  investimento: 'investment', carteira: 'investment', aporte: 'investment',
+  'outras despesas': 'other', outros: 'other', geral: 'other', diverso: 'other',
+};
+
+const KEY_TO_NAMES: Record<string, string[]> = {
+  income: ['salário', 'renda', 'receita', 'outras receitas'],
+  food: ['alimentação', 'mercado', 'comida'],
+  housing: ['casa', 'moradia', 'aluguel', 'água', 'luz'],
+  internet: ['internet', 'telefone'],
+  transport: ['transporte', 'carro', 'combustível'],
+  health: ['saúde', 'médico', 'farmácia'],
+  education: ['educação', 'escola', 'curso'],
+  entertainment: ['entretenimento', 'cinema', 'lazer'],
+  leisure: ['lazer', 'viagem', 'hobby'],
+  clothing: ['roupas', 'roupa', 'vestuário'],
+  investment: ['investimento', 'aporte'],
+  other: ['outras despesas', 'outros', 'geral'],
 };
 
 function catNameToKey(name: string): string {
@@ -119,42 +171,68 @@ function catNameToKey(name: string): string {
   return NAME_TO_KEY[lower] || 'other';
 }
 
+function findCategoryId(
+  categories: ApiCategory[],
+  key: string,
+  type: 'income' | 'expense'
+): string | undefined {
+  if (type === 'income' || key === 'income') {
+    return categories.find((c) => c.type === 'income')?.id;
+  }
+  const patterns = KEY_TO_NAMES[key] || [key];
+  const found = categories.find(
+    (c) => c.type === 'expense' && patterns.some((p) => c.name.toLowerCase().includes(p))
+  );
+  return found?.id || categories.find((c) => c.type === 'expense')?.id;
+}
+
 // ── Transform helpers ─────────────────────────────────────────────────────────
 
-function parseDate(d: string): string {
+function parseDate(d: string | null | undefined): string {
   if (!d) return new Date().toISOString().split('T')[0];
   return d.split('T')[0];
 }
 
+function goalColor(name: string): string {
+  const colors = ['#0096C7', '#2ED573', '#FF6B6B', '#A29BFE', '#FD9644', '#00B894', '#6C5CE7', '#FDCB6E'];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  return colors[Math.abs(hash) % colors.length];
+}
+
 function transformTransaction(raw: Record<string, unknown>, catMap: Record<string, ApiCategory>): Transaction {
   const cat = catMap[raw.categoryId as string];
-  const categoryKey = cat ? (cat.type === 'income' ? 'income' : catNameToKey(cat.name)) : (raw.type === 'income' ? 'income' : 'other');
+  const categoryKey = cat
+    ? (cat.type === 'income' ? 'income' : catNameToKey(cat.name))
+    : (raw.type === 'income' ? 'income' : 'other');
   return {
     id: raw.id as string,
     description: raw.description as string,
-    amount: parseFloat(raw.amount as string),
+    amount: Math.abs(parseFloat(raw.amount as string)),
     type: raw.type as TransactionType,
     category: categoryKey,
-    categoryId: raw.categoryId as string,
+    categoryId: raw.categoryId as string | undefined,
     accountId: raw.accountId as string,
     toAccountId: (raw.toAccountId as string) || undefined,
     date: parseDate(raw.date as string),
-    installments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
     currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
     totalInstallments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
-    recurring: (raw.isRecurring as boolean) || (raw.isFixed as boolean) || false,
+    installments: raw.totalInstallments && Number(raw.totalInstallments) > 1 ? Number(raw.totalInstallments) : undefined,
+    recurring: (raw.isRecurring as boolean) || false,
     isFixed: raw.isFixed as boolean,
     isPaid: raw.isPaid as boolean,
     tags: (raw.tags as string[]) || [],
     notes: (raw.notes as string) || undefined,
+    attachmentUrl: (raw.attachmentUrl as string) || undefined,
     currency: (raw.currency as string) || 'BRL',
     transferGroupId: (raw.transferGroupId as string) || undefined,
+    recurrenceType: (raw.recurrenceType as string) || null,
   };
 }
 
 function transformAccount(raw: Record<string, unknown>): Account {
-  let type = raw.type as AccountType;
-  if (type === ('wallet' as AccountType)) type = 'savings';
+  let type = (raw.type as string) as AccountType;
+  if (type === 'wallet') type = 'savings';
   return {
     id: raw.id as string,
     name: raw.name as string,
@@ -173,17 +251,14 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
   const month = now.getMonth() + 1;
   const closingDay = Number(raw.closingDay) || 1;
   const dueDay = Number(raw.dueDay) || 10;
-
   const formatDay = (day: number) =>
     `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
   const used = transactions
     .filter((t) => t.accountId === (raw.accountId as string) && t.type === 'expense')
     .reduce((s, t) => s + t.amount, 0);
-
   return {
     id: raw.id as string,
-    accountId: raw.accountId as string,
+    accountId: (raw.accountId as string) || '',
     name: raw.name as string,
     institution: (raw.brand as string) || 'Cartão',
     brand: (raw.brand as string) || '',
@@ -200,49 +275,65 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
 }
 
 function transformInvestment(raw: Record<string, unknown>): Investment {
-  let type = raw.type as Investment['type'];
-  if (type === ('acoes' as Investment['type'])) type = 'stocks';
+  const type = (raw.type as string) as Investment['type'];
   return {
     id: raw.id as string,
     name: (raw.name as string) || (raw.ticker as string) || '',
     ticker: (raw.ticker as string) || '',
     type,
     quantity: parseFloat(raw.quantity as string) || 0,
-    avgPrice: parseFloat((raw.averagePrice || raw.purchasePrice) as string) || 0,
+    avgPrice: parseFloat((raw.purchasePrice || raw.averagePrice) as string) || 0,
     currentPrice: parseFloat(raw.currentPrice as string) || 0,
     currency: 'BRL',
     purchaseDate: raw.purchaseDate ? parseDate(raw.purchaseDate as string) : undefined,
     status: (raw.status as string) || 'active',
+    institution: (raw.institution as string) || undefined,
   };
 }
 
 function transformBudget(raw: Record<string, unknown>, catMap: Record<string, ApiCategory>): Budget {
   const cat = catMap[raw.categoryId as string];
   const categoryKey = cat ? catNameToKey(cat.name) : 'other';
-  const month = String(raw.month).padStart(2, '0');
+  const month = Number(raw.month);
+  const year = Number(raw.year);
   return {
     id: raw.id as string,
     category: categoryKey,
     categoryId: raw.categoryId as string,
     limit: parseFloat(raw.amount as string) || 0,
-    month: `${raw.year}-${month}`,
+    month: `${year}-${String(month).padStart(2, '0')}`,
   };
 }
 
 function transformGoal(raw: Record<string, unknown>): Goal {
+  const name = raw.name as string;
   return {
     id: raw.id as string,
-    name: raw.name as string,
+    name,
     description: (raw.description as string) || undefined,
     targetAmount: parseFloat(raw.targetAmount as string) || 0,
     currentAmount: parseFloat(raw.currentAmount as string) || 0,
     deadline: parseDate(raw.deadline as string),
     icon: (raw.icon as string) || 'target',
-    color: '#0096C7',
+    color: (raw.color as string) || goalColor(name),
   };
 }
 
-// ── Context definition ────────────────────────────────────────────────────────
+function transformSettings(raw: Record<string, unknown>): AppSettings {
+  return {
+    id: raw.id as string,
+    currency: (raw.currency as string) || 'BRL',
+    language: (raw.language as string) || 'pt-BR',
+    theme: (raw.theme as string) || 'system',
+    emailNotifications: (raw.emailNotifications as boolean) ?? true,
+    monthlyReports: (raw.monthlyReports as boolean) ?? true,
+    budgetAlerts: (raw.budgetAlerts as boolean) ?? true,
+    billsEnabled: (raw.billsEnabled as boolean) ?? false,
+    sinkingFundsEnabled: (raw.sinkingFundsEnabled as boolean) ?? false,
+  };
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
 
 interface FinanceContextType {
   transactions: Transaction[];
@@ -252,6 +343,9 @@ interface FinanceContextType {
   budgets: Budget[];
   goals: Goal[];
   categories: ApiCategory[];
+  tags: Tag[];
+  notifications: AppNotification[];
+  settings: AppSettings | null;
   isLoading: boolean;
 
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
@@ -266,20 +360,28 @@ interface FinanceContextType {
   addCreditCard: (c: Omit<CreditCard, 'id' | 'used'>) => Promise<void>;
   updateCreditCard: (id: string, c: Partial<CreditCard>) => Promise<void>;
   deleteCreditCard: (id: string) => Promise<void>;
-  addCardExpense: (cardId: string, t: Omit<Transaction, 'id' | 'cardId'>) => void;
+  addCardExpense: (cardId: string, t: Omit<Transaction, 'id'>) => void;
   payCardInvoice: (cardId: string, amount: number, accountId: string) => void;
   advanceInstallment: (transactionId: string) => void;
   getCardTransactions: (cardId: string, month?: string) => Transaction[];
 
   addInvestment: (i: Omit<Investment, 'id'>) => Promise<void>;
   updateInvestment: (id: string, i: Partial<Investment>) => Promise<void>;
+  deleteInvestment: (id: string) => Promise<void>;
 
   addGoal: (g: Omit<Goal, 'id'>) => Promise<void>;
   updateGoal: (id: string, g: Partial<Goal>) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
   addContribution: (goalId: string, amount: number) => Promise<void>;
 
   addBudget: (b: Omit<Budget, 'id'>) => Promise<void>;
   updateBudget: (id: string, b: Partial<Budget>) => Promise<void>;
+  deleteBudget: (id: string) => Promise<void>;
+
+  addCategory: (c: Omit<ApiCategory, 'id'>) => Promise<void>;
+  updateSettings: (s: Partial<AppSettings>) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  dismissNotification: (id: string) => void;
 
   refresh: () => Promise<void>;
 
@@ -291,41 +393,13 @@ interface FinanceContextType {
 }
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
-
-// ── Category ID lookup helper ─────────────────────────────────────────────────
-
-function findCategoryId(
-  categories: ApiCategory[],
-  key: string,
-  type: 'income' | 'expense'
-): string | undefined {
-  if (type === 'income' || key === 'income') {
-    return categories.find((c) => c.type === 'income')?.id;
-  }
-  const nameMap: Record<string, string[]> = {
-    food: ['alimentação', 'comida', 'mercado'],
-    housing: ['casa', 'moradia', 'aluguel', 'água', 'luz'],
-    internet: ['internet', 'telefone'],
-    transport: ['transporte', 'carro', 'combustível', 'mecanica'],
-    health: ['saúde', 'médico', 'farmácia'],
-    education: ['educação', 'escola'],
-    entertainment: ['entretenimento', 'lazer'],
-    clothing: ['roupas', 'roupa', 'vestuário'],
-    investment: ['investimento'],
-    other: ['outras despesas', 'outros'],
-  };
-  const patterns = nameMap[key] || [key];
-  const found = categories.find(
-    (c) => c.type === 'expense' && patterns.some((p) => c.name.toLowerCase().includes(p))
-  );
-  return found?.id || categories.find((c) => c.type === 'expense')?.id;
-}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
-
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
@@ -333,81 +407,104 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [categories, setCategories] = useState<ApiCategory[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const catMapRef = useRef<Record<string, ApiCategory>>({});
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [cats, accs, txs, invs, buds, gls, cards] = await Promise.all([
-        apiGet<ApiCategory[]>('/api/categories').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/accounts').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/transactions').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/investments').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/budgets').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/goals').catch(() => []),
-        apiGet<Record<string, unknown>[]>('/api/cards').catch(() => []),
+      const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
+        apiGet<ApiCategory[]>('/api/categories'),
+        apiGet<Record<string, unknown>[]>('/api/accounts'),
+        apiGet<Record<string, unknown>[]>('/api/transactions'),
+        apiGet<Record<string, unknown>[]>('/api/investments'),
+        apiGet<Record<string, unknown>[]>('/api/budgets'),
+        apiGet<Record<string, unknown>[]>('/api/goals'),
+        apiGet<Record<string, unknown>[]>('/api/cards'),
+        apiGet<Tag[]>('/api/tags'),
+        apiGet<AppNotification[]>('/api/notifications'),
+        apiGet<Record<string, unknown>>('/api/settings'),
       ]);
 
+      const catList = cats.status === 'fulfilled' ? cats.value : [];
       const catMap: Record<string, ApiCategory> = {};
-      cats.forEach((c) => { catMap[c.id] = c; });
+      catList.forEach((c) => { catMap[c.id] = c; });
       catMapRef.current = catMap;
-      setCategories(cats);
+      setCategories(catList);
 
-      const mappedAccounts = accs.map(transformAccount);
+      const accsData = accs.status === 'fulfilled' ? accs.value : [];
+      const mappedAccounts = accsData.map(transformAccount);
       setAccounts(mappedAccounts);
 
-      const mappedTx = txs.map((r) => transformTransaction(r, catMap));
+      const txsData = txs.status === 'fulfilled' ? txs.value : [];
+      const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
 
-      const mappedCards = cards.map((r) => transformCard(r, mappedTx));
+      const cardsData = cards.status === 'fulfilled' ? cards.value : [];
+      const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
       setCreditCards(mappedCards);
 
-      setInvestments(invs.map(transformInvestment));
-      setBudgets(buds.map((r) => transformBudget(r, catMap)));
-      setGoals(gls.map(transformGoal));
+      const invsData = invs.status === 'fulfilled' ? invs.value : [];
+      setInvestments(invsData.map(transformInvestment));
+
+      const budsData = buds.status === 'fulfilled' ? buds.value : [];
+      setBudgets(budsData.map((r) => transformBudget(r, catMap)));
+
+      const glsData = gls.status === 'fulfilled' ? gls.value : [];
+      setGoals(glsData.map(transformGoal));
+
+      if (tagList.status === 'fulfilled') setTags(tagList.value || []);
+      if (notifs.status === 'fulfilled') setNotifications(notifs.value || []);
+      if (settingsRaw.status === 'fulfilled' && settingsRaw.value && settingsRaw.value.id) {
+        setSettings(transformSettings(settingsRaw.value));
+      }
     } catch (e) {
-      console.warn('[FinanceContext] loadAll failed:', e);
+      console.warn('[FinanceContext] loadAll error:', e);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    if (isAuthenticated) {
+      loadAll();
+    } else {
+      setTransactions([]);
+      setAccounts([]);
+      setCreditCards([]);
+      setInvestments([]);
+      setBudgets([]);
+      setGoals([]);
+      setCategories([]);
+      setTags([]);
+      setNotifications([]);
+      setSettings(null);
+      catMapRef.current = {};
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, loadAll]);
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
-
-  const totalBalance = accounts
-    .filter((a) => !a.archived && a.type !== 'credit')
-    .reduce((s, a) => s + a.balance, 0);
-
-  const monthlyIncome = monthlyTx
-    .filter((t) => t.type === 'income')
-    .reduce((s, t) => s + t.amount, 0);
-
-  const monthlyExpenses = monthlyTx
-    .filter((t) => t.type === 'expense')
-    .reduce((s, t) => s + t.amount, 0);
-
+  const totalBalance = accounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+  const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const monthlyExpenses = monthlyTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const netResult = monthlyIncome - monthlyExpenses;
-
   const savingsRate = monthlyIncome > 0 ? Math.max(0, netResult / monthlyIncome) : 0;
   const healthScore = Math.min(100, Math.round(savingsRate * 100));
 
   // ── Transactions ───────────────────────────────────────────────────────────
 
   const addTransaction = useCallback(async (t: Omit<Transaction, 'id'>) => {
-    const cats = catMapRef.current;
-    const catList = Object.values(cats);
-    const categoryId = t.categoryId || findCategoryId(catList, t.category, t.type === 'transfer' ? 'expense' : t.type as 'income' | 'expense');
-
+    const cats = Object.values(catMapRef.current);
+    const categoryId = t.categoryId || findCategoryId(cats, t.category, t.type === 'transfer' ? 'expense' : t.type as 'income' | 'expense');
     const body = {
       description: t.description,
       amount: t.amount,
@@ -416,19 +513,26 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       accountId: t.accountId,
       categoryId,
       toAccountId: t.toAccountId || undefined,
-      isPaid: t.type === 'income' || (t.isPaid ?? true),
+      isPaid: t.isPaid ?? true,
       isFixed: t.recurring || t.isFixed || false,
       isRecurring: t.recurring || false,
-      notes: t.notes || '',
+      notes: t.notes || null,
       tags: t.tags || [],
-      totalInstallments: t.installments && t.installments > 1 ? t.installments : undefined,
+      totalInstallments: t.installments && t.installments > 1 ? t.installments : 1,
+      currency: t.currency || 'BRL',
     };
-
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/transactions', body);
       const newTx = transformTransaction(raw, catMapRef.current);
       setTransactions((prev) => [newTx, ...prev]);
-    } catch {
+      if (raw.accountId) {
+        const updatedAcc = await apiGet<Record<string, unknown>>(`/api/accounts`);
+        if (Array.isArray(updatedAcc)) {
+          setAccounts((updatedAcc as Record<string, unknown>[]).map(transformAccount));
+        }
+      }
+    } catch (e) {
+      console.warn('[addTransaction] API error:', e);
       const optimistic: Transaction = { ...t, id: uid() };
       setTransactions((prev) => [optimistic, ...prev]);
     }
@@ -447,34 +551,36 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         notes: t.notes,
         tags: t.tags,
         isPaid: t.isPaid,
+        isFixed: t.isFixed,
+        isRecurring: t.recurring,
       });
-    } catch {}
+    } catch (e) { console.warn('[updateTransaction]', e); }
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
     setTransactions((prev) => prev.filter((item) => item.id !== id));
     try {
       await apiDelete(`/api/transactions/${id}`);
+      const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
+      if (Array.isArray(updatedAcc)) setAccounts(updatedAcc.map(transformAccount));
     } catch {}
   }, []);
 
   const addTransfer = useCallback(async (
-    fromAccountId: string, toAccountId: string,
-    amount: number, description: string, date: string
+    fromAccountId: string, toAccountId: string, amount: number, description: string, date: string
   ) => {
     const body = {
-      description,
-      amount,
-      type: 'transfer',
-      date,
-      accountId: fromAccountId,
-      toAccountId,
-      categoryId: categories.find((c) => c.type === 'expense')?.id,
+      description, amount, type: 'transfer', date,
+      accountId: fromAccountId, toAccountId,
+      categoryId: Object.values(catMapRef.current).find((c) => c.type === 'expense')?.id,
+      isPaid: true,
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/transactions', body);
       const newTx = transformTransaction(raw, catMapRef.current);
       setTransactions((prev) => [newTx, ...prev]);
+      const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
+      if (Array.isArray(updatedAcc)) setAccounts(updatedAcc.map(transformAccount));
     } catch {
       const optimistic: Transaction = {
         id: uid(), description, amount, type: 'transfer',
@@ -482,16 +588,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       };
       setTransactions((prev) => [optimistic, ...prev]);
     }
-  }, [categories]);
+  }, []);
 
   // ── Accounts ───────────────────────────────────────────────────────────────
 
   const addAccount = useCallback(async (a: Omit<Account, 'id'>) => {
-    const body = { name: a.name, type: a.type, institution: a.institution, balance: a.balance, color: a.color };
+    const body = {
+      name: a.name,
+      type: a.type === 'savings' ? 'savings' : a.type,
+      institution: a.institution,
+      balance: a.balance,
+      color: a.color,
+      creditLimit: a.creditLimit || undefined,
+    };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/accounts', body);
       setAccounts((prev) => [...prev, transformAccount(raw)]);
-    } catch {
+    } catch (e) {
+      console.warn('[addAccount]', e);
       setAccounts((prev) => [...prev, { ...a, id: uid() }]);
     }
   }, []);
@@ -499,15 +613,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const updateAccount = useCallback(async (id: string, a: Partial<Account>) => {
     setAccounts((prev) => prev.map((item) => item.id === id ? { ...item, ...a } : item));
     try {
-      await apiPatch(`/api/accounts/${id}`, a);
+      await apiPatch(`/api/accounts/${id}`, {
+        name: a.name,
+        type: a.type,
+        institution: a.institution,
+        color: a.color,
+        archived: a.archived,
+        creditLimit: a.creditLimit,
+      });
     } catch {}
   }, []);
 
   const deleteAccount = useCallback(async (id: string) => {
     setAccounts((prev) => prev.filter((item) => item.id !== id));
-    try {
-      await apiDelete(`/api/accounts/${id}`);
-    } catch {}
+    try { await apiDelete(`/api/accounts/${id}`); } catch {}
   }, []);
 
   // ── Credit Cards ───────────────────────────────────────────────────────────
@@ -516,17 +635,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const body = {
       name: c.name,
       brand: c.brand || c.institution,
+      lastFourDigits: c.lastFourDigits,
       creditLimit: c.limit,
-      closingDay: c.closingDay || 1,
-      dueDay: c.dueDay || 10,
+      closingDay: c.closingDay,
+      dueDay: c.dueDay,
       color: c.color,
-      accountId: c.accountId,
+      accountId: c.accountId || undefined,
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/cards', body);
       const mapped = transformCard(raw, transactions);
       setCreditCards((prev) => [...prev, mapped]);
-    } catch {
+    } catch (e) {
+      console.warn('[addCreditCard]', e);
       setCreditCards((prev) => [...prev, { ...c, id: uid(), used: 0 }]);
     }
   }, [transactions]);
@@ -547,9 +668,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCreditCard = useCallback(async (id: string) => {
     setCreditCards((prev) => prev.filter((item) => item.id !== id));
-    try {
-      await apiDelete(`/api/cards/${id}`);
-    } catch {}
+    try { await apiDelete(`/api/cards/${id}`); } catch {}
   }, []);
 
   const addCardExpense = useCallback((cardId: string, t: Omit<Transaction, 'id'>) => {
@@ -585,17 +704,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const addInvestment = useCallback(async (i: Omit<Investment, 'id'>) => {
     const body = {
-      name: i.name, ticker: i.ticker,
-      type: i.type === 'stocks' ? 'acoes' : i.type,
-      quantity: i.quantity, purchasePrice: i.avgPrice,
+      name: i.name,
+      ticker: i.ticker,
+      type: i.type,
+      quantity: i.quantity,
+      purchasePrice: i.avgPrice,
       currentPrice: i.currentPrice,
       purchaseDate: i.purchaseDate || new Date().toISOString().split('T')[0],
       status: 'active',
+      institution: i.institution,
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/investments', body);
       setInvestments((prev) => [...prev, transformInvestment(raw)]);
-    } catch {
+    } catch (e) {
+      console.warn('[addInvestment]', e);
       setInvestments((prev) => [...prev, { ...i, id: uid() }]);
     }
   }, []);
@@ -607,22 +730,33 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         currentPrice: i.currentPrice,
         quantity: i.quantity,
         name: i.name,
+        purchasePrice: i.avgPrice,
+        institution: i.institution,
       });
     } catch {}
+  }, []);
+
+  const deleteInvestment = useCallback(async (id: string) => {
+    setInvestments((prev) => prev.filter((item) => item.id !== id));
+    try { await apiDelete(`/api/investments/${id}`); } catch {}
   }, []);
 
   // ── Goals ──────────────────────────────────────────────────────────────────
 
   const addGoal = useCallback(async (g: Omit<Goal, 'id'>) => {
     const body = {
-      name: g.name, description: g.description || '',
-      targetAmount: g.targetAmount, currentAmount: g.currentAmount || 0,
-      deadline: g.deadline, icon: g.icon || 'target',
+      name: g.name,
+      description: g.description || null,
+      targetAmount: g.targetAmount,
+      currentAmount: g.currentAmount || 0,
+      deadline: g.deadline,
+      icon: g.icon || 'target',
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/goals', body);
       setGoals((prev) => [...prev, transformGoal(raw)]);
-    } catch {
+    } catch (e) {
+      console.warn('[addGoal]', e);
       setGoals((prev) => [...prev, { ...g, id: uid() }]);
     }
   }, []);
@@ -631,25 +765,45 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setGoals((prev) => prev.map((item) => item.id === id ? { ...item, ...g } : item));
     try {
       await apiPatch(`/api/goals/${id}`, {
-        name: g.name, targetAmount: g.targetAmount,
-        currentAmount: g.currentAmount, deadline: g.deadline, icon: g.icon,
+        name: g.name,
+        description: g.description,
+        targetAmount: g.targetAmount,
+        currentAmount: g.currentAmount,
+        deadline: g.deadline,
+        icon: g.icon,
       });
     } catch {}
   }, []);
 
+  const deleteGoal = useCallback(async (id: string) => {
+    setGoals((prev) => prev.filter((item) => item.id !== id));
+    try { await apiDelete(`/api/goals/${id}`); } catch {}
+  }, []);
+
   const addContribution = useCallback(async (goalId: string, amount: number) => {
-    setGoals((prev) => prev.map((g) => g.id === goalId
-      ? { ...g, currentAmount: Math.min(g.currentAmount + amount, g.targetAmount) }
-      : g
-    ));
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return;
+    const newAmount = Math.min(goal.currentAmount + amount, goal.targetAmount);
+    setGoals((prev) => prev.map((g) => g.id === goalId ? { ...g, currentAmount: newAmount } : g));
     try {
-      const goal = goals.find((g) => g.id === goalId);
-      if (goal) {
-        await apiPatch(`/api/goals/${goalId}`, {
-          currentAmount: Math.min(goal.currentAmount + amount, goal.targetAmount),
-        });
+      const res = await apiFetch(`/api/goals/${goalId}/contribute`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      });
+      if (res.ok) {
+        const raw = await res.json().catch(() => null);
+        if (raw && raw.currentAmount !== undefined) {
+          setGoals((prev) => prev.map((g) => g.id === goalId
+            ? { ...g, currentAmount: parseFloat(raw.currentAmount) }
+            : g
+          ));
+        }
+      } else {
+        await apiPatch(`/api/goals/${goalId}`, { currentAmount: newAmount });
       }
-    } catch {}
+    } catch {
+      try { await apiPatch(`/api/goals/${goalId}`, { currentAmount: newAmount }); } catch {}
+    }
   }, [goals]);
 
   // ── Budgets ────────────────────────────────────────────────────────────────
@@ -661,13 +815,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const body = {
       categoryId,
       amount: b.limit,
-      month: parseInt(month),
-      year: parseInt(year),
+      month: parseInt(month, 10),
+      year: parseInt(year, 10),
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/budgets', body);
       setBudgets((prev) => [...prev, transformBudget(raw, catMapRef.current)]);
-    } catch {
+    } catch (e) {
+      console.warn('[addBudget]', e);
       setBudgets((prev) => [...prev, { ...b, id: uid() }]);
     }
   }, []);
@@ -679,20 +834,64 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  const deleteBudget = useCallback(async (id: string) => {
+    setBudgets((prev) => prev.filter((item) => item.id !== id));
+    try { await apiDelete(`/api/budgets/${id}`); } catch {}
+  }, []);
+
+  // ── Categories ─────────────────────────────────────────────────────────────
+
+  const addCategory = useCallback(async (c: Omit<ApiCategory, 'id'>) => {
+    try {
+      const raw = await apiPost<ApiCategory>('/api/categories', {
+        name: c.name,
+        type: c.type,
+        icon: c.icon || 'Tag',
+        color: c.color || '#0096C7',
+        parentId: c.parentId || null,
+      });
+      setCategories((prev) => [...prev, raw]);
+      catMapRef.current[raw.id] = raw;
+    } catch (e) { console.warn('[addCategory]', e); }
+  }, []);
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+
+  const updateSettings = useCallback(async (s: Partial<AppSettings>) => {
+    setSettings((prev) => prev ? { ...prev, ...s } : s as AppSettings);
+    try {
+      const raw = await apiPatch<Record<string, unknown>>('/api/settings', s);
+      if (raw && raw.id) setSettings(transformSettings(raw));
+    } catch {}
+  }, []);
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    try { await apiPatch(`/api/notifications/${id}`, { read: true }); } catch {}
+  }, []);
+
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   // ── Refresh ────────────────────────────────────────────────────────────────
 
   const refresh = useCallback(() => loadAll(), [loadAll]);
 
   return (
     <FinanceContext.Provider value={{
-      transactions, accounts, creditCards, investments, budgets, goals, categories, isLoading,
+      transactions, accounts, creditCards, investments, budgets, goals,
+      categories, tags, notifications, settings, isLoading,
       addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
-      addCreditCard, updateCreditCard, deleteCreditCard, addCardExpense, payCardInvoice,
-      advanceInstallment, getCardTransactions,
-      addInvestment, updateInvestment,
-      addGoal, updateGoal, addContribution,
-      addBudget, updateBudget,
+      addCreditCard, updateCreditCard, deleteCreditCard,
+      addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
+      addInvestment, updateInvestment, deleteInvestment,
+      addGoal, updateGoal, deleteGoal, addContribution,
+      addBudget, updateBudget, deleteBudget,
+      addCategory, updateSettings, markNotificationRead, dismissNotification,
       refresh,
       totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
     }}>

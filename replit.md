@@ -56,25 +56,35 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 React Native + Expo (managed workflow) personal finance mobile app targeting Google Play and Apple App Store.
 
 - **Tech**: Expo Router, Context API, AsyncStorage, TypeScript
-- **Theme**: "Azul Oceano" (`#0096C7`) default accent; 7 presets sync with web via API
-- **Auth**: Demo mode (click Entrar) or API-backed; `EXPO_PUBLIC_API_URL` env controls mode
-- **API sync**: `GET/PUT /api/preferences` — mobile syncs accent color with web, polls every 30s
+- **Theme**: "Azul Oceano" (`#0096C7`) default accent; 7 presets
+- **API**: Connects to production backend at `https://pilarfinanceiro.replit.app` (set in `.env.local`)
+  - All requests use `Accept: application/json` + `Authorization: Bearer <token>` headers
+  - `EXPO_PUBLIC_API_URL` env var controls the backend URL
+- **Auth** (`context/AuthContext.tsx`):
+  - `POST /api/auth/login` → `{ user, accessToken, refreshToken }`
+  - `POST /api/auth/register` → `{ user }` (no tokens, auto-login follows)
+  - `POST /api/auth/refresh` → `{ accessToken }` (keeps existing refresh token)
+  - `GET /api/auth/user` — validates session on boot
+- **API Service** (`services/api.ts`): token refresh queue, retry on 401, all HTTP methods with proper headers
+- **FinanceContext** (`context/FinanceContext.tsx`): Only loads when `isAuthenticated=true`; resets on logout
+  - Budget: `month`+`year` as ints in API → converted to `"YYYY-MM"` string internally
+  - Investment: `purchasePrice` field in API → `avgPrice` in mobile context
+  - Goal: no `color` in API → generated deterministically from name hash
+  - Goal contribution: `POST /api/goals/:id/contribute` endpoint
+  - Settings: `PATCH /api/settings` → full settings sync
+  - Tags, Notifications, Categories all loaded from API
 - **Screens**:
   - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart
-  - Transactions (add, edit, delete, installments, recurring)
-  - Reports (charts by category, income vs expenses)
-  - Investments (stocks, FIIs, ETFs, crypto, fixed income)
-  - Mais → Contas e Cartões, Metas, DARFs, Orçamentos, Configurações
+  - Transactions (add/edit/delete, uses real API categories, installments, recurring)
+  - Reports (charts by category, income vs expenses, cash flow, health score)
+  - Investments (stocks, FIIs, REITs, ETFs, crypto, fixed income)
+  - Mais → Contas e Cartões, Metas, Orçamentos, **Notificações**, Configurações, Planos
 - **Credit Card Features** (`app/card/`):
-  - `card/[id].tsx` — detail screen with 3 tabs: Fatura (invoice), Parcelas (installments), Detalhes (details)
-  - Fatura tab: month navigator, invoice total, category spending chart (horizontal bars), transaction list, FAB to add expense + pay invoice
-  - Parcelas tab: installment purchases with "Adiantar para este mês" button
-  - Detalhes tab: card limits/dates info, edit + delete buttons
+  - `card/[id].tsx` — detail: Fatura, Parcelas, Detalhes tabs
   - `card/add.tsx` — add/edit credit card form with live card preview
 - **Account Features** (`app/account/`):
-  - `account/add.tsx` supports both add (new) and edit (id param) modes with delete option
-  - `account/[id].tsx` — detail with income/expenses stats, edit button in header
-- **FinanceContext**: `addCardExpense`, `payCardInvoice`, `advanceInstallment`, `getCardTransactions`, `deleteCreditCard`, `deleteAccount`; Transaction has optional `cardId` field
+  - `account/add.tsx` — add/edit; `account/[id].tsx` — detail with stats
+- **Notifications** (`app/(more)/notifications.tsx`): Lists API notifications with read/dismiss; badge count in Mais tab
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 

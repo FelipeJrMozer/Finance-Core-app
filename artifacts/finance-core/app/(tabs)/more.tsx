@@ -60,7 +60,8 @@ function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, r
 export default function MoreScreen() {
   const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, transactions, totalBalance, investments } = useFinance();
+  const { budgets, goals, transactions, totalBalance, investments, notifications } = useFinance();
+  const unreadNotifs = notifications.filter((n) => !n.read).length;
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
@@ -207,6 +208,14 @@ export default function MoreScreen() {
           CONFIGURAÇÕES
         </Text>
         <View style={styles.menuGroup}>
+          <MenuItem
+            icon="bell"
+            label="Notificações"
+            subtitle="Alertas de orçamento, metas e relatórios"
+            badge={unreadNotifs > 0 ? `${unreadNotifs}` : undefined}
+            badgeColor={colors.danger}
+            onPress={() => router.push('/(more)/notifications')}
+          />
           <MenuItem
             icon="settings"
             label="Configurações do App"

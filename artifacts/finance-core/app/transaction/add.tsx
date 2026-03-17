@@ -1,20 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform, TextInput
+  View, Text, StyleSheet, ScrollView, Pressable, Alert,
+  KeyboardAvoidingView, Platform, TextInput
 } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
-import { useFinance } from '@/context/FinanceContext';
+import { useFinance, ApiCategory } from '@/context/FinanceContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
+import { getCategoryInfo } from '@/components/CategoryBadge';
+
+function getApiCatIcon(cat: ApiCategory): { icon: string; color: string; label: string } {
+  const iconMap: Record<string, string> = {
+    ShoppingCart: 'shopping-cart', DollarSign: 'dollar-sign', Home: 'home', Car: 'truck',
+    Zap: 'zap', Wifi: 'wifi', Heart: 'heart', BookOpen: 'book-open', Smile: 'smile',
+    Shirt: 'tag', TrendingUp: 'trending-up', Globe: 'globe', Gift: 'gift',
+    Coffee: 'coffee', Music: 'music', Plane: 'anchor', Star: 'star', Target: 'target',
+    Tag: 'tag', Briefcase: 'briefcase', PiggyBank: 'database',
+  };
+  return {
+    icon: iconMap[cat.icon] || 'tag',
+    color: cat.color || '#0096C7',
+    label: cat.name,
+  };
+}
 
 export default function AddTransactionScreen() {
   const { theme, colors } = useTheme();
-  const { addTransaction, updateTransaction, addTransfer, transactions, accounts } = useFinance();
+  const { addTransaction, updateTransaction, addTransfer, transactions, accounts, categories } = useFinance();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -26,7 +42,7 @@ export default function AddTransactionScreen() {
   );
   const [description, setDescription] = useState(existing?.description || '');
   const [amount, setAmount] = useState(existing ? existing.amount.toFixed(2) : '');
-  const [category, setCategory] = useState(existing?.category || 'food');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(existing?.categoryId || '');
   const [accountId, setAccountId] = useState(existing?.accountId || accounts[0]?.id || '');
   const [toAccountId, setToAccountId] = useState(existing?.toAccountId || '');
   const [date, setDate] = useState(existing?.date || new Date().toISOString().split('T')[0]);
@@ -37,6 +53,16 @@ export default function AddTransactionScreen() {
 
   const activeAccounts = accounts.filter((a) => !a.archived);
 
+  const apiCatsFiltered = useMemo(() => {
+    return categories.filter((c) => !c.archived && (type === 'income' ? c.type === 'income' : c.type === 'expense'));
+  }, [categories, type]);
+
+  useEffect(() => {
+    if (!selectedCategoryId && apiCatsFiltered.length > 0) {
+      setSelectedCategoryId(apiCatsFiltered[0].id);
+    }
+  }, [apiCatsFiltered]);
+
   useEffect(() => {
     if (toAccountId === '' && activeAccounts.length >= 2) {
       setToAccountId(activeAccounts.find((a) => a.id !== accountId)?.id || '');
@@ -44,68 +70,57 @@ export default function AddTransactionScreen() {
   }, [accountId]);
 
   const handleSave = async () => {
-    if (!description.trim()) {
-      Alert.alert('Atenção', 'Adicione uma descrição');
-      return;
-    }
+    if (!description.trim()) { Alert.alert('Atenção', 'Adicione uma descrição'); return; }
     const amountNum = parseFloat(amount.replace(',', '.'));
-    if (!amount || isNaN(amountNum) || amountNum <= 0) {
-      Alert.alert('Atenção', 'Informe um valor válido');
-      return;
-    }
+    if (!amount || isNaN(amountNum) || amountNum <= 0) { Alert.alert('Atenção', 'Informe um valor válido'); return; }
 
-    if (type === 'transfer') {
-      if (!toAccountId || toAccountId === accountId) {
-        Alert.alert('Atenção', 'Selecione contas de origem e destino diferentes');
-        return;
-      }
-      if (isEdit) {
-        updateTransaction(id!, {
+    setLoading(true);
+    try {
+      if (type === 'transfer') {
+        if (!toAccountId || toAccountId === accountId) {
+          Alert.alert('Atenção', 'Selecione contas diferentes'); return;
+        }
+        if (isEdit) {
+          await updateTransaction(id!, { description: description.trim(), amount: amountNum, accountId, toAccountId, date, notes: notes.trim() || undefined });
+        } else {
+          await addTransfer(accountId, toAccountId, amountNum, description.trim(), date);
+        }
+      } else {
+        const selectedCat = categories.find((c) => c.id === selectedCategoryId);
+        const txData = {
           description: description.trim(),
           amount: amountNum,
+          type: type as 'income' | 'expense',
+          category: selectedCat ? (selectedCat.type === 'income' ? 'income' : selectedCat.name.toLowerCase()) : (type === 'income' ? 'income' : 'other'),
+          categoryId: selectedCategoryId || undefined,
           accountId,
-          toAccountId,
           date,
+          installments: parseInt(installments) || 1,
+          recurring,
           notes: notes.trim() || undefined,
-        });
-      } else {
-        addTransfer(accountId, toAccountId, amountNum, description.trim(), date);
+        };
+        if (isEdit) {
+          await updateTransaction(id!, txData);
+        } else {
+          await addTransaction(txData);
+        }
       }
-    } else {
-      const txData = {
-        description: description.trim(),
-        amount: amountNum,
-        type: type as 'income' | 'expense',
-        category: type === 'income' ? 'income' : category,
-        accountId,
-        date,
-        installments: parseInt(installments) || 1,
-        recurring,
-        notes: notes.trim() || undefined,
-      };
-
-      if (isEdit) {
-        updateTransaction(id!, txData);
-      } else {
-        addTransaction(txData);
-      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro ao salvar';
+      Alert.alert('Erro', msg);
+    } finally {
+      setLoading(false);
     }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
   };
 
-  const categories = Object.keys(CATEGORIES).filter((c) => c !== 'income' && c !== 'other' && c !== 'transfer');
-
   const Tab = ({ value, label, icon, activeColor }: {
-    value: 'expense' | 'income' | 'transfer';
-    label: string;
-    icon: string;
-    activeColor: string;
+    value: 'expense' | 'income' | 'transfer'; label: string; icon: string; activeColor: string;
   }) => (
     <Pressable
       testID={`type-${value}`}
-      onPress={() => { setType(value); Haptics.selectionAsync(); }}
+      onPress={() => { setType(value); setSelectedCategoryId(''); Haptics.selectionAsync(); }}
       style={[styles.typeOption, type === value && { backgroundColor: activeColor, borderRadius: 10 }]}
     >
       <Feather name={icon as any} size={15} color={type === value ? '#000' : theme.textSecondary} />
@@ -124,64 +139,34 @@ export default function AddTransactionScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Type Toggle */}
         <View style={[styles.typeToggle, { backgroundColor: theme.surfaceElevated }]}>
           <Tab value="expense" label="Despesa" icon="arrow-down-circle" activeColor={colors.danger} />
           <Tab value="income" label="Receita" icon="arrow-up-circle" activeColor={colors.primary} />
           <Tab value="transfer" label="Transferência" icon="repeat" activeColor={colors.info || '#2196F3'} />
         </View>
 
-        <Input
-          testID="desc-input"
-          label="Descrição"
-          value={description}
-          onChangeText={setDescription}
-          placeholder={type === 'transfer' ? 'Ex: Reserva de emergência' : 'Ex: Supermercado'}
-          icon="edit-2"
-        />
+        <Input testID="desc-input" label="Descrição" value={description} onChangeText={setDescription}
+          placeholder={type === 'transfer' ? 'Ex: Reserva de emergência' : 'Ex: Supermercado'} icon="edit-2" />
 
-        <Input
-          testID="amount-input"
-          label="Valor (R$)"
-          value={amount}
-          onChangeText={setAmount}
-          placeholder="0,00"
-          keyboardType="decimal-pad"
-          icon="dollar-sign"
-        />
+        <Input testID="amount-input" label="Valor (R$)" value={amount} onChangeText={setAmount}
+          placeholder="0,00" keyboardType="decimal-pad" icon="dollar-sign" />
 
-        <Input
-          label="Data"
-          value={date}
-          onChangeText={setDate}
-          placeholder="AAAA-MM-DD"
-          icon="calendar"
-        />
+        <Input label="Data" value={date} onChangeText={setDate} placeholder="AAAA-MM-DD" icon="calendar" />
 
-        {/* Transfer: from/to accounts */}
         {type === 'transfer' && (
           <>
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Conta de origem</Text>
               <View style={styles.chipRow}>
                 {activeAccounts.map((acc) => (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }
-                    ]}
-                  >
+                  <Pressable key={acc.id} onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
+                    style={[styles.chip, { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }]}>
                     <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                    <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-                      {acc.name}
-                    </Text>
+                    <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
                   </Pressable>
                 ))}
               </View>
             </View>
-
             <View style={styles.transferArrow}>
               <View style={[styles.arrowLine, { backgroundColor: theme.border }]} />
               <View style={[styles.arrowCircle, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}>
@@ -189,27 +174,14 @@ export default function AddTransactionScreen() {
               </View>
               <View style={[styles.arrowLine, { backgroundColor: theme.border }]} />
             </View>
-
             <View style={styles.field}>
               <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Conta de destino</Text>
               <View style={styles.chipRow}>
                 {activeAccounts.map((acc) => (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => { setToAccountId(acc.id); Haptics.selectionAsync(); }}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: toAccountId === acc.id ? `${acc.color}20` : theme.surfaceElevated,
-                        borderColor: toAccountId === acc.id ? acc.color : theme.border,
-                        opacity: acc.id === accountId ? 0.35 : 1,
-                      }
-                    ]}
-                  >
+                  <Pressable key={acc.id} onPress={() => { setToAccountId(acc.id); Haptics.selectionAsync(); }}
+                    style={[styles.chip, { backgroundColor: toAccountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: toAccountId === acc.id ? acc.color : theme.border, opacity: acc.id === accountId ? 0.35 : 1 }]}>
                     <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                    <Text style={[styles.chipText, { color: toAccountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-                      {acc.name}
-                    </Text>
+                    <Text style={[styles.chipText, { color: toAccountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -217,29 +189,21 @@ export default function AddTransactionScreen() {
           </>
         )}
 
-        {/* Non-transfer fields */}
         {type !== 'transfer' && (
           <>
-            {/* Category (expenses only) */}
-            {type === 'expense' && (
+            {apiCatsFiltered.length > 0 && (
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Categoria</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.chipRow}>
-                    {categories.map((cat) => {
-                      const info = getCategoryInfo(cat);
-                      const selected = category === cat;
+                    {apiCatsFiltered.map((cat) => {
+                      const info = getApiCatIcon(cat);
+                      const selected = selectedCategoryId === cat.id;
                       return (
-                        <Pressable
-                          key={cat}
-                          testID={`cat-${cat}`}
-                          onPress={() => { setCategory(cat); Haptics.selectionAsync(); }}
-                          style={[
-                            styles.chip,
-                            { backgroundColor: selected ? `${info.color}25` : theme.surfaceElevated, borderColor: selected ? info.color : theme.border }
-                          ]}
-                        >
-                          <Feather name={info.icon} size={13} color={selected ? info.color : theme.textTertiary} />
+                        <Pressable key={cat.id} testID={`cat-${cat.id}`}
+                          onPress={() => { setSelectedCategoryId(cat.id); Haptics.selectionAsync(); }}
+                          style={[styles.chip, { backgroundColor: selected ? `${info.color}25` : theme.surfaceElevated, borderColor: selected ? info.color : theme.border }]}>
+                          <Feather name={info.icon as any} size={13} color={selected ? info.color : theme.textTertiary} />
                           <Text style={[styles.chipText, { color: selected ? info.color : theme.textSecondary, fontFamily: selected ? 'Inter_500Medium' : 'Inter_400Regular' }]}>
                             {info.label}
                           </Text>
@@ -251,48 +215,29 @@ export default function AddTransactionScreen() {
               </View>
             )}
 
-            {/* Account Picker */}
             {activeAccounts.length > 0 && (
               <View style={styles.field}>
                 <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Conta</Text>
                 <View style={styles.chipRow}>
                   {activeAccounts.map((acc) => (
-                    <Pressable
-                      key={acc.id}
-                      onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
-                      style={[
-                        styles.chip,
-                        { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }
-                      ]}
-                    >
+                    <Pressable key={acc.id} onPress={() => { setAccountId(acc.id); Haptics.selectionAsync(); }}
+                      style={[styles.chip, { backgroundColor: accountId === acc.id ? `${acc.color}20` : theme.surfaceElevated, borderColor: accountId === acc.id ? acc.color : theme.border }]}>
                       <View style={[styles.chipDot, { backgroundColor: acc.color }]} />
-                      <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-                        {acc.name}
-                      </Text>
+                      <Text style={[styles.chipText, { color: accountId === acc.id ? acc.color : theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{acc.name}</Text>
                     </Pressable>
                   ))}
                 </View>
               </View>
             )}
 
-            {/* Installments (expenses only) */}
             {type === 'expense' && (
-              <Input
-                label="Parcelas"
-                value={installments}
-                onChangeText={setInstallments}
-                keyboardType="number-pad"
-                placeholder="1"
-                icon="layers"
-              />
+              <Input label="Parcelas" value={installments} onChangeText={setInstallments}
+                keyboardType="number-pad" placeholder="1" icon="layers" />
             )}
 
-            {/* Recurring Toggle */}
-            <Pressable
-              testID="recurring-toggle"
+            <Pressable testID="recurring-toggle"
               onPress={() => { setRecurring(!recurring); Haptics.selectionAsync(); }}
-              style={[styles.toggleRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            >
+              style={[styles.toggleRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.toggleLeft}>
                 <Feather name="repeat" size={18} color={recurring ? colors.primary : theme.textTertiary} />
                 <View>
@@ -307,28 +252,20 @@ export default function AddTransactionScreen() {
           </>
         )}
 
-        {/* Notes */}
         <View style={styles.field}>
           <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Observações (opcional)</Text>
           <TextInput
-            value={notes}
-            onChangeText={setNotes}
+            value={notes} onChangeText={setNotes}
             placeholder="Ex: referência, número do pedido..."
             placeholderTextColor={theme.textTertiary}
-            multiline
-            numberOfLines={3}
-            style={[styles.notesInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+            multiline numberOfLines={3}
+            style={[styles.notesInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border, fontFamily: 'Inter_400Regular' }]}
           />
         </View>
 
-        <Button
-          testID="save-btn"
+        <Button testID="save-btn"
           label={isEdit ? 'Salvar Alterações' : type === 'transfer' ? 'Confirmar Transferência' : 'Salvar Transação'}
-          onPress={handleSave}
-          loading={loading}
-          fullWidth
-          size="lg"
-        />
+          onPress={handleSave} loading={loading} fullWidth size="lg" />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -351,7 +288,7 @@ const styles = StyleSheet.create({
   toggleSub: { fontSize: 12, marginTop: 2 },
   switch: { width: 44, height: 26, borderRadius: 13, borderWidth: 1, justifyContent: 'center', padding: 2 },
   switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#fff' },
-  notesInput: { borderRadius: 12, borderWidth: 1, padding: 14, fontSize: 15, fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top' },
+  notesInput: { borderRadius: 12, borderWidth: 1, padding: 14, fontSize: 15, minHeight: 80, textAlignVertical: 'top' },
   transferArrow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8 },
   arrowLine: { flex: 1, height: 1 },
   arrowCircle: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
