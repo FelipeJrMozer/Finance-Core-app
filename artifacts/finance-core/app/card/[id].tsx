@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Modal, Alert,
-  KeyboardAvoidingView, Platform, TextInput, FlatList
+  KeyboardAvoidingView, Platform, TextInput, FlatList, Switch
 } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -46,7 +46,10 @@ export default function CardDetailScreen() {
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expCategory, setExpCategory] = useState('food');
-  const [expInstallments, setExpInstallments] = useState('1');
+  const [expInstallments, setExpInstallments] = useState(1);
+  const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expRecurring, setExpRecurring] = useState(false);
+  const [expNotes, setExpNotes] = useState('');
   const [selectedPayAccount, setSelectedPayAccount] = useState(accounts[0]?.id || '');
   const [payAmount, setPayAmount] = useState('');
 
@@ -87,27 +90,38 @@ export default function CardDetailScreen() {
   const dueDateDay = card.dueDate.split('-')[2];
   const closingDateDay = card.closingDate.split('-')[2];
 
+  const expAmountNum = parseFloat(expAmount.replace(',', '.')) || 0;
+  const expInstallmentValue = expInstallments > 1 ? expAmountNum / expInstallments : expAmountNum;
+
   const handleSaveExpense = () => {
-    const amountNum = parseFloat(expAmount.replace(',', '.'));
-    if (!expDesc.trim() || isNaN(amountNum) || amountNum <= 0) {
-      Alert.alert('Atenção', 'Preencha descrição e valor válido');
+    if (!expDesc.trim()) {
+      Alert.alert('Atenção', 'Adicione uma descrição');
+      return;
+    }
+    if (isNaN(expAmountNum) || expAmountNum <= 0) {
+      Alert.alert('Atenção', 'Informe um valor válido');
       return;
     }
     addCardExpense(id, {
       description: expDesc.trim(),
-      amount: amountNum,
+      amount: expAmountNum,
       type: 'expense',
       category: expCategory,
       accountId: accounts[0]?.id || '',
-      date: `${selectedMonth}-${String(now.getDate()).padStart(2, '0')}`,
-      installments: parseInt(expInstallments) || 1,
+      date: expDate || new Date().toISOString().split('T')[0],
+      installments: expInstallments,
       currentInstallment: 1,
+      recurring: expRecurring,
+      notes: expNotes.trim() || undefined,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowExpenseModal(false);
     setExpDesc('');
     setExpAmount('');
-    setExpInstallments('1');
+    setExpInstallments(1);
+    setExpDate(new Date().toISOString().split('T')[0]);
+    setExpRecurring(false);
+    setExpNotes('');
   };
 
   const handlePayInvoice = () => {
@@ -554,79 +568,190 @@ export default function CardDetailScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView
             style={{ flex: 1, backgroundColor: theme.background }}
-            contentContainerStyle={[styles.modal, { paddingBottom: insets.bottom + 24 }]}
+            contentContainerStyle={[styles.modal, { paddingBottom: insets.bottom + 32 }]}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Header */}
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
                 Adicionar despesa
               </Text>
-              <Pressable onPress={() => setShowExpenseModal(false)}>
-                <Feather name="x" size={22} color={theme.textSecondary} />
+              <Pressable
+                onPress={() => setShowExpenseModal(false)}
+                style={[styles.modalCloseBtn, { backgroundColor: theme.surfaceElevated }]}
+              >
+                <Feather name="x" size={18} color={theme.textSecondary} />
               </Pressable>
             </View>
 
-            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Descrição</Text>
+            {/* Card chip */}
+            <View style={[styles.expCardChip, { backgroundColor: `${card.color}18`, borderColor: `${card.color}40` }]}>
+              <Feather name="credit-card" size={14} color={card.color} />
+              <Text style={[styles.expCardChipText, { color: card.color, fontFamily: 'Inter_600SemiBold' }]}>
+                {card.name}
+              </Text>
+            </View>
+
+            {/* Amount hero */}
+            <View style={[styles.amountHero, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.amountCurrency, { color: theme.textTertiary, fontFamily: 'Inter_500Medium' }]}>R$</Text>
+              <TextInput
+                value={expAmount}
+                onChangeText={setExpAmount}
+                placeholder="0,00"
+                placeholderTextColor={theme.textTertiary}
+                keyboardType="decimal-pad"
+                style={[styles.amountInput, { color: theme.text, fontFamily: 'Inter_700Bold' }]}
+                autoFocus={false}
+              />
+            </View>
+            {expInstallments > 1 && expAmountNum > 0 && (
+              <Text style={[styles.installmentPreview, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                {expInstallments}x de {formatBRL(expInstallmentValue)} por mês
+              </Text>
+            )}
+
+            {/* Description */}
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Descrição *</Text>
             <TextInput
               value={expDesc}
               onChangeText={setExpDesc}
-              placeholder="Ex: Supermercado"
+              placeholder="Ex: Supermercado, Netflix, Gasolina..."
               placeholderTextColor={theme.textTertiary}
-              style={[styles.textInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+              style={[styles.textInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border, fontFamily: 'Inter_400Regular' }]}
             />
 
-            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Valor (R$)</Text>
-            <TextInput
-              value={expAmount}
-              onChangeText={setExpAmount}
-              placeholder="0,00"
-              placeholderTextColor={theme.textTertiary}
-              keyboardType="decimal-pad"
-              style={[styles.textInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
-            />
+            {/* Date */}
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Data da compra</Text>
+            <View style={[styles.dateRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Feather name="calendar" size={16} color={theme.textTertiary} />
+              <TextInput
+                value={expDate}
+                onChangeText={setExpDate}
+                placeholder="AAAA-MM-DD"
+                placeholderTextColor={theme.textTertiary}
+                style={[styles.dateInput, { color: theme.text, fontFamily: 'Inter_400Regular' }]}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
 
+            {/* Installments */}
             <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Parcelas</Text>
+            <View style={styles.installmentsGrid}>
+              {[1, 2, 3, 4, 5, 6, 8, 10, 12, 18, 24, 36].map((n) => (
+                <Pressable
+                  key={n}
+                  onPress={() => { setExpInstallments(n); Haptics.selectionAsync(); }}
+                  style={[
+                    styles.installmentChip,
+                    {
+                      backgroundColor: expInstallments === n ? colors.primary : theme.surface,
+                      borderColor: expInstallments === n ? colors.primary : theme.border,
+                    }
+                  ]}
+                >
+                  <Text style={[
+                    styles.installmentChipText,
+                    { color: expInstallments === n ? '#fff' : theme.textSecondary, fontFamily: expInstallments === n ? 'Inter_600SemiBold' : 'Inter_400Regular' }
+                  ]}>
+                    {n === 1 ? 'À vista' : `${n}x`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Recurring */}
+            <View style={[styles.recurringRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={[styles.recurringTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Despesa recorrente</Text>
+                <Text style={[styles.recurringDesc, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                  Lançar automaticamente todos os meses
+                </Text>
+              </View>
+              <Switch
+                value={expRecurring}
+                onValueChange={(v) => { setExpRecurring(v); Haptics.selectionAsync(); }}
+                trackColor={{ false: theme.border, true: `${colors.primary}80` }}
+                thumbColor={expRecurring ? colors.primary : theme.textTertiary}
+              />
+            </View>
+
+            {/* Category */}
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Categoria</Text>
+            <View style={styles.categoryGrid}>
+              {categories.map((cat) => {
+                const info = getCategoryInfo(cat);
+                const active = expCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    onPress={() => { setExpCategory(cat); Haptics.selectionAsync(); }}
+                    style={[
+                      styles.categoryCell,
+                      {
+                        backgroundColor: active ? `${info.color}20` : theme.surface,
+                        borderColor: active ? info.color : theme.border,
+                      }
+                    ]}
+                  >
+                    <View style={[styles.categoryIcon, { backgroundColor: active ? `${info.color}25` : theme.surfaceElevated }]}>
+                      <Feather name={info.icon as any} size={16} color={active ? info.color : theme.textTertiary} />
+                    </View>
+                    <Text style={[styles.categoryCellText, { color: active ? info.color : theme.textSecondary, fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular' }]} numberOfLines={1}>
+                      {info.label}
+                    </Text>
+                    {active && (
+                      <View style={[styles.categoryCheck, { backgroundColor: info.color }]}>
+                        <Feather name="check" size={10} color="#fff" />
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Notes */}
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Observações</Text>
             <TextInput
-              value={expInstallments}
-              onChangeText={setExpInstallments}
-              placeholder="1"
+              value={expNotes}
+              onChangeText={setExpNotes}
+              placeholder="Informações adicionais (opcional)"
               placeholderTextColor={theme.textTertiary}
-              keyboardType="number-pad"
-              style={[styles.textInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border }]}
+              multiline
+              numberOfLines={3}
+              style={[styles.textInput, styles.notesInput, { color: theme.text, backgroundColor: theme.surface, borderColor: theme.border, fontFamily: 'Inter_400Regular' }]}
             />
 
-            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Categoria</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.chipRow}>
-                {categories.map((cat) => {
-                  const info = getCategoryInfo(cat);
-                  return (
-                    <Pressable
-                      key={cat}
-                      onPress={() => { setExpCategory(cat); Haptics.selectionAsync(); }}
-                      style={[
-                        styles.chip,
-                        {
-                          backgroundColor: expCategory === cat ? `${info.color}25` : theme.surfaceElevated,
-                          borderColor: expCategory === cat ? info.color : theme.border,
-                        }
-                      ]}
-                    >
-                      <Feather name={info.icon as any} size={13} color={expCategory === cat ? info.color : theme.textTertiary} />
-                      <Text style={[styles.chipText, { color: expCategory === cat ? info.color : theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                        {info.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+            {/* Summary strip */}
+            {expAmountNum > 0 && (
+              <View style={[styles.expSummary, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}30` }]}>
+                <View style={styles.expSummaryRow}>
+                  <Text style={[styles.expSummaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Valor total</Text>
+                  <Text style={[styles.expSummaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(expAmountNum)}</Text>
+                </View>
+                {expInstallments > 1 && (
+                  <View style={styles.expSummaryRow}>
+                    <Text style={[styles.expSummaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Entrada na fatura</Text>
+                    <Text style={[styles.expSummaryValue, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                      {expInstallments}x de {formatBRL(expInstallmentValue)}
+                    </Text>
+                  </View>
+                )}
+                {expRecurring && (
+                  <View style={styles.expSummaryRow}>
+                    <Text style={[styles.expSummaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Recorrência</Text>
+                    <Text style={[styles.expSummaryValue, { color: colors.warning, fontFamily: 'Inter_600SemiBold' }]}>Mensal</Text>
+                  </View>
+                )}
               </View>
-            </ScrollView>
+            )}
 
             <Pressable
               onPress={handleSaveExpense}
-              style={[styles.saveBtn, { backgroundColor: colors.primary }]}
+              style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: expAmountNum > 0 && expDesc.trim() ? 1 : 0.5 }]}
             >
-              <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Salvar despesa</Text>
+              <Feather name="plus" size={18} color="#fff" />
+              <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Adicionar despesa</Text>
             </Pressable>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -779,7 +904,32 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
   chipText: { fontSize: 12 },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 14, marginTop: 8 },
-  saveBtnText: { color: '#000', fontSize: 16 },
+  saveBtnText: { color: '#fff', fontSize: 16 },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  expCardChip: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  expCardChipText: { fontSize: 13 },
+  amountHero: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 4 },
+  amountCurrency: { fontSize: 22, marginRight: 4, paddingTop: 6 },
+  amountInput: { flex: 1, fontSize: 44, paddingVertical: 12 },
+  installmentPreview: { textAlign: 'center', fontSize: 14, marginTop: -4 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, gap: 10 },
+  dateInput: { flex: 1, fontSize: 15, paddingVertical: 14 },
+  installmentsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  installmentChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: 1, minWidth: 60, alignItems: 'center' },
+  installmentChipText: { fontSize: 13 },
+  recurringRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  recurringTitle: { fontSize: 15 },
+  recurringDesc: { fontSize: 12 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryCell: { width: '47%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, position: 'relative' },
+  categoryIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  categoryCellText: { fontSize: 13, flex: 1 },
+  categoryCheck: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  notesInput: { minHeight: 80, textAlignVertical: 'top' },
+  expSummary: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
+  expSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  expSummaryLabel: { fontSize: 13 },
+  expSummaryValue: { fontSize: 14 },
   accountChip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   accName: { fontSize: 14 },
   accBalance: { fontSize: 12, marginTop: 2 },
