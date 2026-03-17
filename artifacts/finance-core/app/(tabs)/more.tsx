@@ -54,7 +54,7 @@ function MenuItem({ icon, label, subtitle, badge, color = '#00C853', onPress, te
 }
 
 export default function MoreScreen() {
-  const { theme, colors, isDark, themeMode, setThemeMode, valuesVisible, toggleValuesVisible } = useTheme();
+  const { theme, colors, isDark, themeMode, setThemeMode } = useTheme();
   const { user, logout } = useAuth();
   const { budgets, goals, darfs, transactions } = useFinance();
   const insets = useSafeAreaInsets();
@@ -112,14 +112,6 @@ export default function MoreScreen() {
               </View>
             )}
           </View>
-          {/* Global eye toggle in profile area */}
-          <Pressable
-            testID="toggle-values-more"
-            onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-            style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-          >
-            <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
-          </Pressable>
         </View>
       </LinearGradient>
 
@@ -268,7 +260,6 @@ const styles = StyleSheet.create({
   profileEmail: { fontSize: 14 },
   planBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 2 },
   planText: { fontSize: 12 },
-  eyeBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   content: { padding: 16, gap: 12 },
   sectionLabel: { fontSize: 11, letterSpacing: 1 },
   menuGroup: { gap: 8 },

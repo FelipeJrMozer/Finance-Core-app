@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Platform, Dimensions
+  View, Text, StyleSheet, ScrollView, RefreshControl, Platform, Dimensions
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
@@ -98,7 +96,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
 }
 
 export default function ReportsScreen() {
-  const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
+  const { theme, colors, isDark, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -148,22 +146,13 @@ export default function ReportsScreen() {
         colors={isDark ? ['#0A0A0F', '#0D1A14'] : ['#F0FFF4', '#F5F7FA']}
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-              Relatórios
-            </Text>
-            <Text style={[styles.period, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-              {getMonthName(currentMonth)} • Resumo do mês
-            </Text>
-          </View>
-          <Pressable
-            testID="toggle-values"
-            onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-            style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-          >
-            <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
-          </Pressable>
+        <View>
+          <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+            Relatórios
+          </Text>
+          <Text style={[styles.period, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+            {getMonthName(currentMonth)} • Resumo do mês
+          </Text>
         </View>
       </LinearGradient>
 
@@ -262,10 +251,8 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 24, gap: 4 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   screenTitle: { fontSize: 26 },
   period: { fontSize: 14, marginTop: 2 },
-  eyeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, marginTop: 4 },
   content: { padding: 16, gap: 16 },
   section: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
   sectionTitle: { fontSize: 16 },

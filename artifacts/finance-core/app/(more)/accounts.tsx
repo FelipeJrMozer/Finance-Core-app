@@ -14,7 +14,7 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function AccountsScreen() {
-  const { theme, colors, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { accounts, creditCards, updateAccount } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -33,20 +33,12 @@ export default function AccountsScreen() {
           <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
             Contas Bancárias
           </Text>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-              style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-            >
-              <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={16} color={colors.primary} />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push('/account/add')}
-              style={[styles.addBtn, { backgroundColor: colors.primary }]}
-            >
-              <Feather name="plus" size={18} color="#000" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => router.push('/account/add')}
+            style={[styles.addBtn, { backgroundColor: colors.primary }]}
+          >
+            <Feather name="plus" size={18} color="#000" />
+          </Pressable>
         </View>
 
         {activeAccounts.length === 0 ? (
@@ -154,9 +146,7 @@ export default function AccountsScreen() {
 
 const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   sectionTitle: { fontSize: 18 },
-  eyeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   addBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   list: { gap: 12 },
   accountCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },

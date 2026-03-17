@@ -100,7 +100,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
 }
 
 export default function InvestmentsScreen() {
-  const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
+  const { theme, colors, isDark, maskValue } = useTheme();
   const { investments, isLoading } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -134,13 +134,6 @@ export default function InvestmentsScreen() {
               Carteira
             </Text>
             <View style={styles.headerActions}>
-              <Pressable
-                testID="toggle-values"
-                onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                style={[styles.eyeBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-              >
-                <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
-              </Pressable>
               <Pressable
                 testID="add-investment"
                 onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}
@@ -246,7 +239,6 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   screenTitle: { fontSize: 26 },
-  eyeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   portfolioCard: { borderRadius: 20, padding: 20, gap: 16 },
   portfolioLabel: { color: 'rgba(0,0,0,0.7)', fontSize: 14 },
