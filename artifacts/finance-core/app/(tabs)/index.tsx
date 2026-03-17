@@ -264,7 +264,8 @@ export default function DashboardScreen() {
   const { theme, colors, isDark, valuesVisible, toggleValuesVisible, maskValue } = useTheme();
   const { user } = useAuth();
   const {
-    totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
+    totalBalance, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses,
+    netResult, healthScore,
     transactions, budgets, isLoading, accounts, investments, creditCards
   } = useFinance();
   const insets = useSafeAreaInsets();
@@ -279,6 +280,9 @@ export default function DashboardScreen() {
   const netWorth = totalBalance + totalInvestments - totalCreditUsed;
 
   const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
+
+  const incomeTrend = prevMonthIncome > 0 ? ((monthlyIncome - prevMonthIncome) / prevMonthIncome) * 100 : undefined;
+  const expensesTrend = prevMonthExpenses > 0 ? ((monthlyExpenses - prevMonthExpenses) / prevMonthExpenses) * 100 : undefined;
 
   const topExpenseCategory = (() => {
     const cats: Record<string, number> = {};
@@ -428,8 +432,8 @@ export default function DashboardScreen() {
 
               {/* Summary Cards */}
               <View style={styles.summaryRow}>
-                <SummaryCard label="Receitas" value={formatBRL(monthlyIncome, true)} icon="arrow-up" color={colors.primary} trend={5.2} testID="income-card" />
-                <SummaryCard label="Despesas" value={formatBRL(monthlyExpenses, true)} icon="arrow-down" color={colors.danger} trend={-3.1} testID="expenses-card" />
+                <SummaryCard label="Receitas" value={formatBRL(monthlyIncome, true)} icon="arrow-up" color={colors.primary} trend={incomeTrend} testID="income-card" />
+                <SummaryCard label="Despesas" value={formatBRL(monthlyExpenses, true)} icon="arrow-down" color={colors.danger} trend={expensesTrend} testID="expenses-card" />
               </View>
               <View style={styles.summaryRow}>
                 <SummaryCard label="Resultado" value={formatBRL(netResult, true)} icon="activity" color={netResult >= 0 ? colors.primary : colors.danger} testID="net-card" />

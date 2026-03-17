@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
-import { formatBRL, getCurrentMonth } from '@/utils/formatters';
+import { apiPost } from '@/services/api';
 
 interface Message {
   id: string;
@@ -18,51 +18,43 @@ interface Message {
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-function getAIResponse(userMessage: string, context: {
-  totalBalance: number;
-  monthlyIncome: number;
-  monthlyExpenses: number;
-  netResult: number;
-  healthScore: number;
-}): string {
-  const msg = userMessage.toLowerCase();
-  const { totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore } = context;
-  const savingsRate = monthlyIncome > 0 ? ((netResult / monthlyIncome) * 100).toFixed(1) : '0';
+function MarkdownText({ content, color, fontFamily }: { content: string; color: string; fontFamily: string }) {
+  const lines = content.split('\n');
 
-  if (msg.includes('saldo') || msg.includes('dinheiro') || msg.includes('quanto')) {
-    return `Seu saldo total atual é ${formatBRL(totalBalance)}. Este mês você teve ${formatBRL(monthlyIncome)} de receitas e ${formatBRL(monthlyExpenses)} de despesas, resultando em um saldo mensal de ${formatBRL(netResult)}.`;
-  }
-  if (msg.includes('poupan') || msg.includes('guardar') || msg.includes('economiz')) {
-    return `Sua taxa de poupança este mês é de ${savingsRate}%. ${
-      parseFloat(savingsRate) >= 20
-        ? 'Excelente! Você está acima da meta de 20% recomendada por especialistas.'
-        : 'Tente aumentar para pelo menos 20%. Dica: corte despesas não essenciais e automatize transferências para poupança no início do mês.'
-    }`;
-  }
-  if (msg.includes('investimento') || msg.includes('investir') || msg.includes('rend')) {
-    return `Para quem está começando a investir, recomendo: 1) Primeiro, mantenha uma reserva de emergência de 6 meses de despesas. 2) Tesouro Selic para segurança. 3) IVVB11 para exposição ao S&P500. 4) FIIs para renda passiva. Sua saúde financeira atual é ${healthScore}/1000.`;
-  }
-  if (msg.includes('dívida') || msg.includes('cartão') || msg.includes('crédito')) {
-    return `Estratégia para quitar dívidas: priorize as de maior juros (especialmente cartão de crédito). Tente pagar sempre o valor total da fatura. Com ${formatBRL(netResult)} de resultado mensal, você tem capacidade de acelerar a quitação.`;
-  }
-  if (msg.includes('aposentadoria') || msg.includes('previdência')) {
-    return `Para aposentadoria, recomendo contribuir com pelo menos 15% da renda. Considere PGBL ou VGBL dependendo do seu imposto de renda. Invista em ativos diversificados: renda fixa, ações e FIIs. Com sua renda atual de ${formatBRL(monthlyIncome)}, contribuindo 15% resultaria em ${formatBRL(monthlyIncome * 0.15)} por mês.`;
-  }
-  if (msg.includes('imposto') || msg.includes('ir') || msg.includes('darf')) {
-    return `Sobre imposto de renda: operações de venda de ações acima de R$ 20.000/mês precisam recolher DARF. FIIs distribuem rendimentos isentos de IR para PF. Fique atento aos prazos - DARF deve ser pago até o último dia útil do mês seguinte à operação.`;
-  }
-  if (msg.includes('meta') || msg.includes('objetivo') || msg.includes('sonho')) {
-    return `Para atingir suas metas financeiras: 1) Defina objetivos específicos com valor e prazo. 2) Calcule quanto precisa guardar por mês. 3) Crie uma conta separada para cada meta. 4) Automatize aportes. Quer que eu calcule quanto você precisa guardar para alguma meta específica?`;
-  }
-  if (msg.includes('saúde') || msg.includes('score') || msg.includes('nota')) {
-    return `Sua saúde financeira é ${healthScore}/1000 - ${
-      healthScore >= 800 ? 'Excelente! Continue assim.' :
-      healthScore >= 600 ? 'Boa! Você está no caminho certo.' :
-      'Há espaço para melhorar. Foque em aumentar a poupança e os investimentos.'
-    } Para melhorar seu score, mantenha gastos abaixo da renda, aumente investimentos e defina metas claras.`;
-  }
-  
-  return `Olá! Sou seu assistente financeiro pessoal. Posso ajudá-lo com:\n\n• Análise do seu saldo e fluxo de caixa\n• Estratégias de poupança e investimento\n• Planejamento para metas e aposentadoria\n• Dicas sobre impostos e DARFs\n• Gestão de dívidas e cartão de crédito\n\nSua saúde financeira atual é ${healthScore}/1000. O que deseja analisar?`;
+  return (
+    <View style={{ gap: 2 }}>
+      {lines.map((line, i) => {
+        const isBullet = line.trimStart().startsWith('* ') || line.trimStart().startsWith('- ');
+        const text = isBullet ? line.trimStart().slice(2) : line;
+
+        const parts: { text: string; bold: boolean }[] = [];
+        const boldRegex = /\*\*([^*]+)\*\*/g;
+        let last = 0;
+        let match;
+        while ((match = boldRegex.exec(text)) !== null) {
+          if (match.index > last) parts.push({ text: text.slice(last, match.index), bold: false });
+          parts.push({ text: match[1], bold: true });
+          last = match.index + match[0].length;
+        }
+        if (last < text.length) parts.push({ text: text.slice(last), bold: false });
+
+        if (!text.trim() && !isBullet) return <View key={i} style={{ height: 4 }} />;
+
+        return (
+          <View key={i} style={isBullet ? { flexDirection: 'row', gap: 6, alignItems: 'flex-start' } : undefined}>
+            {isBullet && <Text style={{ color, fontFamily, fontSize: 15, lineHeight: 22 }}>•</Text>}
+            <Text style={{ color, fontFamily, fontSize: 15, lineHeight: 22, flex: isBullet ? 1 : undefined }}>
+              {parts.map((p, j) => (
+                <Text key={j} style={p.bold ? { fontFamily: 'Inter_600SemiBold' } : undefined}>
+                  {p.text}
+                </Text>
+              ))}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 export default function ChatScreen() {
@@ -74,16 +66,16 @@ export default function ChatScreen() {
     {
       id: uid(),
       role: 'assistant',
-      content: `Olá! Sou seu assistente financeiro AI. Estou analisando seus dados financeiros.\n\n📊 Resumo atual:\n• Saldo total: ${formatBRL(totalBalance)}\n• Saúde financeira: ${healthScore}/1000\n\nComo posso ajudar você hoje?`,
+      content: `Olá! Sou seu assistente financeiro com IA. Estou pronto para analisar seus dados e responder suas perguntas sobre finanças pessoais.\n\nComo posso ajudar você hoje?`,
       timestamp: new Date(),
     }
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const userMsg: Message = { id: uid(), role: 'user', content: text, timestamp: new Date() };
@@ -91,13 +83,43 @@ export default function ChatScreen() {
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const response = getAIResponse(text, { totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore });
-      const aiMsg: Message = { id: uid(), role: 'assistant', content: response, timestamp: new Date() };
+    try {
+      const history = [...messages]
+        .reverse()
+        .slice(1)
+        .map((m) => ({ role: m.role, content: m.content }));
+
+      const data = await apiPost<{ reply: string }>('/api/ai/chat', {
+        message: text,
+        messages: history,
+        context: {
+          totalBalance,
+          monthlyIncome,
+          monthlyExpenses,
+          netResult,
+          healthScore,
+        },
+      });
+
+      const aiMsg: Message = {
+        id: uid(),
+        role: 'assistant',
+        content: data.reply ?? 'Não foi possível obter uma resposta.',
+        timestamp: new Date(),
+      };
       setMessages((prev) => [aiMsg, ...prev]);
-      setIsTyping(false);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, 800 + Math.random() * 600);
+    } catch {
+      const errMsg: Message = {
+        id: uid(),
+        role: 'assistant',
+        content: 'Desculpe, não consegui processar sua mensagem. Verifique sua conexão e tente novamente.',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [errMsg, ...prev]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const QUICK_QUESTIONS = [
@@ -132,15 +154,19 @@ export default function ChatScreen() {
                 <Feather name="cpu" size={14} color={colors.primary} />
               </View>
             )}
-            <Text style={[
-              styles.bubbleText,
-              {
-                color: item.role === 'user' ? '#000' : theme.text,
-                fontFamily: 'Inter_400Regular',
-              }
-            ]}>
-              {item.content}
-            </Text>
+            {item.role === 'assistant' ? (
+              <View style={{ flex: 1 }}>
+                <MarkdownText
+                  content={item.content}
+                  color={theme.text}
+                  fontFamily="Inter_400Regular"
+                />
+              </View>
+            ) : (
+              <Text style={[styles.bubbleText, { color: '#000', fontFamily: 'Inter_400Regular' }]}>
+                {item.content}
+              </Text>
+            )}
           </View>
         )}
         ListHeaderComponent={
@@ -160,7 +186,6 @@ export default function ChatScreen() {
         scrollEnabled={!!messages.length}
       />
 
-      {/* Quick Questions */}
       {messages.length <= 1 && (
         <View style={styles.quickRow}>
           {QUICK_QUESTIONS.map((q) => (
@@ -177,7 +202,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Input */}
       <View style={[
         styles.inputBar,
         {

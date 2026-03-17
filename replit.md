@@ -73,11 +73,14 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
   - Goal contribution: `POST /api/goals/:id/contribute` endpoint
   - Settings: `PATCH /api/settings` → full settings sync
   - Tags, Notifications, Categories all loaded from API
+- **FinanceContext computed values**: `monthlyIncome`, `monthlyExpenses`, `prevMonthIncome`, `prevMonthExpenses` — both current and previous month computed from the `transactions` array for real trend percentages
+- **AI Chat** (`app/chat.tsx`): Uses real `POST /api/ai/chat` with `{ message, messages, context }`. Passes conversation history and financial context (totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore). Renders markdown responses (bold `**text**`, bullet points `* item`). Powered by Groq via the production backend.
 - **Screens**:
-  - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart
+  - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart; SummaryCards use real month-over-month trends (no hardcoded values)
   - Transactions (add/edit/delete, uses real API categories, installments, recurring)
   - Reports (charts by category, income vs expenses, cash flow, health score)
   - Investments (stocks, FIIs, REITs, ETFs, crypto, fixed income)
+  - AI Chat (connects to real `/api/ai/chat` endpoint with context + history)
   - Mais → Contas e Cartões, Metas, Orçamentos, **Notificações**, Configurações, Planos
 - **Credit Card Features** (`app/card/`):
   - `card/[id].tsx` — detail: Fatura, Parcelas, Detalhes tabs

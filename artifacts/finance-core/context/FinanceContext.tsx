@@ -388,6 +388,8 @@ interface FinanceContextType {
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpenses: number;
+  prevMonthIncome: number;
+  prevMonthExpenses: number;
   netResult: number;
   healthScore: number;
 }
@@ -492,10 +494,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
   const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+  const prevMonthTx = transactions.filter((t) => t.date.startsWith(prevMonth));
   const totalBalance = accounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
   const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const monthlyExpenses = monthlyTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const prevMonthIncome = prevMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const prevMonthExpenses = prevMonthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const netResult = monthlyIncome - monthlyExpenses;
   const savingsRate = monthlyIncome > 0 ? Math.max(0, netResult / monthlyIncome) : 0;
   const healthScore = Math.min(100, Math.round(savingsRate * 100));
@@ -893,7 +900,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addBudget, updateBudget, deleteBudget,
       addCategory, updateSettings, markNotificationRead, dismissNotification,
       refresh,
-      totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
+      totalBalance, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
     }}>
       {children}
     </FinanceContext.Provider>
