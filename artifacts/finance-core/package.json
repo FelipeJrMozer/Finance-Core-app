@@ -58,6 +58,7 @@
   "dependencies": {
     "@react-native-community/datetimepicker": "^9.0.0",
     "@shopify/react-native-skia": "^2.5.1",
+    "expo-clipboard": "^8.0.8",
     "expo-device": "^8.0.10",
     "expo-notifications": "^0.32.16",
     "react-native-gifted-charts": "^1.4.76",

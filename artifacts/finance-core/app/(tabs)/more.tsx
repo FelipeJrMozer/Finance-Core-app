@@ -188,6 +188,13 @@ export default function MoreScreen() {
             subtitle={activeSubscriptions.length > 0 ? `${activeSubscriptions.length} ativas • R$ ${monthlySubTotal.toFixed(2).replace('.', ',')}/mês` : 'Nenhuma assinatura ativa'}
             onPress={() => router.push('/(more)/family')}
           />
+          <MenuItem
+            testID="menu-bank-notifications"
+            icon="bell"
+            label="Central de Notificações Bancárias"
+            subtitle="Importe SMS e notificações do banco para lançar movimentações"
+            onPress={() => router.push('/(more)/bank-notifications')}
+          />
         </View>
 
         {/* Budgets Quick View */}

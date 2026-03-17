@@ -19,6 +19,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="budgets" options={{ title: 'Orçamentos' }} />
       <Stack.Screen name="settings" options={{ title: 'Configurações' }} />
       <Stack.Screen name="family" options={{ title: 'Módulo Familiar' }} />
+      <Stack.Screen name="bank-notifications" options={{ title: 'Central de Notificações Bancárias' }} />
     </Stack>
   );
 }
