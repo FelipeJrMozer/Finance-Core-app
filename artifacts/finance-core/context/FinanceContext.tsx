@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -357,6 +357,22 @@ function transformGoal(raw: Record<string, unknown>): Goal {
   };
 }
 
+/**
+ * Computes the net movement of transactions for a given account:
+ * income - expense - transferOut + transferIn
+ */
+function computeTxNet(accountId: string, txs: Transaction[]): number {
+  return txs.reduce((net, t) => {
+    if (t.accountId === accountId) {
+      if (t.type === 'income') return net + t.amount;
+      if (t.type === 'expense') return net - t.amount;
+      if (t.type === 'transfer') return net - t.amount;
+    }
+    if (t.toAccountId === accountId && t.type === 'transfer') return net + t.amount;
+    return net;
+  }, 0);
+}
+
 function transformSettings(raw: Record<string, unknown>): AppSettings {
   return {
     id: raw.id as string,
@@ -453,6 +469,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const catMapRef = useRef<Record<string, ApiCategory>>({});
+  const openingBalancesRef = useRef<Record<string, number>>({});
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
@@ -483,6 +500,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const txsData = txs.status === 'fulfilled' ? txs.value : [];
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
+
+      // Compute opening balances (balance before any loaded transactions).
+      // openingBalance = api.balance - txNet, so that
+      // computedBalance = openingBalance + currentTxNet always reflects local state.
+      const newOpeningBalances: Record<string, number> = {};
+      mappedAccounts.forEach((acc) => {
+        const txNet = computeTxNet(acc.id, mappedTx);
+        newOpeningBalances[acc.id] = acc.balance - txNet;
+      });
+      openingBalancesRef.current = newOpeningBalances;
 
       const cardsData = cards.status === 'fulfilled' ? cards.value : [];
       const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
@@ -536,7 +563,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
   const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
   const prevMonthTx = transactions.filter((t) => t.date.startsWith(prevMonth));
-  const totalBalance = accounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+  // Recompute account balances from local transactions so any optimistic update
+  // (add/delete transaction) is instantly reflected without waiting for an API refresh.
+  // openingBalance (captured once after loadAll) + currentTxNet = live balance.
+  const computedAccounts = useMemo(() => {
+    return accounts.map((acc) => {
+      const opening = openingBalancesRef.current[acc.id];
+      if (opening === undefined) return acc;
+      const txNet = computeTxNet(acc.id, transactions);
+      return { ...acc, balance: opening + txNet };
+    });
+  }, [accounts, transactions]);
+
+  const totalBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
   const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const monthlyExpenses = monthlyTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const prevMonthIncome = prevMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
@@ -648,10 +687,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     };
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/accounts', body);
-      setAccounts((prev) => [...prev, transformAccount(raw)]);
+      const newAcc = transformAccount(raw);
+      // Opening balance = initial balance (no transactions exist for this account yet)
+      openingBalancesRef.current[newAcc.id] = newAcc.balance;
+      setAccounts((prev) => [...prev, newAcc]);
     } catch (e) {
       console.warn('[addAccount]', e);
-      setAccounts((prev) => [...prev, { ...a, id: uid() }]);
+      const fallbackAcc = { ...a, id: uid() };
+      openingBalancesRef.current[fallbackAcc.id] = fallbackAcc.balance;
+      setAccounts((prev) => [...prev, fallbackAcc]);
     }
   }, []);
 
@@ -932,7 +976,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <FinanceContext.Provider value={{
-      transactions, accounts, creditCards, investments, budgets, goals,
+      transactions, accounts: computedAccounts, creditCards, investments, budgets, goals,
       categories, tags, notifications, settings, isLoading,
       addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
