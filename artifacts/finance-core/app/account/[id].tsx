@@ -10,6 +10,11 @@ import { useFinance } from '@/context/FinanceContext';
 import { TransactionItem } from '@/components/TransactionItem';
 import { formatBRL } from '@/utils/formatters';
 
+function getCurrentMonth() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+}
+
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   checking: 'Conta Corrente', savings: 'Poupança', investment: 'Investimentos', credit: 'Crédito'
 };
@@ -23,9 +28,12 @@ export default function AccountDetailScreen() {
   const account = accounts.find((a) => a.id === id);
   if (!account) return null;
 
-  const accountTx = transactions.filter((t) => t.accountId === id && !t.cardId).slice(0, 30);
-  const monthlyIncome = accountTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const monthlyExpenses = accountTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const currentMonth = getCurrentMonth();
+  const allAccountTx = transactions.filter((t) => t.accountId === id);
+  const recentTx = allAccountTx.slice(0, 30);
+  const monthlyTx = allAccountTx.filter((t) => t.date.startsWith(currentMonth));
+  const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const monthlyExpenses = monthlyTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
   return (
     <ScrollView
@@ -55,14 +63,14 @@ export default function AccountDetailScreen() {
 
       <View style={[styles.statsRow, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Entradas</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Entradas do mês</Text>
           <Text style={[styles.statValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>
             {maskValue(formatBRL(monthlyIncome))}
           </Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Saídas</Text>
+          <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Saídas do mês</Text>
           <Text style={[styles.statValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>
             {maskValue(formatBRL(monthlyExpenses))}
           </Text>
@@ -83,14 +91,14 @@ export default function AccountDetailScreen() {
         <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
           Últimas transações
         </Text>
-        {accountTx.map((t) => (
+        {recentTx.map((t) => (
           <TransactionItem
             key={t.id}
             transaction={t}
             onPress={(tx) => router.push({ pathname: '/transaction/[id]', params: { id: tx.id } })}
           />
         ))}
-        {accountTx.length === 0 && (
+        {recentTx.length === 0 && (
           <View style={styles.empty}>
             <Feather name="inbox" size={32} color={theme.textTertiary} />
             <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>

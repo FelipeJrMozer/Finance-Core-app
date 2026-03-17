@@ -165,7 +165,7 @@ export default function ReportsScreen() {
   const avgDailyExpense = totalExpense / (dayOfMonth || 1);
   const forecastExpense = isCurrentMonth ? avgDailyExpense * daysInMonth : totalExpense;
 
-  const totalAccounts = accounts.filter((a) => !a.archived).reduce((s, a) => s + a.balance, 0);
+  const totalAccounts = accounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const totalCredit = creditCards.reduce((s, c) => s + c.used, 0);
   const netWorth = totalAccounts + totalInvestments - totalCredit;
