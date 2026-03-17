@@ -82,6 +82,35 @@ export interface DARF {
   paidDate?: string;
 }
 
+export type FamilyRole = 'titular' | 'conjuge' | 'filho' | 'dependente' | 'outro';
+
+export interface FamilyMember {
+  id: string;
+  name: string;
+  role: FamilyRole;
+  color: string;
+  monthlyBudget?: number;
+  email?: string;
+}
+
+export type BillingCycle = 'monthly' | 'quarterly' | 'annual';
+
+export interface Subscription {
+  id: string;
+  name: string;
+  amount: number;
+  billingCycle: BillingCycle;
+  nextBillingDate: string;
+  category: string;
+  color: string;
+  icon: string;
+  memberId?: string;
+  sharedWith?: string[];
+  active: boolean;
+  notes?: string;
+  accountId?: string;
+}
+
 interface FinanceContextType {
   transactions: Transaction[];
   accounts: Account[];
@@ -90,6 +119,8 @@ interface FinanceContextType {
   budgets: Budget[];
   goals: Goal[];
   darfs: DARF[];
+  familyMembers: FamilyMember[];
+  subscriptions: Subscription[];
   addTransaction: (t: Omit<Transaction, 'id'>) => void;
   updateTransaction: (id: string, t: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
@@ -112,6 +143,13 @@ interface FinanceContextType {
   updateBudget: (id: string, b: Partial<Budget>) => void;
   markDARFPaid: (id: string) => void;
   getCardTransactions: (cardId: string, month?: string) => Transaction[];
+  addFamilyMember: (m: Omit<FamilyMember, 'id'>) => void;
+  updateFamilyMember: (id: string, m: Partial<FamilyMember>) => void;
+  deleteFamilyMember: (id: string) => void;
+  addSubscription: (s: Omit<Subscription, 'id'>) => void;
+  updateSubscription: (id: string, s: Partial<Subscription>) => void;
+  deleteSubscription: (id: string) => void;
+  toggleSubscription: (id: string) => void;
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpenses: number;
@@ -130,6 +168,8 @@ const KEYS = {
   budgets: 'fc_budgets',
   goals: 'fc_goals',
   darfs: 'fc_darfs',
+  familyMembers: 'fc_family_members',
+  subscriptions: 'fc_subscriptions',
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -209,7 +249,28 @@ function generateDemoData() {
     { id: '2', type: 'DARF - IRRF FIIs', month: currentMonth, amount: 80.00, dueDate: `${currentMonth}-30`, paid: true, paidDate: `${currentMonth}-10` },
   ];
 
-  return { accounts, creditCards, transactions, investments, budgets, goals, darfs };
+  const familyMembers: FamilyMember[] = [
+    { id: 'fm1', name: 'Carlos Silva', role: 'titular', color: '#0096C7', monthlyBudget: 8000, email: 'carlos@email.com' },
+    { id: 'fm2', name: 'Ana Silva', role: 'conjuge', color: '#E91E8C', monthlyBudget: 4000, email: 'ana@email.com' },
+    { id: 'fm3', name: 'Pedro Silva', role: 'filho', color: '#FF9800', monthlyBudget: 800 },
+  ];
+
+  const nextMonth = now.getMonth() === 11
+    ? `${now.getFullYear() + 1}-01`
+    : `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, '0')}`;
+
+  const subscriptions: Subscription[] = [
+    { id: 'sub1', name: 'Netflix', amount: 55.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-01`, category: 'entertainment', color: '#E50914', icon: 'play-circle', memberId: 'fm1', sharedWith: ['fm2', 'fm3'], active: true },
+    { id: 'sub2', name: 'Spotify Family', amount: 34.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-05`, category: 'entertainment', color: '#1DB954', icon: 'music', memberId: 'fm1', sharedWith: ['fm2', 'fm3'], active: true },
+    { id: 'sub3', name: 'iCloud 200GB', amount: 9.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-10`, category: 'technology', color: '#007AFF', icon: 'cloud', memberId: 'fm2', active: true },
+    { id: 'sub4', name: 'Amazon Prime', amount: 19.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-15`, category: 'entertainment', color: '#FF9900', icon: 'shopping-bag', memberId: 'fm1', sharedWith: ['fm2'], active: true },
+    { id: 'sub5', name: 'Disney+', amount: 43.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-20`, category: 'entertainment', color: '#113CCF', icon: 'star', memberId: 'fm3', sharedWith: ['fm2'], active: true },
+    { id: 'sub6', name: 'Apple One', amount: 49.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-01`, category: 'technology', color: '#555', icon: 'smartphone', memberId: 'fm2', active: true },
+    { id: 'sub7', name: 'YouTube Premium', amount: 27.90, billingCycle: 'monthly', nextBillingDate: `${nextMonth}-12`, category: 'entertainment', color: '#FF0000', icon: 'youtube', memberId: 'fm1', sharedWith: ['fm3'], active: false },
+    { id: 'sub8', name: 'Microsoft 365', amount: 599.00, billingCycle: 'annual', nextBillingDate: `${now.getFullYear() + 1}-03-15`, category: 'technology', color: '#0078D4', icon: 'grid', memberId: 'fm1', sharedWith: ['fm2'], active: true },
+  ];
+
+  return { accounts, creditCards, transactions, investments, budgets, goals, darfs, familyMembers, subscriptions };
 }
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
@@ -220,12 +281,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [darfs, setDarfs] = useState<DARF[]>([]);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [t, a, cc, inv, b, g, d] = await Promise.all([
+        const [t, a, cc, inv, b, g, d, fm, subs] = await Promise.all([
           AsyncStorage.getItem(KEYS.transactions),
           AsyncStorage.getItem(KEYS.accounts),
           AsyncStorage.getItem(KEYS.creditCards),
@@ -233,6 +296,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEYS.budgets),
           AsyncStorage.getItem(KEYS.goals),
           AsyncStorage.getItem(KEYS.darfs),
+          AsyncStorage.getItem(KEYS.familyMembers),
+          AsyncStorage.getItem(KEYS.subscriptions),
         ]);
 
         if (!a) {
@@ -244,6 +309,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           setBudgets(demo.budgets);
           setGoals(demo.goals);
           setDarfs(demo.darfs);
+          setFamilyMembers(demo.familyMembers);
+          setSubscriptions(demo.subscriptions);
           await Promise.all([
             AsyncStorage.setItem(KEYS.transactions, JSON.stringify(demo.transactions)),
             AsyncStorage.setItem(KEYS.accounts, JSON.stringify(demo.accounts)),
@@ -252,6 +319,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
             AsyncStorage.setItem(KEYS.budgets, JSON.stringify(demo.budgets)),
             AsyncStorage.setItem(KEYS.goals, JSON.stringify(demo.goals)),
             AsyncStorage.setItem(KEYS.darfs, JSON.stringify(demo.darfs)),
+            AsyncStorage.setItem(KEYS.familyMembers, JSON.stringify(demo.familyMembers)),
+            AsyncStorage.setItem(KEYS.subscriptions, JSON.stringify(demo.subscriptions)),
           ]);
         } else {
           if (t) setTransactions(JSON.parse(t));
@@ -261,6 +330,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           if (b) setBudgets(JSON.parse(b));
           if (g) setGoals(JSON.parse(g));
           if (d) setDarfs(JSON.parse(d));
+          if (fm) setFamilyMembers(JSON.parse(fm));
+          if (subs) setSubscriptions(JSON.parse(subs));
         }
       } finally {
         setIsLoading(false);
@@ -518,6 +589,64 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const addFamilyMember = useCallback((m: Omit<FamilyMember, 'id'>) => {
+    const newM = { ...m, id: uid() };
+    setFamilyMembers((prev) => {
+      const next = [...prev, newM];
+      save(KEYS.familyMembers, next);
+      return next;
+    });
+  }, []);
+
+  const updateFamilyMember = useCallback((id: string, m: Partial<FamilyMember>) => {
+    setFamilyMembers((prev) => {
+      const next = prev.map((item) => item.id === id ? { ...item, ...m } : item);
+      save(KEYS.familyMembers, next);
+      return next;
+    });
+  }, []);
+
+  const deleteFamilyMember = useCallback((id: string) => {
+    setFamilyMembers((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.familyMembers, next);
+      return next;
+    });
+  }, []);
+
+  const addSubscription = useCallback((s: Omit<Subscription, 'id'>) => {
+    const newS = { ...s, id: uid() };
+    setSubscriptions((prev) => {
+      const next = [...prev, newS];
+      save(KEYS.subscriptions, next);
+      return next;
+    });
+  }, []);
+
+  const updateSubscription = useCallback((id: string, s: Partial<Subscription>) => {
+    setSubscriptions((prev) => {
+      const next = prev.map((item) => item.id === id ? { ...item, ...s } : item);
+      save(KEYS.subscriptions, next);
+      return next;
+    });
+  }, []);
+
+  const deleteSubscription = useCallback((id: string) => {
+    setSubscriptions((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      save(KEYS.subscriptions, next);
+      return next;
+    });
+  }, []);
+
+  const toggleSubscription = useCallback((id: string) => {
+    setSubscriptions((prev) => {
+      const next = prev.map((item) => item.id === id ? { ...item, active: !item.active } : item);
+      save(KEYS.subscriptions, next);
+      return next;
+    });
+  }, []);
+
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthlyTransactions = transactions.filter((t) => t.date.startsWith(currentMonth));
@@ -539,12 +668,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   return (
     <FinanceContext.Provider value={{
       transactions, accounts, creditCards, investments, budgets, goals, darfs,
+      familyMembers, subscriptions,
       addTransaction, updateTransaction, deleteTransaction, addTransfer,
       addAccount, updateAccount, deleteAccount,
       addCreditCard, updateCreditCard, deleteCreditCard,
       addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
       addInvestment, updateInvestment, addGoal, updateGoal, addContribution,
       addBudget, updateBudget, markDARFPaid,
+      addFamilyMember, updateFamilyMember, deleteFamilyMember,
+      addSubscription, updateSubscription, deleteSubscription, toggleSubscription,
       totalBalance, monthlyIncome, monthlyExpenses, netResult, healthScore,
       isLoading,
     }}>

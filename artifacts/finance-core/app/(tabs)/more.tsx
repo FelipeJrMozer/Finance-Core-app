@@ -60,7 +60,7 @@ function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, r
 export default function MoreScreen() {
   const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, darfs, transactions, totalBalance, investments } = useFinance();
+  const { budgets, goals, darfs, transactions, totalBalance, investments, familyMembers, subscriptions } = useFinance();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
@@ -70,6 +70,11 @@ export default function MoreScreen() {
     monthlyTx.filter((t) => t.category === category && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
   const unpaidDarfs = darfs.filter((d) => !d.paid);
+  const activeSubscriptions = subscriptions.filter((s) => s.active);
+  const monthlySubTotal = activeSubscriptions.reduce((sum, s) => {
+    const mult = s.billingCycle === 'monthly' ? 1 : s.billingCycle === 'quarterly' ? 1 / 3 : 1 / 12;
+    return sum + s.amount * mult;
+  }, 0);
   const pendingGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
 
   const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
@@ -167,6 +172,21 @@ export default function MoreScreen() {
             badge={unpaidDarfs.length > 0 ? `${unpaidDarfs.length}` : undefined}
             badgeColor={unpaidDarfs.length > 0 ? colors.warning : undefined}
             onPress={() => router.push('/(more)/darfs')}
+          />
+          <MenuItem
+            testID="menu-family"
+            icon="users"
+            label="Módulo Familiar"
+            subtitle={`${familyMembers.length} membro${familyMembers.length !== 1 ? 's' : ''} • ${activeSubscriptions.length} assinatura${activeSubscriptions.length !== 1 ? 's' : ''} ativas`}
+            badge={familyMembers.length > 0 ? `${familyMembers.length}` : undefined}
+            onPress={() => router.push('/(more)/family')}
+          />
+          <MenuItem
+            testID="menu-subscriptions"
+            icon="refresh-cw"
+            label="Assinaturas"
+            subtitle={activeSubscriptions.length > 0 ? `${activeSubscriptions.length} ativas • R$ ${monthlySubTotal.toFixed(2).replace('.', ',')}/mês` : 'Nenhuma assinatura ativa'}
+            onPress={() => router.push('/(more)/family')}
           />
         </View>
 

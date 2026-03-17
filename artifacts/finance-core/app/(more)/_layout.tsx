@@ -17,6 +17,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="darfs" options={{ title: 'DARFs e IR' }} />
       <Stack.Screen name="budgets" options={{ title: 'Orçamentos' }} />
       <Stack.Screen name="settings" options={{ title: 'Configurações' }} />
+      <Stack.Screen name="family" options={{ title: 'Módulo Familiar' }} />
     </Stack>
   );
 }
