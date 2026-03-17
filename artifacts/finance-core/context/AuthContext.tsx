@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiFetch, initApiSession, clearApiSession, BASE_URL } from '@/services/api';
+import { Platform } from 'react-native';
 
-interface User {
+export interface User {
   id: string;
   name: string;
   email: string;
@@ -21,19 +23,45 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
-const USER_KEY = 'fc_user';
-const SESSION_KEY = 'fc_session';
+const USER_KEY = 'pf_user';
+
+function mapApiUser(raw: Record<string, string>): User {
+  return {
+    id: raw.id || '1',
+    name: [raw.firstName, raw.lastName].filter(Boolean).join(' ') || raw.name || raw.email?.split('@')[0] || 'Usuário',
+    email: raw.email,
+    avatar: raw.profileImageUrl || undefined,
+    plan: raw.plan || undefined,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(USER_KEY).then((val) => {
-      if (val) setUser(JSON.parse(val));
+    const init = async () => {
+      await initApiSession();
+      const cached = await AsyncStorage.getItem(USER_KEY);
+      if (cached) {
+        setUser(JSON.parse(cached));
+        try {
+          const res = await apiFetch('/api/auth/user');
+          if (res.ok) {
+            const raw = await res.json();
+            const fresh = mapApiUser(raw);
+            setUser(fresh);
+            await AsyncStorage.setItem(USER_KEY, JSON.stringify(fresh));
+          } else {
+            await AsyncStorage.removeItem(USER_KEY);
+            setUser(null);
+            await clearApiSession();
+          }
+        } catch {}
+      }
       setIsLoading(false);
-    });
+    };
+    init();
   }, []);
 
   const persistUser = async (u: User | null) => {
@@ -43,50 +71,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = useCallback(async (email: string, password: string) => {
-    if (API_URL) {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Invalid credentials');
-      const data = await res.json();
-      await persistUser(data.user || { id: '1', name: email.split('@')[0], email });
-    } else {
-      // Demo mode
-      if (email && password) {
-        const u: User = { id: '1', name: 'Alex Silva', email, plan: 'Family' };
-        await persistUser(u);
-      } else {
-        throw new Error('Invalid credentials');
-      }
+    const res = await apiFetch('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'Email ou senha incorretos');
     }
+    const raw = await res.json();
+    const u = mapApiUser(raw);
+    await persistUser(u);
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
-    if (API_URL) {
-      const res = await fetch(`${API_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Registration failed');
-      const data = await res.json();
-      await persistUser(data.user || { id: '1', name, email });
-    } else {
-      const u: User = { id: '1', name, email, plan: 'Free' };
-      await persistUser(u);
-    }
+    const [firstName, ...rest] = name.trim().split(' ');
+    const lastName = rest.join(' ');
+    const res = await apiFetch('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ firstName, lastName, email, password }),
+    });
+    if (!res.ok) throw new Error('Falha ao criar conta');
+    const raw = await res.json();
+    const u = mapApiUser({ ...raw, name });
+    await persistUser(u);
   }, []);
 
   const logout = useCallback(async () => {
-    if (API_URL) {
-      await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
-    }
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    await clearApiSession();
     await persistUser(null);
-    await AsyncStorage.removeItem(SESSION_KEY);
   }, []);
 
   const updateUser = useCallback((data: Partial<User>) => {
@@ -100,8 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, isLoading, isAuthenticated: !!user,
-      login, register, logout, updateUser, apiUrl: API_URL
+      user,
+      isLoading,
+      isAuthenticated: !!user,
+      login,
+      register,
+      logout,
+      updateUser,
+      apiUrl: BASE_URL,
     }}>
       {children}
     </AuthContext.Provider>
