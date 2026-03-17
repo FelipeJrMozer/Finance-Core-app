@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Modal, Alert,
   KeyboardAvoidingView, Platform, TextInput, FlatList
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -165,6 +165,18 @@ export default function CardDetailScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Stack.Screen
+        options={{
+          headerRight: tab === 'invoice' ? () => (
+            <Pressable
+              onPress={() => setShowExpenseModal(true)}
+              style={[styles.headerAddBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="plus" size={18} color="#000" />
+            </Pressable>
+          ) : undefined,
+        }}
+      />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
@@ -481,23 +493,14 @@ export default function CardDetailScreen() {
         )}
       </ScrollView>
 
-      {tab === 'invoice' && (
+      {tab === 'invoice' && invoiceTotal > 0 && (
         <View style={[styles.fab, { paddingBottom: insets.bottom + 8 }]}>
-          {invoiceTotal > 0 && (
-            <Pressable
-              onPress={() => { setPayAmount(invoiceTotal.toFixed(2)); setShowPayModal(true); }}
-              style={[styles.fabBtn, { backgroundColor: colors.success, flex: 1 }]}
-            >
-              <Feather name="check-circle" size={18} color="#000" />
-              <Text style={[styles.fabText, { color: '#000', fontFamily: 'Inter_600SemiBold' }]}>Pagar fatura</Text>
-            </Pressable>
-          )}
           <Pressable
-            onPress={() => setShowExpenseModal(true)}
-            style={[styles.fabBtn, { backgroundColor: colors.primary }]}
+            onPress={() => { setPayAmount(invoiceTotal.toFixed(2)); setShowPayModal(true); }}
+            style={[styles.fabBtn, { backgroundColor: colors.success, flex: 1 }]}
           >
-            <Feather name="plus" size={18} color="#000" />
-            <Text style={[styles.fabText, { color: '#000', fontFamily: 'Inter_600SemiBold' }]}>Despesa</Text>
+            <Feather name="check-circle" size={18} color="#000" />
+            <Text style={[styles.fabText, { color: '#000', fontFamily: 'Inter_600SemiBold' }]}>Pagar fatura</Text>
           </Pressable>
         </View>
       )}
@@ -735,4 +738,5 @@ const styles = StyleSheet.create({
   accountChip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   accName: { fontSize: 14 },
   accBalance: { fontSize: 12, marginTop: 2 },
+  headerAddBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
 });
