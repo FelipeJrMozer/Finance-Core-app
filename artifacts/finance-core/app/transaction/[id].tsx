@@ -81,6 +81,8 @@ export default function TransactionDetailScreen() {
     ...(isTransfer && toAccount ? [{ label: 'Conta de destino', value: toAccount.name, icon: 'arrow-right-circle' as const }] : []),
     ...(!isTransfer ? [{ label: 'Categoria', value: info.label, icon: 'tag' as const }] : []),
     ...(isInstallment ? [{ label: 'Parcelas', value: `${transaction.currentInstallment || '?'}/${transaction.installments}x de ${maskValue(formatBRL(transaction.amount))}`, icon: 'layers' as const }] : []),
+    { label: 'Status', value: transaction.isPaid ? 'Pago' : 'Pendente', icon: 'check-circle' as const },
+    ...(!isTransfer && transaction.isFixed ? [{ label: 'Tipo', value: 'Despesa Fixa', icon: 'anchor' as const }] : []),
     ...(transaction.recurring ? [{ label: 'Recorrência', value: 'Mensal', icon: 'repeat' as const }] : []),
     ...(transaction.notes ? [{ label: 'Observações', value: transaction.notes, icon: 'file-text' as const }] : []),
   ];

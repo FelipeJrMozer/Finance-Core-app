@@ -64,6 +64,8 @@ export default function AddTransactionScreen() {
   const [date, setDate] = useState(existing?.date || new Date().toISOString().split('T')[0]);
   const [installments, setInstallments] = useState(existing?.installments?.toString() || '1');
   const [recurring, setRecurring] = useState(existing?.recurring || false);
+  const [isFixed, setIsFixed] = useState(existing?.isFixed || false);
+  const [isPaid, setIsPaid] = useState(existing ? (existing.isPaid ?? true) : true);
   const [notes, setNotes] = useState(existing?.notes || '');
   const [loading, setLoading] = useState(false);
 
@@ -139,6 +141,8 @@ export default function AddTransactionScreen() {
           date,
           installments: parseInt(installments) || 1,
           recurring,
+          isFixed,
+          isPaid,
           notes: notes.trim() || undefined,
         };
         if (isEdit) {
@@ -376,6 +380,42 @@ export default function AddTransactionScreen() {
             {type === 'expense' && (
               <Input label="Parcelas" value={installments} onChangeText={setInstallments}
                 keyboardType="number-pad" placeholder="1" icon="layers" />
+            )}
+
+            {/* Pago / Pendente */}
+            <Pressable
+              onPress={() => { setIsPaid(!isPaid); Haptics.selectionAsync(); }}
+              style={[styles.toggleRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={styles.toggleLeft}>
+                <Feather name="check-circle" size={18} color={isPaid ? colors.primary : theme.textTertiary} />
+                <View>
+                  <Text style={[styles.toggleLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+                    {isPaid ? 'Pago' : 'Pendente'}
+                  </Text>
+                  <Text style={[styles.toggleSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Marcar como pago</Text>
+                </View>
+              </View>
+              <View style={[styles.switch, { backgroundColor: isPaid ? colors.primary : theme.surfaceElevated, borderColor: isPaid ? colors.primary : theme.border }]}>
+                <View style={[styles.switchThumb, { transform: [{ translateX: isPaid ? 18 : 0 }] }]} />
+              </View>
+            </Pressable>
+
+            {/* Despesa fixa */}
+            {type === 'expense' && (
+              <Pressable
+                onPress={() => { setIsFixed(!isFixed); Haptics.selectionAsync(); }}
+                style={[styles.toggleRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.toggleLeft}>
+                  <Feather name="anchor" size={18} color={isFixed ? colors.primary : theme.textTertiary} />
+                  <View>
+                    <Text style={[styles.toggleLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>Despesa Fixa</Text>
+                    <Text style={[styles.toggleSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Valor fixo todo mês</Text>
+                  </View>
+                </View>
+                <View style={[styles.switch, { backgroundColor: isFixed ? colors.primary : theme.surfaceElevated, borderColor: isFixed ? colors.primary : theme.border }]}>
+                  <View style={[styles.switchThumb, { transform: [{ translateX: isFixed ? 18 : 0 }] }]} />
+                </View>
+              </Pressable>
             )}
 
             <Pressable testID="recurring-toggle"

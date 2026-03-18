@@ -472,6 +472,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const openingBalancesRef = useRef<Record<string, number>>({});
   const transactionsRef = useRef<Transaction[]>([]);
 
+  /**
+   * Call this whenever accounts are refreshed from the API.
+   * Recalibrates opening balances so computedAccounts = api.balance for the current transactions.
+   * Merges with existing entries so new accounts get their opening balance set correctly.
+   */
+  const recalibrateOpeningBalances = useCallback((freshAccounts: Account[], currentTxs: Transaction[]) => {
+    const next: Record<string, number> = { ...openingBalancesRef.current };
+    freshAccounts.forEach((acc) => {
+      const txNet = computeTxNet(acc.id, currentTxs);
+      next[acc.id] = acc.balance - txNet;
+    });
+    openingBalancesRef.current = next;
+  }, []);
+
   const loadAll = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -502,15 +516,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
 
-      // Compute opening balances (balance before any loaded transactions).
-      // openingBalance = api.balance - txNet, so that
-      // computedBalance = openingBalance + currentTxNet always reflects local state.
-      const newOpeningBalances: Record<string, number> = {};
-      mappedAccounts.forEach((acc) => {
-        const txNet = computeTxNet(acc.id, mappedTx);
-        newOpeningBalances[acc.id] = acc.balance - txNet;
-      });
-      openingBalancesRef.current = newOpeningBalances;
+      // Calibrate opening balances from fresh API data.
+      recalibrateOpeningBalances(mappedAccounts, mappedTx);
 
       const cardsData = cards.status === 'fulfilled' ? cards.value : [];
       const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
@@ -631,11 +638,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/transactions', body);
       const newTx = transformTransaction(raw, catMapRef.current);
-      setTransactions((prev) => [newTx, ...prev]);
+      // Add transaction first so the balance recalculates immediately
+      setTransactions((prev) => {
+        const next = [newTx, ...prev];
+        transactionsRef.current = next;
+        return next;
+      });
+      // Then refresh accounts from API and recalibrate opening balances
       if (raw.accountId) {
-        const updatedAcc = await apiGet<Record<string, unknown>>(`/api/accounts`);
+        const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
         if (Array.isArray(updatedAcc)) {
-          setAccounts((updatedAcc as Record<string, unknown>[]).map(transformAccount));
+          const freshAccounts = updatedAcc.map(transformAccount);
+          recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
+          setAccounts(freshAccounts);
         }
       }
     } catch (e) {
@@ -643,7 +658,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const optimistic: Transaction = { ...t, id: uid() };
       setTransactions((prev) => [optimistic, ...prev]);
     }
-  }, []);
+  }, [recalibrateOpeningBalances]);
 
   const updateTransaction = useCallback(async (id: string, t: Partial<Transaction>) => {
     setTransactions((prev) => prev.map((item) => item.id === id ? { ...item, ...t } : item));
@@ -666,13 +681,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
-    setTransactions((prev) => prev.filter((item) => item.id !== id));
+    setTransactions((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      transactionsRef.current = next;
+      return next;
+    });
     try {
       await apiDelete(`/api/transactions/${id}`);
       const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
-      if (Array.isArray(updatedAcc)) setAccounts(updatedAcc.map(transformAccount));
+      if (Array.isArray(updatedAcc)) {
+        const freshAccounts = updatedAcc.map(transformAccount);
+        recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
+        setAccounts(freshAccounts);
+      }
     } catch {}
-  }, []);
+  }, [recalibrateOpeningBalances]);
 
   const addTransfer = useCallback(async (
     fromAccountId: string, toAccountId: string, amount: number, description: string, date: string
@@ -686,9 +709,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/transactions', body);
       const newTx = transformTransaction(raw, catMapRef.current);
-      setTransactions((prev) => [newTx, ...prev]);
+      setTransactions((prev) => {
+        const next = [newTx, ...prev];
+        transactionsRef.current = next;
+        return next;
+      });
       const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
-      if (Array.isArray(updatedAcc)) setAccounts(updatedAcc.map(transformAccount));
+      if (Array.isArray(updatedAcc)) {
+        const freshAccounts = updatedAcc.map(transformAccount);
+        recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
+        setAccounts(freshAccounts);
+      }
     } catch {
       const optimistic: Transaction = {
         id: uid(), description, amount, type: 'transfer',
@@ -696,7 +727,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       };
       setTransactions((prev) => [optimistic, ...prev]);
     }
-  }, []);
+  }, [recalibrateOpeningBalances]);
 
   // ── Accounts ───────────────────────────────────────────────────────────────
 
