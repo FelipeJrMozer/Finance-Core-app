@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
 import { BudgetProgress } from '@/components/BudgetProgress';
+import { WalletHeaderButton } from '@/components/WalletHeaderButton';
 import { ACCENT_PRESETS } from '@/constants/colors';
 
 interface MenuItemProps {
@@ -120,12 +121,15 @@ export default function MoreScreen() {
               </View>
             )}
           </View>
-          <Pressable
-            onPress={() => router.push('/(more)/settings')}
-            style={[styles.settingsBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-          >
-            <Feather name="settings" size={20} color={colors.primary} />
-          </Pressable>
+          <View style={{ alignItems: 'flex-end', gap: 8 }}>
+            <WalletHeaderButton />
+            <Pressable
+              onPress={() => router.push('/(more)/settings')}
+              style={[styles.settingsBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+            >
+              <Feather name="settings" size={20} color={colors.primary} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Net Worth quick view */}

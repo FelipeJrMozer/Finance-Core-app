@@ -12,6 +12,7 @@ import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Investment } from '@/context/FinanceContext';
 import { formatBRL, formatPercent } from '@/utils/formatters';
+import { WalletHeaderButton } from '@/components/WalletHeaderButton';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
@@ -222,6 +223,7 @@ export default function InvestmentsScreen() {
         >
           <View style={styles.headerTop}>
             <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Carteira</Text>
+            <WalletHeaderButton />
             <Pressable
               testID="add-investment"
               onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}

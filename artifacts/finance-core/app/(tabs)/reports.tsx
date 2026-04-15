@@ -11,6 +11,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, formatMonthYear, getCurrentMonth, getMonthName } from '@/utils/formatters';
 import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
+import { WalletHeaderButton } from '@/components/WalletHeaderButton';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
@@ -277,7 +278,10 @@ export default function ReportsScreen() {
           colors={isDark ? ['#0A0A0F', '#0D1420'] : ['#EBF8FF', '#F5F7FA']}
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
-          <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Relatórios</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Relatórios</Text>
+            <WalletHeaderButton />
+          </View>
           <View style={[styles.monthNav, { backgroundColor: `${theme.surface}80`, borderColor: `${theme.border}60` }]}>
             <Pressable
               onPress={() => setSelectedMonth(addMonths(selectedMonth, -1))}
