@@ -21,6 +21,7 @@ import { FinanceProvider } from "@/context/FinanceContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTransactionIntent } from "@/hooks/useTransactionIntent";
 import { QuickTransactionModal } from "@/components/QuickTransactionModal";
+import { HeaderActions } from "@/components/HeaderActions";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -67,15 +68,15 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="transaction/[id]" options={{ title: 'Transação', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
         <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação', presentation: 'formSheet', sheetAllowedDetents: [0.9, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="account/[id]" options={{ title: 'Conta' }} />
+        <Stack.Screen name="account/[id]" options={{ title: 'Conta', headerRight: () => <HeaderActions /> }} />
         <Stack.Screen name="account/add" options={{ title: 'Nova Conta', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="investment/[id]" options={{ title: 'Ativo' }} />
+        <Stack.Screen name="investment/[id]" options={{ title: 'Ativo', headerRight: () => <HeaderActions /> }} />
         <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
+        <Stack.Screen name="goal/[id]" options={{ title: 'Meta', headerRight: () => <HeaderActions /> }} />
         <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
+        <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar', headerRight: () => <HeaderActions /> }} />
         <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
+        <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true, headerRight: () => <HeaderActions /> }} />
       </Stack>
     </>
   );

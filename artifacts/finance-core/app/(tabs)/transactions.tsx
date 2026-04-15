@@ -11,7 +11,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Transaction } from '@/context/FinanceContext';
 import { TransactionItem } from '@/components/TransactionItem';
 import { formatBRL } from '@/utils/formatters';
-import { WalletHeaderButton } from '@/components/WalletHeaderButton';
+import { HeaderActions } from '@/components/HeaderActions';
 
 type FilterType = 'all' | 'income' | 'expense' | 'transfer';
 
@@ -295,11 +295,11 @@ export default function TransactionsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={[styles.headerSection, { paddingTop: topPad + 16 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Transações</Text>
-          <WalletHeaderButton />
-        </View>
-        <View style={styles.headerActions}>
+        <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Transações</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <HeaderActions />
+          <View style={[{ width: 1, height: 24, backgroundColor: 'transparent' }]} />
+          <View style={styles.headerActions}>
           {filtered.length > 0 && (
             <Pressable
               testID="export-csv-btn"
@@ -316,6 +316,7 @@ export default function TransactionsScreen() {
           >
             <Feather name="plus" size={20} color="#000" />
           </Pressable>
+          </View>
         </View>
       </View>
 

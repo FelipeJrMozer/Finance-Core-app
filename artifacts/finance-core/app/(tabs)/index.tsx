@@ -13,6 +13,7 @@ import { useFinance } from '@/context/FinanceContext';
 import { useWallet } from '@/context/WalletContext';
 import { WalletSelectorModal } from '@/components/WalletSelectorModal';
 import { WalletIcon } from '@/components/WalletIcon';
+import { HeaderActions } from '@/components/HeaderActions';
 import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
@@ -355,31 +356,7 @@ export default function DashboardScreen() {
                 </Pressable>
               )}
             </View>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={() => { Haptics.selectionAsync(); setWalletModalVisible(true); }}
-                style={[styles.iconBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-                testID="wallet-selector"
-              >
-                <WalletIcon size={18} color={colors.primary} />
-              </Pressable>
-              <Pressable
-                testID="toggle-all-values"
-                onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                style={[styles.iconBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
-              >
-                <Feather name={valuesVisible ? 'eye' : 'eye-off'} size={18} color={colors.primary} />
-              </Pressable>
-              <Pressable
-                style={[styles.avatarBtn, { backgroundColor: colors.primary }]}
-                testID="profile-avatar"
-                onPress={() => router.push('/(more)/settings')}
-              >
-                <Text style={[styles.avatarInitial, { fontFamily: 'Inter_700Bold' }]}>
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </Pressable>
-            </View>
+            <HeaderActions />
           </View>
 
           {/* Balance Card */}

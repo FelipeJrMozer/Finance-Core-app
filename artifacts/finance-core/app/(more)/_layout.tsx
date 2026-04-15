@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 import { useTheme } from '@/context/ThemeContext';
+import { HeaderActions } from '@/components/HeaderActions';
 
 export default function MoreSubLayout() {
   const { theme } = useTheme();
@@ -10,6 +11,7 @@ export default function MoreSubLayout() {
     headerShadowVisible: false,
     contentStyle: { backgroundColor: theme.background },
     headerTitleStyle: { fontFamily: 'Inter_600SemiBold' as const },
+    headerRight: () => <HeaderActions />,
   };
   return (
     <Stack screenOptions={screenOptions}>
