@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
+import { useWallet } from '@/context/WalletContext';
+import { WalletSelectorModal } from '@/components/WalletSelectorModal';
 import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
@@ -268,8 +270,10 @@ export default function DashboardScreen() {
     netResult, healthScore,
     transactions, budgets, isLoading, accounts, investments, creditCards
   } = useFinance();
+  const { selectedWallet, wallets } = useWallet();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const [walletModalVisible, setWalletModalVisible] = useState(false);
 
   const recentTransactions = transactions.slice(0, 5);
   const currentMonth = getCurrentMonth();
@@ -318,6 +322,12 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         contentContainerStyle={{ paddingBottom: 100 }}
       >
+        {/* Wallet Selector Modal */}
+        <WalletSelectorModal
+          visible={walletModalVisible}
+          onClose={() => setWalletModalVisible(false)}
+        />
+
         {/* Header */}
         <LinearGradient
           colors={isDark ? ['#0A0A0F', '#091520'] : ['#EBF8FF', '#F5F7FA']}
@@ -333,6 +343,18 @@ export default function DashboardScreen() {
               </Text>
             </View>
             <View style={styles.headerActions}>
+              {wallets.length > 0 && (
+                <Pressable
+                  onPress={() => { Haptics.selectionAsync(); setWalletModalVisible(true); }}
+                  style={[styles.walletBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+                >
+                  <Feather name="briefcase" size={13} color={colors.primary} />
+                  <Text style={[styles.walletBtnText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
+                    {selectedWallet?.name || 'Carteira'}
+                  </Text>
+                  <Feather name="chevron-down" size={13} color={colors.primary} />
+                </Pressable>
+              )}
               <Pressable
                 testID="toggle-all-values"
                 onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
@@ -615,6 +637,8 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   greeting: { fontSize: 14 },
   headerTitle: { fontSize: 26 },
+  walletBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, borderWidth: 1, maxWidth: 130 },
+  walletBtnText: { fontSize: 12, flex: 1 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   avatarBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { color: '#000', fontSize: 20 },

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { useWallet } from '@/context/WalletContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -455,6 +456,13 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2,
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const { selectedWalletId } = useWallet();
+
+  const wq = useCallback((path: string) => {
+    if (!selectedWalletId) return path;
+    const sep = path.includes('?') ? '&' : '?';
+    return `${path}${sep}walletId=${selectedWalletId}`;
+  }, [selectedWalletId]);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -490,14 +498,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
-        apiGet<ApiCategory[]>('/api/categories'),
-        apiGet<Record<string, unknown>[]>('/api/accounts'),
-        apiGet<Record<string, unknown>[]>('/api/transactions'),
-        apiGet<Record<string, unknown>[]>('/api/investments'),
-        apiGet<Record<string, unknown>[]>('/api/budgets'),
-        apiGet<Record<string, unknown>[]>('/api/goals'),
-        apiGet<Record<string, unknown>[]>('/api/cards'),
-        apiGet<Tag[]>('/api/tags'),
+        apiGet<ApiCategory[]>(wq('/api/categories')),
+        apiGet<Record<string, unknown>[]>(wq('/api/accounts')),
+        apiGet<Record<string, unknown>[]>(wq('/api/transactions')),
+        apiGet<Record<string, unknown>[]>(wq('/api/investments')),
+        apiGet<Record<string, unknown>[]>(wq('/api/budgets')),
+        apiGet<Record<string, unknown>[]>(wq('/api/goals')),
+        apiGet<Record<string, unknown>[]>(wq('/api/cards')),
+        apiGet<Tag[]>(wq('/api/tags')),
         apiGet<AppNotification[]>('/api/notifications'),
         apiGet<Record<string, unknown>>('/api/settings'),
       ]);
@@ -542,12 +550,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [wq]);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && selectedWalletId !== undefined) {
       loadAll();
-    } else {
+    } else if (!isAuthenticated) {
       setTransactions([]);
       setAccounts([]);
       setCreditCards([]);
@@ -563,7 +571,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       transactionsRef.current = [];
       setIsLoading(false);
     }
-  }, [isAuthenticated, loadAll]);
+  }, [isAuthenticated, selectedWalletId, loadAll]);
 
   // Keep transactionsRef in sync so callbacks can access latest transactions
   // without stale closures (needed by updateAccount balance sync).
@@ -619,7 +627,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const addTransaction = useCallback(async (t: Omit<Transaction, 'id'>) => {
     const cats = Object.values(catMapRef.current);
     const categoryId = t.categoryId || findCategoryId(cats, t.category, t.type === 'transfer' ? 'expense' : t.type as 'income' | 'expense');
-    const body = {
+    const body: Record<string, unknown> = {
       description: t.description,
       amount: t.amount,
       type: t.type,
@@ -635,6 +643,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       totalInstallments: t.installments && t.installments > 1 ? t.installments : 1,
       currency: t.currency || 'BRL',
     };
+    if (selectedWalletId) body.walletId = selectedWalletId;
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/transactions', body);
       const newTx = transformTransaction(raw, catMapRef.current);
@@ -646,7 +655,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       });
       // Then refresh accounts from API and recalibrate opening balances
       if (raw.accountId) {
-        const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
+        const updatedAcc = await apiGet<Record<string, unknown>[]>(wq('/api/accounts'));
         if (Array.isArray(updatedAcc)) {
           const freshAccounts = updatedAcc.map(transformAccount);
           recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
@@ -658,7 +667,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const optimistic: Transaction = { ...t, id: uid() };
       setTransactions((prev) => [optimistic, ...prev]);
     }
-  }, [recalibrateOpeningBalances]);
+  }, [recalibrateOpeningBalances, wq, selectedWalletId]);
 
   const updateTransaction = useCallback(async (id: string, t: Partial<Transaction>) => {
     setTransactions((prev) => prev.map((item) => item.id === id ? { ...item, ...t } : item));
@@ -688,14 +697,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
     try {
       await apiDelete(`/api/transactions/${id}`);
-      const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
+      const updatedAcc = await apiGet<Record<string, unknown>[]>(wq('/api/accounts'));
       if (Array.isArray(updatedAcc)) {
         const freshAccounts = updatedAcc.map(transformAccount);
         recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
         setAccounts(freshAccounts);
       }
     } catch {}
-  }, [recalibrateOpeningBalances]);
+  }, [recalibrateOpeningBalances, wq]);
 
   const addTransfer = useCallback(async (
     fromAccountId: string, toAccountId: string, amount: number, description: string, date: string
@@ -714,7 +723,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         transactionsRef.current = next;
         return next;
       });
-      const updatedAcc = await apiGet<Record<string, unknown>[]>('/api/accounts');
+      const updatedAcc = await apiGet<Record<string, unknown>[]>(wq('/api/accounts'));
       if (Array.isArray(updatedAcc)) {
         const freshAccounts = updatedAcc.map(transformAccount);
         recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
@@ -727,12 +736,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       };
       setTransactions((prev) => [optimistic, ...prev]);
     }
-  }, [recalibrateOpeningBalances]);
+  }, [recalibrateOpeningBalances, wq]);
 
   // ── Accounts ───────────────────────────────────────────────────────────────
 
   const addAccount = useCallback(async (a: Omit<Account, 'id'>) => {
-    const body = {
+    const body: Record<string, unknown> = {
       name: a.name,
       type: a.type === 'savings' ? 'savings' : a.type,
       institution: a.institution,
@@ -740,6 +749,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       color: a.color,
       creditLimit: a.creditLimit || undefined,
     };
+    if (selectedWalletId) body.walletId = selectedWalletId;
     try {
       const raw = await apiPost<Record<string, unknown>>('/api/accounts', body);
       const newAcc = transformAccount(raw);
@@ -752,7 +762,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       openingBalancesRef.current[fallbackAcc.id] = fallbackAcc.balance;
       setAccounts((prev) => [...prev, fallbackAcc]);
     }
-  }, []);
+  }, [selectedWalletId]);
 
   const updateAccount = useCallback(async (id: string, a: Partial<Account>) => {
     setAccounts((prev) => prev.map((item) => item.id === id ? { ...item, ...a } : item));

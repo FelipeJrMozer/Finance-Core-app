@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { WalletProvider } from "@/context/WalletContext";
 import { FinanceProvider } from "@/context/FinanceContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTransactionIntent } from "@/hooks/useTransactionIntent";
@@ -102,14 +103,16 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
             <AuthProvider>
-              <FinanceProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <NotificationGate />
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </FinanceProvider>
+              <WalletProvider>
+                <FinanceProvider>
+                  <GestureHandlerRootView style={{ flex: 1 }}>
+                    <KeyboardProvider>
+                      <NotificationGate />
+                      <RootLayoutNav />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </FinanceProvider>
+              </WalletProvider>
             </AuthProvider>
           </ThemeProvider>
         </QueryClientProvider>
