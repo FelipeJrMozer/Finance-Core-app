@@ -1,0 +1,360 @@
+Pilar Financeiro — App Mobile (Expo / React Native)
+Contexto do Projeto
+Você está desenvolvendo o app mobile companheiro do Pilar Financeiro, uma plataforma brasileira de gestão financeira pessoal. O app web já existe em produção. O app mobile compartilha o mesmo backend e banco de dados — nenhuma nova API precisa ser criada no servidor. Todas as rotas já existem e estão documentadas abaixo.
+
+O repositório do mobile é: https://github.com/FelipeJrMozer/Finance-Core-app
+
+Princípio fundamental: Web ↔ Mobile como espelho
+Toda configuração feita no web (tema, categorias, contas, carteiras, notificações) deve refletir imediatamente no mobile e vice-versa.
+O estado vem sempre do backend compartilhado — sem estados locais duplicados.
+Ao configurar algo no mobile (ex: criar uma transação, mudar tema para escuro), o web deve exibir a mudança imediatamente na próxima sincronização e vice-versa.
+Use React Query (@tanstack/react-query) para cache e sincronização, exatamente como o web.
+Stack Técnica
+Expo SDK 51+ com Expo Router (file-based routing)
+React Native com TypeScript estrito
+@tanstack/react-query para data fetching e cache
+React Hook Form + Zod para formulários
+NativeWind v4 (Tailwind CSS para React Native) para estilização
+React Native Reanimated para animações
+Expo SecureStore para armazenamento seguro de tokens
+Expo Notifications para notificações push
+Recharts → react-native-skia + Victory Native XL para gráficos
+date-fns com locale pt-BR para datas
+Intl.NumberFormat com pt-BR / BRL para moedas
+Design System — Identidade Visual (idêntica ao web)
+Cores (modo claro)
+primary:       hsl(199, 89%, 48%)  → #0096C7 (azul oceano)
+background:    hsl(210, 20%, 98%)  → quase branco
+foreground:    hsl(222, 47%, 11%)  → quase preto
+card:          hsl(0, 0%, 100%)    → branco puro
+border:        hsl(214, 32%, 91%)
+muted:         hsl(214, 32%, 94%)
+muted-fg:      hsl(215, 16%, 47%)
+success:       hsl(160, 84%, 39%)  → verde
+destructive:   hsl(0, 72%, 51%)    → vermelho
+warning:       hsl(38, 92%, 50%)   → laranja/amarelo
+
+Cores (modo escuro)
+primary:       hsl(199, 89%, 55%)
+background:    hsl(222, 30%, 7%)
+foreground:    hsl(210, 40%, 95%)
+card:          hsl(222, 28%, 10%)
+border:        hsl(220, 20%, 15%)
+muted:         hsl(220, 20%, 15%)
+muted-fg:      hsl(220, 15%, 60%)
+
+Tipografia
+Fonte principal: Inter (via expo-font / @expo-google-fonts/inter)
+Fonte mono: Roboto Mono para valores monetários
+Hierarquia de texto: padrão (alta), secundário (média), terciário (baixa)
+Border radius
+Padrão: rounded-md (12px) — nunca cantos muito arredondados exceto para pills/círculos
+Não usar emoji na UI — usar ícones de @expo/vector-icons (Lucide/MaterialIcons)
+Autenticação
+O backend usa sessão via cookie (HTTP-only). Para o mobile:
+
+Endpoint de login: POST /api/auth/login { email, password }
+Endpoint de registro: POST /api/auth/register { name, email, password }
+Verificar usuário logado: GET /api/auth/user
+Logout: POST /api/auth/logout
+Todas as requisições devem incluir credentials: "include" (ou configurar cookies via react-native-cookies)
+Armazenar sessão com Expo SecureStore
+Navegação (Expo Router)
+Bottom Tab Navigator (telas principais)
+(tabs)/
+  index          → Dashboard (Home)
+  transactions   → Transações
+  cards          → Cartões
+  investments    → Investimentos
+  more           → Mais (menu expandido)
+
+Stack dentro de "Mais"
+accounts         → Contas
+budgets          → Orçamentos
+goals            → Metas
+debts            → Dívidas
+bills            → Contas a Pagar
+sinking-funds    → Reservas Programadas
+reports          → Relatórios
+simulators       → Simuladores
+family           → Módulo Família (só plano Family)
+pj               → MEI/ME/PJ (só plano Pro/Family)
+settings         → Configurações
+profile          → Perfil
+
+Telas a Implementar
+1. Dashboard (Home)
+Dados: GET /api/dashboard/metrics + GET /api/accounts + GET /api/transactions
+
+Componentes:
+
+Header: saudação com nome do usuário + avatar + ícone de notificação (badge com contagem não lida)
+Saldo total: valor grande centralizado com computedBalance somado de todas as contas bancárias (type ≠ "credit"), com botão de ocultar/mostrar valores (ícone de olho — persiste em AsyncStorage)
+Cards de métricas do mês (scroll horizontal, 2 visíveis):
+Receitas do mês (verde)
+Despesas do mês (vermelho)
+Saldo do mês
+Investido total
+Gráfico de fluxo de caixa: barras mensais (últimos 6 meses) — GET /api/analytics/monthly-comparison
+Acesso rápido: grid 2×3 com ícones — Transações, Cartões, Metas, Contas, Simuladores, Relatórios
+Transações recentes: lista dos últimos 5 lançamentos com ícone da categoria, descrição, valor colorido (verde/vermelho), data relativa
+Importante:
+
+computedBalance vem do campo computedBalance retornado pela API (não usar balance que é stale)
+Separar contas bancárias (type !== "credit") das de crédito para cálculo do saldo
+Pull-to-refresh em toda a tela
+2. Transações
+Dados: GET /api/transactions + GET /api/categories + GET /api/accounts
+
+Filtros disponíveis:
+
+Seletor de mês/ano (MonthSelector)
+Filtro por tipo: Todos / Receitas / Despesas
+Busca por texto (description)
+Filtro por conta (account)
+Filtro por categoria
+Lista:
+
+Agrupada por data (hoje, ontem, dd/MM)
+Cada item: ícone colorido da categoria, descrição, nome da conta, valor (+verde/-vermelho), badge de parcelamento se houver
+Swipe to delete (com confirmação) e swipe to edit
+Transações pendentes (isPaid = false) em cor mais clara / com indicador visual
+Botão FAB (flutuante): abre modal para nova transação
+
+Modal de nova/editar transação:
+
+Tipo: Receita / Despesa / Transferência (tabs)
+Campos: Valor (teclado numérico nativo), Descrição, Data, Conta, Categoria, Pago (toggle), Recorrência, Parcelas
+Validação Zod + React Hook Form
+3. Cartões
+Dados: GET /api/cards + GET /api/card-invoices + GET /api/card-transactions
+
+Lista de cartões:
+
+Card visual com cor do cartão, nome, últimos 4 dígitos, bandeira, limite total e disponível, barra de uso
+Toque → abre tela de detalhes da fatura
+Tela de detalhes da fatura:
+
+Seletor de mês/ano
+Valor total da fatura, data de vencimento, status (aberta/paga/vencida)
+Lista de transações do cartão agrupadas por data
+Botão "Pagar Fatura" (cria transação de débito na conta vinculada)
+Nova transação no cartão:
+
+Valor, descrição, data, parcelas, categoria
+POST /api/card-transactions
+4. Contas
+Dados: GET /api/accounts
+
+Lista de contas:
+
+Separadas em duas seções: Contas Bancárias e Cartões de Crédito
+Cada item: ícone com cor, nome, instituição, saldo (computedBalance), tipo
+Saldo total somado no topo (apenas contas bancárias)
+Saldo negativo em vermelho
+Ações:
+
+Criar conta: POST /api/accounts
+Editar conta: PATCH /api/accounts/:id
+Arquivar conta: não deletar — usar archived: true
+Transferência entre contas: modal de transferência
+5. Orçamentos
+Dados: GET /api/budgets + GET /api/categories
+
+Lista de orçamentos do mês:
+
+Por categoria: ícone colorido, nome, barra de progresso colorida (verde → amarelo → vermelho conforme % usado), valor gasto / limite
+Totalizador no topo: total orçado vs total gasto
+Alerta visual quando > 80% ou > 100%
+Criar/editar orçamento: POST /api/budgets / PUT /api/budgets/:id
+
+6. Metas
+Dados: GET /api/goals
+
+Lista de metas:
+
+Cada meta: ícone/emoji, nome, valor acumulado / valor alvo, barra de progresso, data alvo, dias restantes
+Botão de aporte (adiciona valor à meta via PATCH /api/goals/:id)
+Criar meta: POST /api/goals
+
+7. Dívidas
+Dados: GET /api/debts
+
+Lista de dívidas ativas:
+
+Credor, valor atual, taxa de juros, próximo pagamento
+Indicador de progresso (pago vs total)
+Total de dívidas no topo
+Registrar pagamento: POST /api/debt-payments
+
+8. Investimentos
+Dados: GET /api/investments
+
+Painel:
+
+Total investido vs valor atual
+Rentabilidade total em % e valor absoluto (verde se positivo, vermelho se negativo)
+Gráfico de alocação por tipo (pizza) — usando react-native-skia
+Lista de ativos: ticker, nome, quantidade, preço médio, valor atual, variação %
+Adicionar ativo: POST /api/investments
+
+9. Relatórios
+Dados: GET /api/reports/financial + GET /api/analytics/monthly-comparison
+
+Telas:
+
+Comparativo mensal: gráfico de barras receitas vs despesas (12 meses)
+Gastos por categoria: pizza chart + lista com percentuais
+Evolução patrimonial: linha ao longo do tempo
+10. Simuladores (tela de listagem + calculadoras)
+Listagem em grid com 8 simuladores principais:
+
+Juros Compostos
+Aposentadoria
+Financiamento Imobiliário
+Meta Financeira
+Empréstimo
+Dividend Yield
+Inflação
+Aportes Mensais
+Cada simulador: formulário com campos numéricos nativos, resultado calculado em tempo real (sem chamada à API — cálculo local no frontend).
+
+11. Configurações
+Dados: GET /api/settings / PUT /api/settings
+
+Seções:
+
+Aparência: toggle dark/light mode (sincroniza com backend via PUT /api/settings { theme: "dark"|"light" })
+Segurança: alterar senha, ativar/desativar 2FA
+Carteiras: gerenciar múltiplas carteiras (GET /api/workspaces)
+Notificações: configurar alertas — vencimentos, metas, orçamentos
+Conta: nome, e-mail, foto de perfil (PATCH /api/profile)
+Backup: exportar dados (GET /api/backup/export/json)
+Plano: ver plano atual, botão para upgrade (GET /api/subscription/info)
+12. Perfil
+Dados: GET /api/auth/user
+
+Avatar com foto ou iniciais
+Nome, e-mail, plano atual (badge colorido)
+Botão de logout
+13. Módulo Família (somente plano Family)
+Dados: GET /api/family/group + GET /api/family/expenses + GET /api/family/pot
+
+Telas:
+
+Visão geral: membros com avatar/foto de perfil, saldo do grupo
+Despesas compartilhadas: lista + criar nova
+Caixinha da família: saldo coletivo + aportes
+Metas coletivas: lista com progresso
+Verificar plano: GET /api/subscription/info → plan.name === "FAMILY"
+
+14. Módulo MEI/PJ (somente plano Pro/Family)
+Dados: GET /api/pj/dashboard
+
+Telas:
+
+Dashboard PJ: receitas, despesas, resultado, DAS estimado
+Receitas PJ: GET /api/pj/revenues
+Despesas PJ: GET /api/pj/expenses
+Clientes: GET /api/pj/clients
+Saques (Pró-labore): GET /api/pj/withdrawals
+Verificar acesso: GET /api/subscription/info → plan.name === "PRO" || plan.name === "FAMILY"
+
+Componentes Compartilhados a Criar
+components/
+  ui/
+    CurrencyText.tsx         → valor monetário com formatação pt-BR + Roboto Mono
+    MonthSelector.tsx        → seletor mês/ano com setas ← →
+    MetricCard.tsx           → card de KPI com título, valor, variação %
+    CategoryIcon.tsx         → ícone colorido por categoria
+    ProgressBar.tsx          → barra de progresso com cores semânticas
+    Avatar.tsx               → foto ou iniciais com fallback
+    Badge.tsx                → pill colorido para status
+    FAB.tsx                  → botão flutuante de ação
+    SwipeableRow.tsx         → row com swipe para editar/deletar
+    EmptyState.tsx           → estado vazio com ícone e mensagem
+    SkeletonLoader.tsx       → loading skeleton para listas
+    BottomSheet.tsx          → sheet modal nativo para formulários
+    PullToRefresh.tsx        → wrapper de pull-to-refresh
+  TransactionForm.tsx        → formulário completo de transação (reutilizável)
+  AccountPicker.tsx          → seletor de conta com saldo
+  CategoryPicker.tsx         → seletor de categoria com ícones
+  ThemeToggle.tsx            → toggle dark/light mode
+
+API — Integração com Backend
+Base URL
+EXPO_PUBLIC_API_URL=https://[seu-dominio-replit].replit.app
+
+Configuração do cliente HTTP
+// lib/api.ts
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+export async function apiRequest(method: string, path: string, body?: any) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",          // cookies de sessão
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+QueryClient (idêntico ao web)
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,     // 5 minutos
+      gcTime: 20 * 60 * 1000,       // 20 minutos
+      queryFn: ({ queryKey }) =>
+        apiRequest("GET", queryKey[0] as string),
+    },
+  },
+});
+
+Sincronização Web ↔ Mobile
+Tema dark/light: PUT /api/settings { theme } → ambos leem GET /api/settings na inicialização
+Contas, categorias, transações: criadas em qualquer plataforma aparecem em ambas via React Query + invalidação de cache
+Configurações globais: GET /api/settings é a fonte de verdade para todos os toggles de módulos (bills, sinking-funds, pjBusinessType, etc.)
+Notificações: GET /api/notifications — mesmo endpoint, lidas em qualquer plataforma marcam como lidas em ambas
+Carteiras (wallets): enviar header x-wallet-id em todas as requisições quando wallet ativa ≠ default
+Regras de Negócio Importantes
+Saldo de contas: sempre usar computedBalance (campo calculado retornado pela API) — NUNCA usar balance (campo stale do banco)
+Contas de crédito: type === "credit" têm saldo negativo (fatura a pagar) — tratar como passivo, não como ativo
+Transações parceladas: campo installmentNumber / totalInstallments — exibir "2/6" no item
+Transações pendentes: isPaid === false — exibir com opacidade reduzida + badge "Pendente"
+Valores: sempre Number(value) ao exibir (API retorna strings decimais)
+Datas: usar date-fns/locale/pt-BR para formatação
+Cartões de crédito: faturas agrupadas por mês/ano via closingDay e dueDay do cartão
+Módulos condicionais: verificar GET /api/settings para saber quais módulos estão habilitados por usuário (billsEnabled, sinkingFundsEnabled, etc.)
+Configurações do Expo
+// app.json
+{
+  "expo": {
+    "name": "Pilar Financeiro",
+    "slug": "pilar-financeiro",
+    "scheme": "pilarfinanceiro",
+    "icon": "./assets/icon.png",
+    "splash": { "backgroundColor": "#0096C7" },
+    "ios": { "bundleIdentifier": "app.br.pilarfinanceiro" },
+    "android": {
+      "package": "app.br.pilarfinanceiro",
+      "adaptiveIcon": { "backgroundColor": "#0096C7" }
+    }
+  }
+}
+
+Ordem de Implementação (prioridade)
+Autenticação (login/logout/persistência de sessão)
+Dashboard com métricas principais
+Lista e criação de Transações
+Contas (lista + saldos)
+Cartões e Faturas
+Orçamentos
+Metas
+Investimentos (painel simplificado)
+Configurações (tema + perfil)
+Relatórios e gráficos
+Módulo Família (condicional)
+Módulo MEI/PJ (condicional)
+Simuladores
+Notificações push
