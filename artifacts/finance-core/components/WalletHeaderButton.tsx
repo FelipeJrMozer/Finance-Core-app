@@ -7,8 +7,11 @@ import { WalletSelectorModal } from '@/components/WalletSelectorModal';
 
 export function WalletHeaderButton() {
   const { theme, colors } = useTheme();
-  const { selectedWallet } = useWallet();
+  const { wallets, selectedWallet, walletError, isLoading } = useWallet();
   const [visible, setVisible] = useState(false);
+
+  if (!isLoading && wallets.length === 0 && !walletError) return null;
+  if (walletError === 'session_expired') return null;
 
   return (
     <>
@@ -19,13 +22,14 @@ export function WalletHeaderButton() {
         style={({ pressed }) => [
           styles.btn,
           {
-            backgroundColor: pressed ? theme.surfaceElevated : 'transparent',
+            backgroundColor: pressed ? theme.surfaceElevated : `${colors.primary}10`,
+            borderColor: `${colors.primary}25`,
           },
         ]}
         hitSlop={6}
       >
-        <View style={[styles.iconWrap, { backgroundColor: `${colors.primary}15` }]}>
-          <WalletIcon size={16} color={colors.primary} />
+        <View style={styles.iconWrap}>
+          <WalletIcon size={14} color={colors.primary} />
           {selectedWallet && (
             <View
               style={[
@@ -35,14 +39,15 @@ export function WalletHeaderButton() {
             />
           )}
         </View>
-        {selectedWallet && (
-          <Text
-            style={[styles.name, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}
-            numberOfLines={1}
-          >
-            {selectedWallet.name}
-          </Text>
-        )}
+        <Text
+          style={[styles.name, {
+            color: selectedWallet ? theme.text : theme.textTertiary,
+            fontFamily: 'Inter_500Medium',
+          }]}
+          numberOfLines={1}
+        >
+          {isLoading ? 'Carregando…' : selectedWallet ? selectedWallet.name : 'Carteiras'}
+        </Text>
       </Pressable>
     </>
   );
@@ -52,31 +57,29 @@ const styles = StyleSheet.create({
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    maxWidth: 160,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: 150,
   },
   iconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dot: {
     position: 'absolute',
-    top: 3,
-    right: 3,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    top: -1,
+    right: -1,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   name: {
     fontSize: 12,
-    maxWidth: 110,
+    maxWidth: 100,
   },
 });

@@ -92,21 +92,50 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
               Carregando carteiras…
             </Text>
           </View>
-        ) : walletError ? (
+        ) : walletError === 'network' ? (
           <View style={styles.centerBox}>
-            <Feather name="alert-circle" size={32} color="#E84393" />
-            <Text style={[styles.errorTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-              Falha ao carregar
+            <Feather name="wifi-off" size={32} color={theme.textTertiary} />
+            <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+              Sem conexão com o servidor
             </Text>
-            <Text style={[styles.errorDetail, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-              {walletError}
+            <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+              Verifique sua internet e tente novamente
             </Text>
             <Pressable
               onPress={handleRetry}
-              style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+              style={[styles.retryBtn, { backgroundColor: `${colors.primary}20` }]}
             >
-              <Feather name="refresh-cw" size={14} color="#fff" />
-              <Text style={[styles.retryText, { fontFamily: 'Inter_600SemiBold' }]}>
+              <Feather name="refresh-cw" size={14} color={colors.primary} />
+              <Text style={[styles.retryTextAlt, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                Tentar novamente
+              </Text>
+            </Pressable>
+          </View>
+        ) : walletError === 'session_expired' ? (
+          <View style={styles.centerBox}>
+            <Feather name="lock" size={32} color={theme.textTertiary} />
+            <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+              Sessão expirada
+            </Text>
+            <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+              Faça login novamente para carregar suas carteiras
+            </Text>
+          </View>
+        ) : walletError ? (
+          <View style={styles.centerBox}>
+            <Feather name="cloud-off" size={32} color={theme.textTertiary} />
+            <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+              Carteiras indisponíveis
+            </Text>
+            <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+              Use o sistema web para gerenciar carteiras
+            </Text>
+            <Pressable
+              onPress={handleRetry}
+              style={[styles.retryBtn, { backgroundColor: `${colors.primary}20` }]}
+            >
+              <Feather name="refresh-cw" size={14} color={colors.primary} />
+              <Text style={[styles.retryTextAlt, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
                 Tentar novamente
               </Text>
             </Pressable>

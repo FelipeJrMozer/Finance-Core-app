@@ -24,7 +24,7 @@ function assignColors(list: Omit<Wallet, 'color'>[]): Wallet[] {
   }));
 }
 
-function extractWalletsFromResponse(data: unknown): Omit<Wallet, 'color'>[] {
+function extractWallets(data: unknown): Omit<Wallet, 'color'>[] {
   if (Array.isArray(data)) return data;
   if (data && typeof data === 'object') {
     const obj = data as Record<string, unknown>;
@@ -48,12 +48,6 @@ interface WalletContextType {
 const SELECTED_WALLET_KEY = 'pf_selected_wallet_id';
 const WalletContext = createContext<WalletContextType | null>(null);
 
-const WALLET_ENDPOINTS = [
-  '/api/wallets',
-  '/api/user/wallets',
-  '/api/portfolios',
-];
-
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -66,63 +60,50 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setWalletError(null);
 
-    const base = getApiBaseUrl();
-    console.log('[WalletContext] base URL:', base);
+    console.log('[WalletContext] fetching wallets from:', getApiBaseUrl() + '/api/wallets');
 
-    let lastError: string | null = null;
-    let found = false;
+    try {
+      const res = await apiFetch('/api/wallets');
+      console.log('[WalletContext] /api/wallets status:', res.status);
 
-    for (const endpoint of WALLET_ENDPOINTS) {
-      try {
-        console.log('[WalletContext] trying endpoint:', endpoint);
-        const res = await apiFetch(endpoint);
-        const statusText = `HTTP ${res.status}`;
-        console.log('[WalletContext]', endpoint, statusText);
+      if (res.ok) {
+        const text = await res.text();
+        console.log('[WalletContext] response:', text.slice(0, 300));
+        let parsed: unknown;
+        try { parsed = JSON.parse(text); } catch { parsed = []; }
+        const raw = extractWallets(parsed);
+        console.log('[WalletContext] wallet count:', raw.length);
+        const list = assignColors(raw);
+        setWallets(list);
 
-        if (res.ok) {
-          const text = await res.text();
-          console.log('[WalletContext] raw response:', text.slice(0, 300));
-          let parsed: unknown;
-          try { parsed = JSON.parse(text); } catch { parsed = []; }
-          const raw = extractWalletsFromResponse(parsed);
-          console.log('[WalletContext] parsed wallets count:', raw.length);
-          const list = assignColors(raw);
-          setWallets(list);
-
-          const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
-          const saved = savedId ? list.find((w) => w.id === savedId) : null;
-          if (saved) {
-            setSelectedWallet(saved);
-          } else if (list.length > 0) {
-            const def = list.find((w) => w.isDefault) || list[0];
-            setSelectedWallet(def);
-            await AsyncStorage.setItem(SELECTED_WALLET_KEY, def.id);
-          }
-          found = true;
-          break;
-        } else if (res.status === 404) {
-          lastError = `${endpoint}: não encontrado (404)`;
-          console.warn('[WalletContext]', lastError);
-        } else if (res.status === 401) {
-          lastError = 'Sessão expirada — faça login novamente';
-          console.warn('[WalletContext]', lastError);
-          break;
-        } else {
-          const errText = await res.text().catch(() => '');
-          lastError = `${endpoint}: erro ${res.status} - ${errText.slice(0, 100)}`;
-          console.warn('[WalletContext]', lastError);
+        const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
+        const saved = savedId ? list.find((w) => w.id === savedId) : null;
+        if (saved) {
+          setSelectedWallet(saved);
+        } else if (list.length > 0) {
+          const def = list.find((w) => w.isDefault) || list[0];
+          setSelectedWallet(def);
+          await AsyncStorage.setItem(SELECTED_WALLET_KEY, def.id);
         }
-      } catch (e) {
-        lastError = `${endpoint}: ${String(e).slice(0, 100)}`;
-        console.warn('[WalletContext] fetch error:', lastError);
+      } else if (res.status === 401) {
+        console.warn('[WalletContext] 401 - session expired');
+        setWalletError('session_expired');
+      } else {
+        const body = await res.text().catch(() => '');
+        console.warn('[WalletContext] error', res.status, body.slice(0, 100));
+        setWalletError(`HTTP ${res.status}`);
       }
+    } catch (e) {
+      const msg = String(e);
+      console.warn('[WalletContext] fetch error:', msg);
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('Network')) {
+        setWalletError('network');
+      } else {
+        setWalletError(msg.slice(0, 80));
+      }
+    } finally {
+      setIsLoading(false);
     }
-
-    if (!found) {
-      setWalletError(lastError || 'Não foi possível carregar as carteiras');
-    }
-
-    setIsLoading(false);
   }, [isAuthenticated]);
 
   useEffect(() => {
