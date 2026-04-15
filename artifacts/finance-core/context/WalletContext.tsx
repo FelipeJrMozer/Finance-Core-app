@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiGet } from '@/services/api';
+import { apiFetch, getApiBaseUrl } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
 export interface Wallet {
@@ -24,11 +24,23 @@ function assignColors(list: Omit<Wallet, 'color'>[]): Wallet[] {
   }));
 }
 
+function extractWalletsFromResponse(data: unknown): Omit<Wallet, 'color'>[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.wallets)) return obj.wallets as Omit<Wallet, 'color'>[];
+    if (Array.isArray(obj.data)) return obj.data as Omit<Wallet, 'color'>[];
+    if (Array.isArray(obj.items)) return obj.items as Omit<Wallet, 'color'>[];
+  }
+  return [];
+}
+
 interface WalletContextType {
   wallets: Wallet[];
   selectedWallet: Wallet | null;
   selectedWalletId: string | null;
   isLoading: boolean;
+  walletError: string | null;
   selectWallet: (wallet: Wallet) => Promise<void>;
   refreshWallets: () => Promise<void>;
 }
@@ -36,36 +48,81 @@ interface WalletContextType {
 const SELECTED_WALLET_KEY = 'pf_selected_wallet_id';
 const WalletContext = createContext<WalletContextType | null>(null);
 
+const WALLET_ENDPOINTS = [
+  '/api/wallets',
+  '/api/user/wallets',
+  '/api/portfolios',
+];
+
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   const refreshWallets = useCallback(async () => {
     if (!isAuthenticated) return;
     setIsLoading(true);
-    try {
-      const data = await apiGet<Omit<Wallet, 'color'>[]>('/api/wallets');
-      const raw = Array.isArray(data) ? data : [];
-      const list = assignColors(raw);
-      setWallets(list);
+    setWalletError(null);
 
-      const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
-      const saved = savedId ? list.find((w) => w.id === savedId) : null;
+    const base = getApiBaseUrl();
+    console.log('[WalletContext] base URL:', base);
 
-      if (saved) {
-        setSelectedWallet(saved);
-      } else if (list.length > 0) {
-        const def = list.find((w) => w.isDefault) || list[0];
-        setSelectedWallet(def);
-        await AsyncStorage.setItem(SELECTED_WALLET_KEY, def.id);
+    let lastError: string | null = null;
+    let found = false;
+
+    for (const endpoint of WALLET_ENDPOINTS) {
+      try {
+        console.log('[WalletContext] trying endpoint:', endpoint);
+        const res = await apiFetch(endpoint);
+        const statusText = `HTTP ${res.status}`;
+        console.log('[WalletContext]', endpoint, statusText);
+
+        if (res.ok) {
+          const text = await res.text();
+          console.log('[WalletContext] raw response:', text.slice(0, 300));
+          let parsed: unknown;
+          try { parsed = JSON.parse(text); } catch { parsed = []; }
+          const raw = extractWalletsFromResponse(parsed);
+          console.log('[WalletContext] parsed wallets count:', raw.length);
+          const list = assignColors(raw);
+          setWallets(list);
+
+          const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
+          const saved = savedId ? list.find((w) => w.id === savedId) : null;
+          if (saved) {
+            setSelectedWallet(saved);
+          } else if (list.length > 0) {
+            const def = list.find((w) => w.isDefault) || list[0];
+            setSelectedWallet(def);
+            await AsyncStorage.setItem(SELECTED_WALLET_KEY, def.id);
+          }
+          found = true;
+          break;
+        } else if (res.status === 404) {
+          lastError = `${endpoint}: não encontrado (404)`;
+          console.warn('[WalletContext]', lastError);
+        } else if (res.status === 401) {
+          lastError = 'Sessão expirada — faça login novamente';
+          console.warn('[WalletContext]', lastError);
+          break;
+        } else {
+          const errText = await res.text().catch(() => '');
+          lastError = `${endpoint}: erro ${res.status} - ${errText.slice(0, 100)}`;
+          console.warn('[WalletContext]', lastError);
+        }
+      } catch (e) {
+        lastError = `${endpoint}: ${String(e).slice(0, 100)}`;
+        console.warn('[WalletContext] fetch error:', lastError);
       }
-    } catch (e) {
-      console.warn('[WalletContext] fetchWallets error:', e);
-    } finally {
-      setIsLoading(false);
     }
+
+    if (!found) {
+      setWalletError(lastError || 'Não foi possível carregar as carteiras');
+    }
+
+    setIsLoading(false);
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -74,6 +131,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     } else {
       setWallets([]);
       setSelectedWallet(null);
+      setWalletError(null);
     }
   }, [isAuthenticated, refreshWallets]);
 
@@ -89,6 +147,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         selectedWallet,
         selectedWalletId: selectedWallet?.id || null,
         isLoading,
+        walletError,
         selectWallet,
         refreshWallets,
       }}

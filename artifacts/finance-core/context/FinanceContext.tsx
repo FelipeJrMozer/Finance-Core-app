@@ -496,6 +496,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
+    console.log('[FinanceContext] loadAll START, walletId:', wq('/api/accounts'));
     try {
       const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
         apiGet<ApiCategory[]>(wq('/api/categories')),
@@ -509,6 +510,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         apiGet<AppNotification[]>('/api/notifications'),
         apiGet<Record<string, unknown>>('/api/settings'),
       ]);
+      console.log('[FinanceContext] results: accounts=', accs.status, '| txs=', txs.status, '| wallets path=', wq('/api/wallets'));
+      if (accs.status === 'rejected') console.warn('[FinanceContext] accounts error:', String(accs.reason).slice(0, 150));
+      if (txs.status === 'rejected') console.warn('[FinanceContext] txs error:', String(txs.reason).slice(0, 150));
 
       const catList = cats.status === 'fulfilled' ? cats.value : [];
       const catMap: Record<string, ApiCategory> = {};

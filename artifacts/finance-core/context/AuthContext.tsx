@@ -40,20 +40,27 @@ function mapApiUser(raw: Record<string, string>): User {
 
 async function doLogin(email: string, password: string): Promise<{ user: User; accessToken: string; refreshToken: string }> {
   const base = getApiBaseUrl();
+  console.log('[Auth] login attempt to:', `${base}/api/auth/login`);
   const res = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
+  console.log('[Auth] login response status:', res.status);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.warn('[Auth] login failed body:', text.slice(0, 200));
     let msg = 'Email ou senha incorretos';
     try { msg = JSON.parse(text).message || msg; } catch {}
     throw new Error(msg);
   }
   const data = await res.json();
+  console.log('[Auth] login response keys:', Object.keys(data));
   const user = mapApiUser(data.user || { email });
-  return { user, accessToken: data.accessToken, refreshToken: data.refreshToken };
+  const accessToken: string = data.accessToken || data.token || '';
+  const refreshToken: string = data.refreshToken || data.token || '';
+  console.log('[Auth] accessToken present:', Boolean(accessToken), '| refreshToken present:', Boolean(refreshToken));
+  return { user, accessToken, refreshToken };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

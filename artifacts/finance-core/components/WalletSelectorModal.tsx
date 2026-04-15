@@ -13,19 +13,18 @@ interface Props {
   onClose: () => void;
 }
 
-const WALLET_COLORS = [
-  '#0096C7', '#6C5CE7', '#00B894', '#FD9644', '#E84393',
-  '#2ED573', '#F53B57', '#1E90FF', '#A29BFE', '#FDCB6E',
-];
-
 function getWalletColor(wallet: Wallet, index: number): string {
+  const PALETTE = [
+    '#0096C7', '#6C5CE7', '#00B894', '#FD9644', '#E84393',
+    '#2ED573', '#F53B57', '#1E90FF', '#A29BFE', '#FDCB6E',
+  ];
   if (wallet.color) return wallet.color;
-  return WALLET_COLORS[index % WALLET_COLORS.length];
+  return PALETTE[index % PALETTE.length];
 }
 
 export function WalletSelectorModal({ visible, onClose }: Props) {
   const { theme, colors, isDark } = useTheme();
-  const { wallets, selectedWallet, selectWallet, isLoading, refreshWallets } = useWallet();
+  const { wallets, selectedWallet, selectWallet, isLoading, walletError, refreshWallets } = useWallet();
 
   const handleSelect = async (wallet: Wallet) => {
     Haptics.selectionAsync();
@@ -45,11 +44,16 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
     onClose();
   };
 
+  const handleRetry = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    refreshWallets();
+  };
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -63,10 +67,8 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
           shadowColor: '#000',
         }
       ]}>
-        {/* Handle */}
         <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <WalletIcon size={20} color={colors.primary} />
@@ -83,20 +85,50 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
           </Pressable>
         </View>
 
-        {/* Wallet list */}
         {isLoading ? (
-          <View style={styles.loadingBox}>
+          <View style={styles.centerBox}>
             <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.hintText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+              Carregando carteiras…
+            </Text>
+          </View>
+        ) : walletError ? (
+          <View style={styles.centerBox}>
+            <Feather name="alert-circle" size={32} color="#E84393" />
+            <Text style={[styles.errorTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+              Falha ao carregar
+            </Text>
+            <Text style={[styles.errorDetail, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+              {walletError}
+            </Text>
+            <Pressable
+              onPress={handleRetry}
+              style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="refresh-cw" size={14} color="#fff" />
+              <Text style={[styles.retryText, { fontFamily: 'Inter_600SemiBold' }]}>
+                Tentar novamente
+              </Text>
+            </Pressable>
           </View>
         ) : wallets.length === 0 ? (
-          <View style={styles.emptyBox}>
+          <View style={styles.centerBox}>
             <WalletIcon size={36} color={theme.textTertiary} />
             <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
               Nenhuma carteira encontrada
             </Text>
-            <Text style={[styles.emptyHint, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+            <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
               Crie uma carteira no sistema web
             </Text>
+            <Pressable
+              onPress={handleRetry}
+              style={[styles.retryBtn, { backgroundColor: `${colors.primary}20` }]}
+            >
+              <Feather name="refresh-cw" size={14} color={colors.primary} />
+              <Text style={[styles.retryTextAlt, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                Recarregar
+              </Text>
+            </Pressable>
           </View>
         ) : (
           <ScrollView
@@ -120,10 +152,7 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
                     },
                   ]}
                 >
-                  {/* Colored dot */}
                   <View style={[styles.dot, { backgroundColor: dotColor }]} />
-
-                  {/* Name */}
                   <Text
                     style={[
                       styles.walletName,
@@ -137,8 +166,6 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
                   >
                     {wallet.name}
                   </Text>
-
-                  {/* Checkmark */}
                   {isSelected && (
                     <Feather name="check" size={16} color={dotColor} />
                   )}
@@ -148,10 +175,8 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
           </ScrollView>
         )}
 
-        {/* Divider */}
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-        {/* Actions — like web's "Gerenciar carteiras" and "Nova carteira" */}
         <Pressable
           onPress={handleManage}
           style={({ pressed }) => [
@@ -237,23 +262,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingBox: {
-    paddingVertical: 24,
-    alignItems: 'center',
-  },
-  emptyBox: {
+  centerBox: {
     alignItems: 'center',
     paddingVertical: 24,
-    gap: 6,
     paddingHorizontal: 24,
+    gap: 6,
+  },
+  errorTitle: {
+    fontSize: 15,
+    marginTop: 6,
+  },
+  errorDetail: {
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   emptyText: {
     fontSize: 14,
     marginTop: 6,
   },
-  emptyHint: {
+  hintText: {
     fontSize: 12,
     textAlign: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  retryText: {
+    fontSize: 13,
+    color: '#fff',
+  },
+  retryTextAlt: {
+    fontSize: 13,
   },
   walletRow: {
     flexDirection: 'row',
