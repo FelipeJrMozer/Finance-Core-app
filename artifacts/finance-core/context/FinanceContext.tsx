@@ -454,9 +454,21 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2,
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
+function toArray<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    for (const key of ['data', 'items', 'results', 'transactions', 'accounts',
+      'investments', 'budgets', 'goals', 'categories', 'cards', 'tags', 'notifications']) {
+      if (Array.isArray(obj[key])) return obj[key] as T[];
+    }
+  }
+  return [];
+}
+
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const { selectedWalletId } = useWallet();
+  const { selectedWalletId, isReady: walletReady } = useWallet();
 
   const wq = useCallback((path: string) => {
     if (!selectedWalletId) return path;
@@ -496,68 +508,83 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const loadAll = useCallback(async () => {
     setIsLoading(true);
-    console.log('[FinanceContext] loadAll START, walletId:', wq('/api/accounts'));
+    console.log('[FinanceContext] loadAll START | walletId:', selectedWalletId);
     try {
       const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
-        apiGet<ApiCategory[]>(wq('/api/categories')),
-        apiGet<Record<string, unknown>[]>(wq('/api/accounts')),
-        apiGet<Record<string, unknown>[]>(wq('/api/transactions')),
-        apiGet<Record<string, unknown>[]>(wq('/api/investments')),
-        apiGet<Record<string, unknown>[]>(wq('/api/budgets')),
-        apiGet<Record<string, unknown>[]>(wq('/api/goals')),
-        apiGet<Record<string, unknown>[]>(wq('/api/cards')),
-        apiGet<Tag[]>(wq('/api/tags')),
-        apiGet<AppNotification[]>('/api/notifications'),
-        apiGet<Record<string, unknown>>('/api/settings'),
+        apiGet<unknown>(wq('/api/categories')),
+        apiGet<unknown>(wq('/api/accounts')),
+        apiGet<unknown>(wq('/api/transactions')),
+        apiGet<unknown>(wq('/api/investments')),
+        apiGet<unknown>(wq('/api/budgets')),
+        apiGet<unknown>(wq('/api/goals')),
+        apiGet<unknown>(wq('/api/cards')),
+        apiGet<unknown>(wq('/api/tags')),
+        apiGet<unknown>('/api/notifications'),
+        apiGet<unknown>('/api/settings'),
       ]);
-      console.log('[FinanceContext] results: accounts=', accs.status, '| txs=', txs.status, '| wallets path=', wq('/api/wallets'));
-      if (accs.status === 'rejected') console.warn('[FinanceContext] accounts error:', String(accs.reason).slice(0, 150));
-      if (txs.status === 'rejected') console.warn('[FinanceContext] txs error:', String(txs.reason).slice(0, 150));
 
-      const catList = cats.status === 'fulfilled' ? cats.value : [];
+      const status = (r: PromiseSettledResult<unknown>) => r.status;
+      console.log('[FinanceContext] cats=%s accs=%s txs=%s invs=%s buds=%s gls=%s cards=%s',
+        status(cats), status(accs), status(txs), status(invs), status(buds), status(gls), status(cards));
+
+      if (accs.status === 'rejected') console.warn('[FinanceContext] accounts err:', String(accs.reason).slice(0, 200));
+      if (txs.status === 'rejected') console.warn('[FinanceContext] txs err:', String(txs.reason).slice(0, 200));
+
+      const catList = toArray<ApiCategory>(cats.status === 'fulfilled' ? cats.value : []);
+      console.log('[FinanceContext] categories:', catList.length);
       const catMap: Record<string, ApiCategory> = {};
       catList.forEach((c) => { catMap[c.id] = c; });
       catMapRef.current = catMap;
       setCategories(catList);
 
-      const accsData = accs.status === 'fulfilled' ? accs.value : [];
+      const accsData = toArray<Record<string, unknown>>(accs.status === 'fulfilled' ? accs.value : []);
+      console.log('[FinanceContext] accounts:', accsData.length);
       const mappedAccounts = accsData.map(transformAccount);
       setAccounts(mappedAccounts);
 
-      const txsData = txs.status === 'fulfilled' ? txs.value : [];
+      const txsData = toArray<Record<string, unknown>>(txs.status === 'fulfilled' ? txs.value : []);
+      console.log('[FinanceContext] transactions:', txsData.length);
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
+      transactionsRef.current = mappedTx;
 
-      // Calibrate opening balances from fresh API data.
       recalibrateOpeningBalances(mappedAccounts, mappedTx);
 
-      const cardsData = cards.status === 'fulfilled' ? cards.value : [];
+      const cardsData = toArray<Record<string, unknown>>(cards.status === 'fulfilled' ? cards.value : []);
+      console.log('[FinanceContext] cards:', cardsData.length);
       const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
       setCreditCards(mappedCards);
 
-      const invsData = invs.status === 'fulfilled' ? invs.value : [];
+      const invsData = toArray<Record<string, unknown>>(invs.status === 'fulfilled' ? invs.value : []);
+      console.log('[FinanceContext] investments:', invsData.length);
       setInvestments(invsData.map(transformInvestment));
 
-      const budsData = buds.status === 'fulfilled' ? buds.value : [];
+      const budsData = toArray<Record<string, unknown>>(buds.status === 'fulfilled' ? buds.value : []);
       setBudgets(budsData.map((r) => transformBudget(r, catMap)));
 
-      const glsData = gls.status === 'fulfilled' ? gls.value : [];
+      const glsData = toArray<Record<string, unknown>>(gls.status === 'fulfilled' ? gls.value : []);
       setGoals(glsData.map(transformGoal));
 
-      if (tagList.status === 'fulfilled') setTags(tagList.value || []);
-      if (notifs.status === 'fulfilled') setNotifications(notifs.value || []);
-      if (settingsRaw.status === 'fulfilled' && settingsRaw.value && settingsRaw.value.id) {
-        setSettings(transformSettings(settingsRaw.value));
+      const tagData = toArray<Tag>(tagList.status === 'fulfilled' ? tagList.value : []);
+      setTags(tagData);
+
+      const notifData = toArray<AppNotification>(notifs.status === 'fulfilled' ? notifs.value : []);
+      setNotifications(notifData);
+
+      if (settingsRaw.status === 'fulfilled' && settingsRaw.value && typeof settingsRaw.value === 'object') {
+        const sv = settingsRaw.value as Record<string, unknown>;
+        if (sv.id || sv.currency) setSettings(transformSettings(sv));
       }
     } catch (e) {
-      console.warn('[FinanceContext] loadAll error:', e);
+      console.warn('[FinanceContext] loadAll FATAL error:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [wq]);
+  }, [wq, selectedWalletId, recalibrateOpeningBalances]);
 
   useEffect(() => {
-    if (isAuthenticated && selectedWalletId !== undefined) {
+    if (isAuthenticated && walletReady) {
+      console.log('[FinanceContext] trigger loadAll | walletReady:', walletReady, '| walletId:', selectedWalletId);
       loadAll();
     } else if (!isAuthenticated) {
       setTransactions([]);
@@ -575,7 +602,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       transactionsRef.current = [];
       setIsLoading(false);
     }
-  }, [isAuthenticated, selectedWalletId, loadAll]);
+  }, [isAuthenticated, walletReady, selectedWalletId, loadAll]);
 
   // Keep transactionsRef in sync so callbacks can access latest transactions
   // without stale closures (needed by updateAccount balance sync).

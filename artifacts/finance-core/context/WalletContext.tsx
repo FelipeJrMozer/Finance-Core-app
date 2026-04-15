@@ -63,6 +63,7 @@ interface WalletContextType {
   selectedWallet: Wallet | null;
   selectedWalletId: string | null;
   isLoading: boolean;
+  isReady: boolean;
   walletError: string | null;
   selectWallet: (wallet: Wallet) => Promise<void>;
   refreshWallets: () => Promise<void>;
@@ -77,6 +78,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
 
   const refreshWallets = useCallback(async () => {
@@ -148,6 +150,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     } finally {
       setIsLoading(false);
+      setIsReady(true);
     }
   }, [isAuthenticated]);
 
@@ -158,6 +161,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       setWallets([]);
       setSelectedWallet(null);
       setWalletError(null);
+      setIsReady(false);
     }
   }, [isAuthenticated, refreshWallets]);
 
@@ -175,6 +179,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         selectedWallet,
         selectedWalletId: selectedWallet?.id || null,
         isLoading,
+        isReady,
         walletError,
         selectWallet,
         refreshWallets,
