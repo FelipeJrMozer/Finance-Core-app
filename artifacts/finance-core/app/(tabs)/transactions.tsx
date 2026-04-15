@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SectionList, RefreshControl, Pressable,
-  TextInput, Platform, ActivityIndicator
+  TextInput, Platform, ActivityIndicator, Alert, Share
 } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Transaction } from '@/context/FinanceContext';
 import { TransactionItem } from '@/components/TransactionItem';
+import { formatBRL } from '@/utils/formatters';
 
 type FilterType = 'all' | 'income' | 'expense' | 'transfer';
 
@@ -98,6 +99,29 @@ export default function TransactionsScreen() {
     await refresh();
     setRefreshing(false);
   };
+
+  const handleExportCSV = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const header = 'Data,Tipo,Descrição,Categoria,Valor,Conta,Status';
+    const rows = filtered.map((t) => {
+      const accountName = accounts.find((a) => a.id === t.accountId)?.name || '';
+      const status = t.isPaid === false ? 'Pendente' : 'Pago';
+      return [
+        t.date,
+        t.type === 'income' ? 'Receita' : t.type === 'expense' ? 'Despesa' : 'Transferência',
+        `"${t.description.replace(/"/g, '""')}"`,
+        t.category || '',
+        t.amount.toFixed(2).replace('.', ','),
+        `"${accountName}"`,
+        status,
+      ].join(',');
+    });
+    const csv = [header, ...rows].join('\n');
+    Share.share({
+      message: csv,
+      title: `Transações ${getMonthLabel(selectedMonth)}.csv`,
+    }).catch(() => {});
+  }, [filtered, accounts, selectedMonth]);
 
   const activeAccount = accountFilter !== 'all' ? accounts.find((a) => a.id === accountFilter) : null;
 
@@ -271,13 +295,24 @@ export default function TransactionsScreen() {
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={[styles.headerSection, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Transações</Text>
-        <Pressable
-          testID="add-transaction-btn"
-          onPress={() => { Haptics.selectionAsync(); router.push('/transaction/add'); }}
-          style={[styles.addBtn, { backgroundColor: colors.primary }]}
-        >
-          <Feather name="plus" size={20} color="#000" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {filtered.length > 0 && (
+            <Pressable
+              testID="export-csv-btn"
+              onPress={handleExportCSV}
+              style={[styles.iconBtn, { backgroundColor: theme.surfaceElevated, borderColor: theme.border }]}
+            >
+              <Feather name="download" size={17} color={theme.textSecondary} />
+            </Pressable>
+          )}
+          <Pressable
+            testID="add-transaction-btn"
+            onPress={() => { Haptics.selectionAsync(); router.push('/transaction/add'); }}
+            style={[styles.addBtn, { backgroundColor: colors.primary }]}
+          >
+            <Feather name="plus" size={20} color="#000" />
+          </Pressable>
+        </View>
       </View>
 
       <SectionList
@@ -339,8 +374,10 @@ export default function TransactionsScreen() {
 const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerSection: { paddingHorizontal: 20, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   screenTitle: { fontSize: 26 },
   addBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   monthNav: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingVertical: 4 },
   monthBtn: { padding: 10 },
   monthLabelBtn: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },

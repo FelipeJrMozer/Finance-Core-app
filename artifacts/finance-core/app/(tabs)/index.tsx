@@ -448,7 +448,11 @@ export default function DashboardScreen() {
               <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
                 Saúde Financeira
               </Text>
-              <Feather name="shield" size={16} color={theme.textTertiary} />
+              <Pressable onPress={() => router.push('/(more)/health-score')} hitSlop={8}>
+                <Text style={[styles.seeAllText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                  Ver análise →
+                </Text>
+              </Pressable>
             </View>
             <HealthGauge score={healthScore} />
             <View style={styles.healthFactors}>
@@ -635,6 +639,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 16 },
   seeAll: { fontSize: 14 },
+  seeAllText: { fontSize: 13 },
   healthFactors: { gap: 8 },
   healthFactor: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   factorLabel: { flex: 1, fontSize: 13 },

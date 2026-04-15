@@ -1,0 +1,512 @@
+Você é o agente do app mobile "Pilar Financeiro" (Finance-Core-1), um app Expo / React Native que compartilha o mesmo backend e banco de dados do sistema web. Seu objetivo é tornar o app mobile um espelho fiel do sistema web — o usuário deve ter a mesma experiência em ambas as plataformas, e toda configuração feita em uma deve refletir na outra automaticamente.
+══════════════════════════════════════════════
+## 1. SISTEMA DE DESIGN — PARIDADE VISUAL COM O WEB
+══════════════════════════════════════════════
+O sistema web usa estas cores exatas. O app mobile JÁ tem o ThemeContext e ACCENT_PRESETS corretos. Confirme e ajuste os valores em `constants/colors.ts` para garantir paridade:
+### Cor primária padrão (acento "ocean"):
+- primary: '#0096C7'         (azul oceano — hsl 199 89% 48%)
+- primaryOnDark: '#26B1F2'
+- primaryShade: '#0B8EC9'
+- primaryLight: '#48CAE4'
+### Backgrounds:
+- Light background: '#F7F9FC'    (hsl 210 20% 98%)
+- Dark background: '#0A0F1E'
+- Light surface/card: '#FFFFFF'
+- Dark surface/card: '#131929'
+- Light surface elevated: '#F0F4F8'
+- Dark surface elevated: '#1A2235'
+### Bordas:
+- Light border: '#DDE4EE'   (hsl 214 32% 91%)
+- Dark border: '#1E2D45'
+### Textos:
+- Light text primary: '#0F172A'     (hsl 222 47% 11%)
+- Light text secondary: '#64748B'   (hsl 215 16% 47%)
+- Light text tertiary: '#94A3B8'
+- Dark text primary: '#F1F5F9'
+- Dark text secondary: '#94A3B8'
+- Dark text tertiary: '#64748B'
+### Semânticas:
+- success: '#10B981'
+- warning: '#F59E0B'
+- danger/destructive: '#EF4444'
+- income (receita): '#10B981'   (verde)
+- expense (despesa): '#EF4444'  (vermelho)
+- transfer (transferência): '#F59E0B' (âmbar)
+### Tipografia:
+- Fonte: Inter (já instalada)
+- Pesos usados: 300, 400, 500, 600, 700, 800
+- Hierarquia de tamanhos: 12, 13, 14, 15, 16, 18, 20, 24, 28, 32
+### Raio de borda padrão:
+- Cards grandes: 16px
+- Cards médios: 12px
+- Botões e inputs: 10px
+- Badges/chips: 6px
+### Regra de espaçamento (use consistentemente):
+- xs: 4px, sm: 8px, md: 12px, lg: 16px, xl: 24px, 2xl: 32px
+══════════════════════════════════════════════
+## 2. SINCRONIZAÇÃO BIDIRECIONAL WEB ↔ MOBILE
+══════════════════════════════════════════════
+TUDO que o usuário configura em uma plataforma deve sincronizar automaticamente na outra via `/api/preferences`. O `ThemeContext.tsx` JÁ faz fetch de `/api/preferences` ao iniciar. Garanta que os seguintes campos estejam sendo salvos E lidos do backend:
+### Em `ThemeContext.tsx`, ao mudar qualquer preferência, salve via PATCH `/api/preferences`:
+```typescript
+await fetch(`${API_URL}/api/preferences`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  body: JSON.stringify({
+    accentId,          // cor de destaque
+    themeMode,         // 'light' | 'dark' | 'system'
+    valuesVisible,     // mostrar/ocultar saldos
+    defaultWorkspaceId // carteira padrão
+  })
+});
+
+Ao iniciar o app, leia E aplique todas as preferências do backend (já parcialmente implementado — complete para cobrir todos os campos acima).
+Dados que sincronizam automaticamente por usarem o mesmo backend:
+✅ Transações, contas, cartões, metas, orçamentos, categorias, tags, investimentos
+✅ Notificações
+✅ Carteiras/workspaces
+⚠️ Preferências visuais (tema, cor, ocultar saldos) — PRECISA SER COMPLETADO
+══════════════════════════════════════════════
+
+3. TELAS EXISTENTES — AJUSTES E MELHORIAS
+══════════════════════════════════════════════
+
+3.1 DASHBOARD — app/(tabs)/index.tsx
+Adicione/melhore:
+
+Card de Health Score mini: logo abaixo do resumo financeiro, mostrar o score atual (0-100) com barra de progresso colorida (vermelho < 40, amarelo 40-70, verde > 70). Tocar navega para a tela Health Score. Buscar via GET /api/health-score.
+
+Botões de ação rápida em linha horizontal (ícone + label):
+
+"Lançar" (+ transação) → abre QuickTransactionModal
+"Transferir" → abre tela de transferência
+"Receber" → transação de receita
+"Conta a pagar" → abre bills
+Alertas ativos: se houver orçamentos ultrapassados ou contas vencendo em até 3 dias, mostrar banner de alerta laranja clicável acima das transações recentes.
+
+Próximas contas a vencer: seção "Vencimentos próximos" mostrando as próximas 3 bills com data e valor.
+
+3.2 TRANSAÇÕES — app/(tabs)/transactions.tsx
+Adicione:
+
+Filtro por tag: chips horizontais de tags acima da lista quando existirem tags cadastradas
+Busca por texto: campo de busca no topo que filtra por descrição/categoria
+Agrupamento por mês: seletor de mês (← Março 2025 →) para navegar entre meses
+Exportar CSV: botão no header com ícone de download que exporta as transações do mês via expo-sharing + CSV gerado localmente
+3.3 INVESTIMENTOS — app/(tabs)/investments.tsx
+Adicione:
+
+Cotação ao vivo: para ativos do tipo stocks, fii, etf, bdr — buscar cotação via GET /api/investments/quotes (o backend web já tem integração BRAPI). Mostrar variação do dia (+ verde / - vermelho).
+
+Aba "Dividendos": dentro da tela de investimentos, terceira aba mostrando dividendos recebidos por mês (bar chart) e lista detalhada. Buscar via GET /api/dividends.
+
+Rentabilidade vs. benchmark: mostrar no card de resumo a rentabilidade da carteira vs. CDI (12% a.a. fixo como referência) e vs. IBOV.
+
+3.4 RELATÓRIOS — app/(tabs)/reports.tsx
+Adicione:
+
+Aba "Patrimônio": evolução patrimonial mês a mês (contas + investimentos - dívidas), line chart dos últimos 6 meses.
+
+Botão exportar: ícone de compartilhar no header. Ao tocar, gerar um resumo em texto (receitas, despesas, top categorias, saldo) e compartilhar via expo-sharing.
+
+Aba "Saúde": mover o health score para esta aba com mais detalhes — os 5 pilares do score com barras individuais e dicas.
+
+3.5 SIMULADORES — app/(more)/simulators.tsx
+O arquivo atual tem 4 simuladores. Adicione mais 8 para totalizar 12:
+
+// Adicione ao array SIMULATORS:
+{ id: 'mortgage',      icon: 'home',       label: 'Financiamento Imóvel',    color: '#7B39ED' },
+{ id: 'vehicle',       icon: 'truck',      label: 'Financiamento Veículo',   color: '#FF9800' },
+{ id: 'inflation',     icon: 'percent',    label: 'IPCA vs. CDI',            color: '#009688' },
+{ id: 'ir',            icon: 'file-text',  label: 'Imposto de Renda',        color: '#F44336' },
+{ id: 'fire',          icon: 'target',     label: 'Independência Financeira', color: '#2196F3' },
+{ id: 'pension',       icon: 'umbrella',   label: 'Previdência Privada',     color: '#9C27B0' },
+{ id: 'card_cost',     icon: 'credit-card',label: 'Custo Real do Cartão',    color: '#E91E63' },
+{ id: 'portability',   icon: 'refresh-cw', label: 'Portabilidade de Crédito', color: '#795548' },
+
+Para cada novo simulador, implemente a lógica de cálculo completa com inputs e resultados — use a mesma estrutura dos simuladores existentes.
+
+Financiamento Imóvel (mortgage):
+
+Inputs: valor do imóvel, entrada, prazo (meses), taxa de juros mensal, sistema (SAC ou PRICE)
+Outputs: primeira parcela, última parcela, total pago, total de juros, tabela das primeiras 6 parcelas
+Financiamento Veículo (vehicle):
+
+Inputs: valor do veículo, entrada, prazo, taxa mensal
+Outputs: parcela mensal, total pago, CET estimado, juros totais
+IPCA vs. CDI (inflation):
+
+Inputs: valor inicial, prazo (anos), IPCA médio (%), CDI (%)
+Outputs: valor corrigido pelo IPCA, valor com CDI, poder de compra mantido?
+Imposto de Renda (ir):
+
+Inputs: rendimento bruto anual, deduções (dependentes, saúde, educação), tipo (simples/completo)
+Outputs: IR devido, alíquota efetiva, restituição ou complemento estimado
+Independência Financeira / FIRE (fire):
+
+Inputs: patrimônio atual, aporte mensal, rentabilidade anual (%), despesa mensal desejada
+Outputs: patrimônio necessário (regra dos 4%), tempo para atingir, data estimada
+Previdência Privada (pension):
+
+Inputs: aporte mensal, prazo (anos), rentabilidade (%), tipo (PGBL/VGBL), alíquota IR
+Outputs: valor acumulado, benefício fiscal anual (PGBL), renda mensal estimada na aposentadoria
+Custo Real do Cartão (card_cost):
+
+Inputs: valor da compra, número de parcelas, taxa do rotativo (% a.m.)
+Outputs: total pago, CET, custo real vs. à vista
+Portabilidade de Crédito (portability):
+
+Inputs: saldo devedor, prazo restante, taxa atual (% a.m.), taxa nova (% a.m.)
+Outputs: parcela atual, parcela nova, economia mensal, economia total
+3.6 CONFIGURAÇÕES — app/(more)/settings.tsx
+Adicione:
+
+Biometria (FaceID / TouchID):
+import * as LocalAuthentication from 'expo-local-authentication';
+// Na seção de segurança, adicione toggle:
+// - verificar suporte: LocalAuthentication.hasHardwareAsync()
+// - ao ativar: autenticar imediatamente para confirmar
+// - salvar preferência em AsyncStorage: 'pf_biometrics_enabled'
+// - no AuthContext/ReauthModal, verificar se biometria está ativa e usar
+
+Sincronização de preferências: botão "Sincronizar configurações" que força um PATCH /api/preferences com todas as preferências atuais.
+
+Importar extrato CSV/OFX: item no menu que abre seletor de arquivo (expo-document-picker), faz upload via POST /api/transactions/import, mostra progresso e resultado.
+
+══════════════════════════════════════════════
+
+4. NOVAS TELAS — CRIAR DO ZERO
+══════════════════════════════════════════════
+
+4.1 HEALTH SCORE DEDICADO
+Arquivo: app/(more)/health-score.tsx
+Acesso: Menu "Mais" → "Saúde Financeira"
+API: GET /api/health-score
+
+Estrutura da tela:
+
+┌─────────────────────────────┐
+│  Header: "Saúde Financeira" │
+├─────────────────────────────┤
+│  Score gauge grande (0-100) │
+│  Círculo colorido com nota  │
+│  "Bom" / "Regular" / "Ruim" │
+├─────────────────────────────┤
+│  Histórico últimos 6 meses  │
+│  [LineChart sparkline]      │
+├─────────────────────────────┤
+│  PILARES (5 cards):         │
+│  💰 Controle de gastos  85% │
+│  🛡️ Reserva emergência  60% │
+│  💳 Uso de crédito      90% │
+│  📈 Investimentos       45% │
+│  📊 Planejamento        70% │
+├─────────────────────────────┤
+│  RECOMENDAÇÕES:             │
+│  • Aumente sua reserva...   │
+│  • Reduza gastos em...      │
+└─────────────────────────────┘
+
+Para o gauge, use a biblioteca react-native-gifted-charts com um semicircle donut chart, OU desenhe com SVG simples.
+
+4.2 MÓDULO PJ / MEI
+Arquivos a criar em: app/(more)/pj/
+
+4.2.1 app/(more)/pj/index.tsx — Dashboard PJ
+
+Registre no app/(more)/_layout.tsx:
+
+<Stack.Screen name="pj/index" options={{ title: 'Módulo PJ / MEI' }} />
+<Stack.Screen name="pj/receitas" options={{ title: 'Receitas PJ' }} />
+<Stack.Screen name="pj/despesas" options={{ title: 'Despesas PJ' }} />
+<Stack.Screen name="pj/clientes" options={{ title: 'Clientes' }} />
+<Stack.Screen name="pj/das" options={{ title: 'DAS / Guias' }} />
+<Stack.Screen name="pj/retiradas" options={{ title: 'Pró-labore e Retiradas' }} />
+
+Estrutura do Dashboard PJ:
+
+┌──────────────────────────────┐
+│ Header: "PJ / MEI"           │
+│ Badge regime: [MEI] ou [ME]  │
+├──────────────────────────────┤
+│ FATURAMENTO DO MÊS           │
+│  R$ 12.500,00                │
+│  Limite MEI: R$ 81.000/ano   │
+│  [====████░░░░] 35% do limite│
+├──────────────────────────────┤
+│ DAS PRÓXIMO                  │
+│  📅 Vence em 7 dias: R$ 67,00│
+│  [Pagar DAS]                 │
+├──────────────────────────────┤
+│ AÇÕES RÁPIDAS (4 botões):    │
+│ [+ Receita] [+ Despesa]      │
+│ [Clientes]  [Pró-labore]     │
+├──────────────────────────────┤
+│ ÚLTIMAS RECEITAS PJ          │
+│ Lista das 5 mais recentes    │
+└──────────────────────────────┘
+
+APIs para o módulo PJ — estas rotas já existem no backend web. O backend mobile (artifacts/api-server/src/routes/) precisa adicionar:
+
+pj-transactions.ts — GET/POST /api/pj/transactions (filtrar por type PJ no campo notes/metadata)
+Alternativa mais simples: use as rotas existentes de transactions.ts com campo pjType: 'receita'|'despesa' e filtre no frontend.
+4.2.2 app/(more)/pj/receitas.tsx — Receitas PJ
+
+Lista de receitas com cliente, valor, data, NF emitida (sim/não)
+Botão adicionar: cliente, valor, descrição, data, NF-e (toggle)
+API: GET/POST /api/transactions?pjType=receita (criar campo extra via notes ou usar categoria dedicada "Receita PJ")
+Total do mês no topo
+4.2.3 app/(more)/pj/despesas.tsx — Despesas PJ
+
+Mesma estrutura das receitas mas para despesas operacionais
+Categorias: "Contador", "Escritório", "Marketing", "Equipamentos", "Serviços", "Outros"
+4.2.4 app/(more)/pj/clientes.tsx — Clientes
+
+API: GET /api/pj/clients (rota a criar no backend mobile)
+Lista de clientes com nome, CNPJ/CPF, total faturado para ele
+CRUD completo: adicionar, editar, arquivar
+// Estrutura de cliente:
+interface PJClient {
+  id: string;
+  name: string;
+  document: string;       // CNPJ ou CPF
+  email?: string;
+  phone?: string;
+  address?: string;
+  totalBilled: number;    // calculado
+  lastTransaction?: string;
+}
+
+4.2.5 app/(more)/pj/das.tsx — DAS / Guias
+
+Lista de DAS mês a mês com status (pago/pendente/vencido)
+Cálculo automático baseado no faturamento do mês (6% MEI Comércio, 5% MEI Serviços, 11% pró-labore)
+API: GET/POST /api/pj/das
+Botão "Marcar como pago" com data e valor real
+4.2.6 app/(more)/pj/retiradas.tsx — Pró-labore e Retiradas
+
+Registrar retiradas mensais (pró-labore)
+Cálculo do INSS sobre pró-labore (11% do salário mínimo para MEI)
+Histórico de retiradas com total do ano
+Adicione no menu "Mais" (app/(tabs)/more.tsx) um item PJ visível apenas se o usuário tiver módulo PJ ativo:
+
+{ icon: 'briefcase', label: 'Módulo PJ / MEI', subtitle: 'Receitas, DAS e clientes', route: '/(more)/pj/index', badge: dasVencendo ? 'DAS' : undefined }
+
+4.3 RELATÓRIO DE INVESTIMENTOS
+Arquivo: app/(more)/investment-report.tsx
+Acesso: Menu "Mais" → "Relatório de Investimentos"
+APIs: GET /api/dividends, GET /api/investments
+
+Estrutura:
+
+┌──────────────────────────────┐
+│ Abas: [Dividendos][Perf.][Hist] │
+├──────────────────────────────┤
+│ ABA DIVIDENDOS:              │
+│ Total recebido no ano:       │
+│ R$ 1.240,00                  │
+│ [BarChart mês a mês]         │
+│ Lista detalhada por ativo    │
+├──────────────────────────────┤
+│ ABA PERFORMANCE:             │
+│ Carteira: +12,3%             │
+│ CDI:      +10,8%             │
+│ IBOV:     +8,5%              │
+│ [Comparativo visual]         │
+├──────────────────────────────┤
+│ ABA HISTÓRICO:               │
+│ Evolução patrimonial 12 meses│
+│ [LineChart]                  │
+└──────────────────────────────┘
+
+4.4 ALERTAS PERSONALIZADOS
+Arquivo: app/(more)/custom-alerts.tsx
+Acesso: Menu "Mais" → "Alertas"
+API: GET/POST/DELETE /api/alerts (já existe no backend web — verificar se está no backend mobile)
+
+Estrutura:
+
+Lista de alertas ativos com ícone, descrição, threshold
+Botão + para criar novo alerta
+Tipos de alerta disponíveis:
+"Gasto em categoria acima de R$___"
+"Saldo da conta abaixo de R$___"
+"Fatura do cartão acima de R$___"
+"Meta atingida X%"
+"Conta vencendo em ___ dias"
+══════════════════════════════════════════════
+
+5. MENU "MAIS" — REORGANIZAÇÃO COMPLETA
+══════════════════════════════════════════════
+
+Reescreva o app/(tabs)/more.tsx para organizar os itens em seções claras, igual ao sidebar do web:
+
+// SEÇÃO: Controle
+{ icon: 'list',        label: 'Transações',           route: '/(tabs)/transactions' },
+{ icon: 'credit-card', label: 'Cartões de crédito',   route: '/(more)/cards' },
+{ icon: 'briefcase',   label: 'Contas bancárias',     route: '/(more)/accounts' },
+{ icon: 'layers',      label: 'Carteiras',            route: '/(more)/wallets' },
+// SEÇÃO: Planejamento
+{ icon: 'pie-chart',   label: 'Orçamentos',           route: '/(more)/budgets' },
+{ icon: 'target',      label: 'Metas financeiras',    route: '/(more)/goals' },
+{ icon: 'trending-up', label: 'Projeção financeira',  route: '/(more)/projection' },
+{ icon: 'clock',       label: 'Contas a pagar',       route: '/(more)/bills' },
+{ icon: 'alert-circle',label: 'Dívidas',              route: '/(more)/debts' },
+// SEÇÃO: Investimentos
+{ icon: 'bar-chart-2', label: 'Minha carteira',       route: '/(tabs)/investments' },
+{ icon: 'file-text',   label: 'Relatório de invest.',  route: '/(more)/investment-report' },
+// SEÇÃO: Análise
+{ icon: 'activity',    label: 'Relatórios',           route: '/(tabs)/reports' },
+{ icon: 'heart',       label: 'Saúde financeira',     route: '/(more)/health-score' },
+// SEÇÃO: PJ / MEI (mostrar só se pjEnabled)
+{ icon: 'briefcase',   label: 'Dashboard PJ',         route: '/(more)/pj/index' },
+// SEÇÃO: Ferramentas
+{ icon: 'sliders',     label: 'Simuladores',          route: '/(more)/simulators' },
+{ icon: 'message-circle', label: 'Assistente IA',     route: '/chat' },
+{ icon: 'bell',        label: 'Alertas',              route: '/(more)/custom-alerts' },
+{ icon: 'inbox',       label: 'Notificações',         route: '/(more)/notifications' },
+{ icon: 'clock',       label: 'Lançamentos pendentes', route: '/(more)/pending-transactions' },
+// SEÇÃO: Configurações
+{ icon: 'tag',         label: 'Categorias',           route: '/(more)/categories' },
+{ icon: 'hash',        label: 'Tags',                 route: '/(more)/tags' },
+{ icon: 'settings',    label: 'Configurações',        route: '/(more)/settings' },
+{ icon: 'star',        label: 'Planos e assinaturas', route: '/(more)/subscriptions' },
+
+══════════════════════════════════════════════
+
+6. COMPONENTES UI — PADRONIZAR COM O WEB
+══════════════════════════════════════════════
+
+6.1 SummaryCard — components/SummaryCard.tsx
+Verifique que o card de resumo usa:
+
+Gradient do azul oceano para o card de saldo principal
+Botão de olho (👁️ / Feather eye/eye-off) para ocultar/mostrar valores — sincronizado com valuesVisible do ThemeContext
+Sombra suave: shadowColor: theme.shadow, shadowOffset: {width:0, height:4}, shadowOpacity:0.12, shadowRadius:8
+6.2 TransactionItem — components/TransactionItem.tsx
+Garanta:
+
+Ícone da categoria com a cor correta (igual ao web)
+Para transferências: ícone de seta bidirecional (Feather: 'arrow-right') com cor âmbar
+Badge de parcelamento quando totalInstallments > 1: "3/12" em chip pequeno
+Swipe to delete / swipe to edit usando react-native-gesture-handler
+6.3 Criar componente: components/SectionHeader.tsx
+// Header de seção reutilizável — igual ao padrão web
+interface SectionHeaderProps {
+  title: string;
+  icon?: keyof typeof Feather.glyphMap;
+  action?: { label: string; onPress: () => void };
+}
+// Visual: ícone + título em muted, linha separadora sutil, "Ver todos" à direita
+
+6.4 Criar componente: components/EmptyState.tsx
+// Estado vazio reutilizável
+interface EmptyStateProps {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  description: string;
+  action?: { label: string; onPress: () => void };
+}
+// Visual: ícone grande em muted, título, descrição, botão opcional
+
+6.5 Criar componente: components/MonthNavigator.tsx
+// Navegador de mês reutilizável — usado em Transações, Orçamentos, Faturas, etc.
+interface MonthNavigatorProps {
+  value: string;          // 'YYYY-MM'
+  onChange: (month: string) => void;
+  style?: ViewStyle;
+}
+// Visual: ← Março 2025 → com haptics em cada toque
+
+══════════════════════════════════════════════
+
+7. BACKEND MOBILE — ROTAS A ADICIONAR
+══════════════════════════════════════════════
+
+No diretório artifacts/api-server/src/routes/, crie os seguintes arquivos e registre em index.ts:
+
+pj-clients.ts — CRUD de clientes PJ
+// GET    /api/pj/clients
+// POST   /api/pj/clients
+// PATCH  /api/pj/clients/:id
+// DELETE /api/pj/clients/:id
+// Schema: { id, userId, name, document, email?, phone?, notes?, createdAt }
+
+pj-das.ts — Controle de DAS
+// GET  /api/pj/das              → lista por userId
+// POST /api/pj/das              → criar registro mensal
+// PATCH /api/pj/das/:id        → marcar pago
+// Schema: { id, userId, referenceMonth, amount, dueDate, paidDate?, status }
+
+Ajuste em preferences.ts — adicionar campos faltantes:
+// Certifique que PATCH /api/preferences aceita e persiste:
+// valuesVisible, defaultWorkspaceId, pjEnabled, pjRegime ('MEI'|'ME'|'EPP')
+
+Ajuste em investments.ts — endpoint de cotações:
+// GET /api/investments/quotes?tickers=PETR4,MXRF11
+// Chame a BRAPI: https://brapi.dev/api/quote/{tickers}?token={BRAPI_TOKEN}
+// Retorne: [{ ticker, regularMarketPrice, regularMarketChangePercent }]
+// Use a variável de ambiente BRAPI_API_KEY já disponível
+
+══════════════════════════════════════════════
+
+8. INSTRUÇÕES DE IMPLEMENTAÇÃO
+══════════════════════════════════════════════
+
+Ordem de execução recomendada:
+Ajustar constants/colors.ts com as cores exatas do web
+Completar sincronização bidirecional em ThemeContext.tsx
+Criar componentes reutilizáveis (SectionHeader, EmptyState, MonthNavigator)
+Adicionar novos simuladores em simulators.tsx
+Melhorar Dashboard com Health Score mini, ações rápidas e alertas
+Criar tela health-score.tsx
+Criar módulo PJ completo (6 telas + rotas no backend)
+Criar investment-report.tsx
+Criar custom-alerts.tsx
+Reorganizar menu "Mais"
+Adicionar biometria em Settings
+Adicionar cotações ao vivo em Investments
+Adicionar exportação em Reports e Transactions
+Padrões obrigatórios para todas as telas:
+Sempre usar useSafeAreaInsets() para padding top/bottom
+Sempre usar useTheme() para cores — NUNCA hardcode de cor
+Sempre usar * Haptics em ações importantes
+Sempre ter estado de loading com ActivityIndicator na cor primary
+Sempre ter estado de erro com retry
+Sempre ter estado vazio com o componente EmptyState
+Pull-to-refresh em todas as listas
+Keyboard avoiding em todas as telas com inputs
+Variáveis de ambiente disponíveis:
+EXPO_PUBLIC_API_URL — URL do backend
+BRAPI_API_KEY — para cotações de bolsa (usar no backend, não no frontend)
+Packages já instalados (não reinstalar):
+expo-haptics, expo-linear-gradient, expo-router, expo-blur, expo-symbols
+react-native-gifted-charts (para gráficos)
+@tanstack/react-query (para fetch de dados)
+expo-local-authentication (para biometria)
+@expo/vector-icons (Feather já em uso)
+Packages a instalar se necessário:
+expo-document-picker (importar OFX/CSV)
+expo-sharing (exportar relatórios)
+expo-print (gerar PDF)
+══════════════════════════════════════════════
+
+9. CRITÉRIOS DE ACEITAÇÃO
+══════════════════════════════════════════════
+
+O app mobile estará completo quando:
+
+ Mudar tema (claro/escuro) no web reflete automaticamente no mobile na próxima abertura
+ Mudar cor de destaque no web reflete no mobile
+ Ocultar/mostrar saldos em um reflete no outro
+ Dashboard mostra Health Score, ações rápidas e próximos vencimentos
+ Todos os 12 simuladores funcionam com cálculos corretos
+ Módulo PJ completo com 5 telas e CRUD funcional
+ Tela de Health Score dedicada com pilares e histórico
+ Tela de Relatório de Investimentos com dividendos e performance
+ Menu "Mais" reorganizado em seções iguais ao sidebar web
+ Biometria configurável nas preferências
+ Cotações ao vivo de ações/FIIs na aba Investimentos
+ Export de transações em CSV funcional
+ Todos os estados vazios e de loading padronizados
+Execute todas as mudanças. Após implementar, valide que o app compila sem erros TypeScript.

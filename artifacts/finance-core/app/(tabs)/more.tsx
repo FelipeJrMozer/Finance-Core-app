@@ -140,11 +140,42 @@ export default function MoreScreen() {
       </LinearGradient>
 
       <View style={styles.content}>
-        {/* Recursos */}
+        {/* Ferramentas */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-          RECURSOS
+          FERRAMENTAS
         </Text>
         <View style={styles.menuGroup}>
+          <MenuItem
+            testID="menu-health"
+            icon="activity"
+            label="Saúde Financeira"
+            subtitle="Pontuação e recomendações para seu bolso"
+            onPress={() => router.push('/(more)/health-score')}
+          />
+          <MenuItem
+            testID="menu-simulators"
+            icon="sliders"
+            label="Simuladores"
+            subtitle="12 simuladores: juros, imóvel, FIRE e mais"
+            badge="12"
+            onPress={() => router.push('/(more)/simulators')}
+          />
+          <MenuItem
+            testID="menu-invest-report"
+            icon="bar-chart-2"
+            label="Relatório de Investimentos"
+            subtitle="Dividendos, performance e benchmark"
+            onPress={() => router.push('/(more)/investment-report')}
+          />
+          <MenuItem
+            testID="menu-pj"
+            icon="briefcase"
+            label="Módulo PJ / MEI"
+            subtitle="Faturamento, DAS, clientes e retiradas"
+            badge="Novo"
+            badgeColor={colors.success}
+            onPress={() => router.push('/(more)/pj/index')}
+          />
           <MenuItem
             testID="menu-ai"
             icon="cpu"
@@ -152,6 +183,13 @@ export default function MoreScreen() {
             subtitle="Conselhos financeiros personalizados"
             onPress={() => router.push('/chat')}
           />
+        </View>
+
+        {/* Gestão */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+          GESTÃO
+        </Text>
+        <View style={styles.menuGroup}>
           <MenuItem
             testID="menu-goals"
             icon="target"
@@ -166,6 +204,20 @@ export default function MoreScreen() {
             label="Contas e Cartões"
             subtitle="Gerencie suas contas bancárias"
             onPress={() => router.push('/(more)/accounts')}
+          />
+          <MenuItem
+            testID="menu-pending"
+            icon="clock"
+            label="Lançamentos Pendentes"
+            subtitle="Pagamentos e recebimentos não confirmados"
+            onPress={() => router.push('/(more)/pending-transactions')}
+          />
+          <MenuItem
+            testID="menu-alerts"
+            icon="bell"
+            label="Alertas Personalizados"
+            subtitle="Configure limites e notificações automáticas"
+            onPress={() => router.push('/(more)/custom-alerts')}
           />
           <MenuItem
             testID="menu-subscriptions"
@@ -219,7 +271,7 @@ export default function MoreScreen() {
           <MenuItem
             icon="settings"
             label="Configurações do App"
-            subtitle={`Tema, cor, notificações • Cor: ${currentPreset.label}`}
+            subtitle={`Tema, cor, biometria • Cor: ${currentPreset.label}`}
             right={
               <View style={[styles.colorDot, { backgroundColor: currentPreset.primary }]} />
             }

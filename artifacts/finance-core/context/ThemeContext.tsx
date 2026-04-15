@@ -28,35 +28,44 @@ interface ThemeContextType {
   notifyWeekly: boolean;
   setNotifySetting: (key: 'notifyDARF' | 'notifyBudget' | 'notifyWeekly', value: boolean) => void;
   isSyncingColors: boolean;
+  syncPreferences: () => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
-async function fetchRemotePrefs(): Promise<{ accentId?: string; themeMode?: string } | null> {
+async function getToken(): Promise<string | null> {
+  try { return await AsyncStorage.getItem('pf_access_token'); } catch { return null; }
+}
+
+async function fetchRemotePrefs(): Promise<{
+  accentId?: string; themeMode?: string; valuesVisible?: boolean;
+} | null> {
   if (!API_URL) return null;
   try {
-    const res = await fetch(`${API_URL}/api/preferences`, { signal: AbortSignal.timeout(3000) });
+    const token = await getToken();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${API_URL}/api/preferences`, { headers, signal: AbortSignal.timeout(4000) });
     if (res.ok) return await res.json();
-  } catch {
-    // offline or API unavailable
-  }
+  } catch { /* offline */ }
   return null;
 }
 
-async function pushRemotePrefs(data: { accentId?: string; themeMode?: string }) {
+async function pushRemotePrefs(data: { accentId?: string; themeMode?: string; valuesVisible?: boolean }) {
   if (!API_URL) return;
   try {
+    const token = await getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
     await fetch(`${API_URL}/api/preferences`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH',
+      headers,
       body: JSON.stringify(data),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(4000),
     });
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -89,7 +98,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (nb !== null) setNotifyBudget(nb === 'true');
       if (nw !== null) setNotifyWeekly(nw === 'true');
 
-      // Sync from API — API is source of truth for accent/theme
+      // Sync from API — API is source of truth for accent/theme/valuesVisible
       if (API_URL) {
         setIsSyncingColors(true);
         const remote = await fetchRemotePrefs();
@@ -104,6 +113,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             setThemeModeState(remote.themeMode as ThemeMode);
             await AsyncStorage.setItem('themeMode', remote.themeMode);
           }
+          if (typeof remote.valuesVisible === 'boolean' && vv === null) {
+            setValuesVisible(remote.valuesVisible);
+            await AsyncStorage.setItem('valuesVisible', String(remote.valuesVisible));
+          }
         }
       }
     };
@@ -114,11 +127,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (API_URL) {
       syncIntervalRef.current = setInterval(async () => {
         const remote = await fetchRemotePrefs();
-        if (remote?.accentId) {
+        if (!remote) return;
+        if (remote.accentId) {
           setAccentId((prev) => {
             if (prev !== remote.accentId) {
               AsyncStorage.setItem('accentColor', remote.accentId!);
               return remote.accentId as AccentId;
+            }
+            return prev;
+          });
+        }
+        if (remote.themeMode) {
+          setThemeModeState((prev) => {
+            if (prev !== remote.themeMode) {
+              AsyncStorage.setItem('themeMode', remote.themeMode!);
+              return remote.themeMode as ThemeMode;
+            }
+            return prev;
+          });
+        }
+        if (typeof remote.valuesVisible === 'boolean') {
+          setValuesVisible((prev) => {
+            if (prev !== remote.valuesVisible) {
+              AsyncStorage.setItem('valuesVisible', String(remote.valuesVisible));
+              return remote.valuesVisible!;
             }
             return prev;
           });
@@ -147,9 +179,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setValuesVisible((prev) => {
       const next = !prev;
       AsyncStorage.setItem('valuesVisible', String(next));
+      pushRemotePrefs({ valuesVisible: next });
       return next;
     });
   }, []);
+
+  const syncPreferences = useCallback(async () => {
+    await pushRemotePrefs({ accentId, themeMode, valuesVisible });
+  }, [accentId, themeMode, valuesVisible]);
 
   const maskValue = useCallback(
     (value: string) => (valuesVisible ? value : '•••••'),
@@ -183,7 +220,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       theme, isDark, themeMode, setThemeMode, colors, accentId, setAccentColor,
       valuesVisible, toggleValuesVisible, maskValue,
       notifyDARF, notifyBudget, notifyWeekly, setNotifySetting,
-      isSyncingColors,
+      isSyncingColors, syncPreferences,
     }}>
       {children}
     </ThemeContext.Provider>

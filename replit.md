@@ -80,13 +80,29 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
   - Clicking the month label resets to current month; right chevron disabled at current month
   - Helper functions `addMonths(ym, delta)` and `getMonthLabel(ym)` defined locally in each screen
 - **Screens**:
-  - Dashboard with Health Gauge, Upcoming Bills, Weekly Chart; SummaryCards use real month-over-month trends (no hardcoded values)
-  - Transactions: month navigation bar at top + type filter chips + account filter + search + summary row (filtered by selected month)
+  - Dashboard: HealthGauge, Upcoming Bills, Weekly Chart, QuickActions; "Ver análise →" links to full health-score screen; SummaryCards use real MoM trends
+  - Transactions: month nav + type filter chips + account filter + search + summary row + CSV export button (Share API)
   - Budgets: month navigation + total spent/limit summary bar; "+" add button only shown for current month
-  - Reports: month navigation in header; all calculations (income, expense, budgets, savings rate, forecast) filtered by selected month; cashflow chart always shows 6-month history
+  - Reports: month nav in header; all calculations filtered by selected month; cashflow chart shows 6-month history
   - Investments (stocks, FIIs, REITs, ETFs, crypto, fixed income)
   - AI Chat (connects to real `/api/ai/chat` endpoint with context + history)
-  - Mais → Contas e Cartões, Metas, Orçamentos, **Notificações**, Configurações, Planos
+  - Mais → reorganized: FERRAMENTAS (Saúde Financeira, Simuladores, Relatório Investimentos, PJ/MEI, IA) + GESTÃO (Metas, Contas, Lançamentos Pendentes, Alertas, Planos) + ORÇAMENTOS + CONFIGURAÇÕES
+- **New Screens** (all navigable from `/(more)/`):
+  - `health-score.tsx`: SVG gauge 0–100, os 5 pilares com barras de progresso, histórico 6 meses (LineChart), recomendações baseadas em dados locais ou API
+  - `simulators.tsx`: grid com 12 simuladores — Juros Compostos, Meta de Poupança, Empréstimo, Reserva de Emergência, Financiamento Imóvel (PRICE/SAC), Financiamento Veículo, IPCA vs CDI, Imposto de Renda, FIRE, Previdência Privada, Custo Real do Cartão, Portabilidade
+  - `investment-report.tsx`: 3 abas — Dividendos (BarChart), Performance (benchmark vs CDI/IBOV), Histórico (LineChart patrimonial)
+  - `custom-alerts.tsx`: alertas personalizados com AsyncStorage (5 tipos: gasto por categoria, saldo mínimo, fatura, meta, vencimento)
+  - `pending-transactions.tsx`: filtra `transactions` onde `isPaid === false`; link para detalhe de cada transação
+  - `pj/index.tsx`: dashboard PJ/MEI com faturamento, limite anual MEI (R$81k), DAS próximo, ações rápidas
+  - `pj/receitas.tsx`: receitas PJ filtradas por `[PJ]` nas notas; MonthNavigator
+  - `pj/despesas.tsx`: despesas PJ filtradas por `[PJ]`; breakdown por categoria; MonthNavigator
+  - `pj/clientes.tsx`: cadastro de clientes PJ com AsyncStorage
+  - `pj/das.tsx`: guias DAS geradas automaticamente (6% faturamento MEI), marcar como pago
+  - `pj/retiradas.tsx`: registro de pró-labore + INSS automático (11% sobre salário mínimo)
+- **New Reusable Components**:
+  - `components/SectionHeader.tsx`: header de seção com título, ícone opcional e ação
+  - `components/EmptyState.tsx`: tela de estado vazio com ícone, título, descrição e botão de ação
+  - `components/MonthNavigator.tsx`: navegação de mês com chevrons e label formatado
 - **Credit Card Features** (`app/card/`):
   - `card/[id].tsx` — detail: Fatura, Parcelas, Detalhes tabs
   - Fatura tab: month navigation with **"Aberta"** badge (current month, primary color) or **"Fechada"** badge (past month, gray)
