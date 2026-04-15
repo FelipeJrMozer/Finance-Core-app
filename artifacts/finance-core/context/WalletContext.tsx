@@ -35,6 +35,29 @@ function extractWallets(data: unknown): Omit<Wallet, 'color'>[] {
   return [];
 }
 
+function isDefaultWallet(w: Record<string, unknown>): boolean {
+  return !!(
+    w.isDefault === true ||
+    w.is_default === true ||
+    w.default === true ||
+    w.isPrimary === true ||
+    w.is_primary === true ||
+    w.primary === true ||
+    w.isMain === true
+  );
+}
+
+function findDefaultWallet(list: Wallet[]): Wallet | null {
+  const byFlag = list.find((w) => isDefaultWallet(w as unknown as Record<string, unknown>));
+  if (byFlag) return byFlag;
+  const byName = list.find((w) =>
+    w.name.toLowerCase().includes('principal') ||
+    w.name.toLowerCase().includes('main') ||
+    w.name.toLowerCase().includes('default')
+  );
+  return byName || null;
+}
+
 interface WalletContextType {
   wallets: Wallet[];
   selectedWallet: Wallet | null;
@@ -46,6 +69,7 @@ interface WalletContextType {
 }
 
 const SELECTED_WALLET_KEY = 'pf_selected_wallet_id';
+const USER_CHOSE_KEY = 'pf_user_chose_wallet';
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
@@ -68,22 +92,43 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const text = await res.text();
-        console.log('[WalletContext] response:', text.slice(0, 300));
+        console.log('[WalletContext] response:', text.slice(0, 400));
         let parsed: unknown;
         try { parsed = JSON.parse(text); } catch { parsed = []; }
         const raw = extractWallets(parsed);
-        console.log('[WalletContext] wallet count:', raw.length);
+        console.log('[WalletContext] wallet count:', raw.length, '| names:', raw.map((w) => (w as Record<string, unknown>).name));
         const list = assignColors(raw);
         setWallets(list);
 
-        const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
-        const saved = savedId ? list.find((w) => w.id === savedId) : null;
-        if (saved) {
-          setSelectedWallet(saved);
-        } else if (list.length > 0) {
-          const def = list.find((w) => w.isDefault) || list[0];
-          setSelectedWallet(def);
-          await AsyncStorage.setItem(SELECTED_WALLET_KEY, def.id);
+        if (list.length > 0) {
+          const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
+          const userChose = await AsyncStorage.getItem(USER_CHOSE_KEY);
+
+          const apiDefault = findDefaultWallet(list);
+          console.log('[WalletContext] api default:', apiDefault?.name, '| savedId:', savedId, '| userChose:', userChose);
+
+          if (apiDefault && !userChose) {
+            console.log('[WalletContext] selecting API default:', apiDefault.name);
+            setSelectedWallet(apiDefault);
+            await AsyncStorage.setItem(SELECTED_WALLET_KEY, apiDefault.id);
+          } else if (savedId) {
+            const saved = list.find((w) => w.id === savedId);
+            if (saved) {
+              console.log('[WalletContext] selecting saved:', saved.name);
+              setSelectedWallet(saved);
+            } else {
+              const fallback = apiDefault || list[0];
+              console.log('[WalletContext] savedId not found, fallback:', fallback.name);
+              setSelectedWallet(fallback);
+              await AsyncStorage.setItem(SELECTED_WALLET_KEY, fallback.id);
+              await AsyncStorage.removeItem(USER_CHOSE_KEY);
+            }
+          } else {
+            const fallback = apiDefault || list[0];
+            console.log('[WalletContext] no saved, using:', fallback.name);
+            setSelectedWallet(fallback);
+            await AsyncStorage.setItem(SELECTED_WALLET_KEY, fallback.id);
+          }
         }
       } else if (res.status === 401) {
         console.warn('[WalletContext] 401 - session expired');
@@ -119,6 +164,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const selectWallet = useCallback(async (wallet: Wallet) => {
     setSelectedWallet(wallet);
     await AsyncStorage.setItem(SELECTED_WALLET_KEY, wallet.id);
+    await AsyncStorage.setItem(USER_CHOSE_KEY, 'true');
+    console.log('[WalletContext] user manually selected:', wallet.name);
   }, []);
 
   return (
