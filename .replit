@@ -83,6 +83,10 @@ author = 48340445
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
+args = "git remote set-url origin https://FelipeJrMozer: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@github.com/FelipeJrMozer/Finance-Core-app.git"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
 args = "git push origin master --force"
 
 [[workflows.workflow.tasks]]
