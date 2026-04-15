@@ -7,8 +7,13 @@ const KEYS = {
 
 let _accessToken: string | null = null;
 let _refreshToken: string | null = null;
+let _walletId: string | null = null;
 let _isRefreshing = false;
 let _refreshQueue: Array<(token: string | null) => void> = [];
+
+export function setCurrentWalletId(id: string | null) {
+  _walletId = id;
+}
 
 export function getApiBaseUrl() {
   return (process.env.EXPO_PUBLIC_API_URL || 'https://pilarfinanceiro.replit.app').replace(/\/$/, '');
@@ -82,6 +87,10 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 
   if (_accessToken) {
     headers['Authorization'] = `Bearer ${_accessToken}`;
+  }
+
+  if (_walletId) {
+    headers['x-wallet-id'] = _walletId;
   }
 
   const res = await fetch(`${base}${path}`, { ...options, headers });

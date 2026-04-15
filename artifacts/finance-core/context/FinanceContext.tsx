@@ -234,11 +234,12 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
 function transformAccount(raw: Record<string, unknown>): Account {
   let type = (raw.type as string) as AccountType;
   if (type === 'wallet') type = 'savings';
+  const balanceRaw = raw.computedBalance ?? raw.balance;
   return {
     id: raw.id as string,
     name: raw.name as string,
     type,
-    balance: parseFloat(raw.balance as string) || 0,
+    balance: parseFloat(balanceRaw as string) || 0,
     institution: (raw.institution as string) || '',
     color: (raw.color as string) || '#0096C7',
     archived: (raw.archived as boolean) || false,

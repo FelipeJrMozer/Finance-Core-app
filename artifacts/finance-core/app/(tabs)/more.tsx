@@ -61,7 +61,7 @@ function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, r
 export default function MoreScreen() {
   const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, transactions, totalBalance, investments, notifications } = useFinance();
+  const { budgets, goals, transactions, totalBalance, investments, notifications, settings } = useFinance();
   const unreadNotifs = notifications.filter((n) => !n.read).length;
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
@@ -216,6 +216,31 @@ export default function MoreScreen() {
             subtitle="Pagamentos e recebimentos não confirmados"
             onPress={() => router.push('/(more)/pending-transactions')}
           />
+          <MenuItem
+            testID="menu-debts"
+            icon="trending-down"
+            label="Dívidas"
+            subtitle="Gerencie empréstimos e parcelamentos"
+            onPress={() => router.push('/(more)/debts')}
+          />
+          {settings?.billsEnabled !== false && (
+            <MenuItem
+              testID="menu-bills"
+              icon="file-text"
+              label="Contas a Pagar"
+              subtitle="Controle seus vencimentos e boletos"
+              onPress={() => router.push('/(more)/bills')}
+            />
+          )}
+          {settings?.sinkingFundsEnabled !== false && (
+            <MenuItem
+              testID="menu-sinking"
+              icon="archive"
+              label="Reservas Programadas"
+              subtitle="Poupe para objetivos específicos"
+              onPress={() => router.push('/(more)/sinking-funds')}
+            />
+          )}
           <MenuItem
             testID="menu-alerts"
             icon="bell"

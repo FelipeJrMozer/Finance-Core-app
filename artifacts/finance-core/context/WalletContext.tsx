@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiFetch, getApiBaseUrl } from '@/services/api';
+import { apiFetch, getApiBaseUrl, setCurrentWalletId } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
 export interface Wallet {
@@ -165,8 +165,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, refreshWallets]);
 
+  useEffect(() => {
+    setCurrentWalletId(selectedWallet?.id || null);
+    console.log('[WalletContext] x-wallet-id header set to:', selectedWallet?.id || 'null');
+  }, [selectedWallet]);
+
   const selectWallet = useCallback(async (wallet: Wallet) => {
     setSelectedWallet(wallet);
+    setCurrentWalletId(wallet.id);
     await AsyncStorage.setItem(SELECTED_WALLET_KEY, wallet.id);
     await AsyncStorage.setItem(USER_CHOSE_KEY, 'true');
     console.log('[WalletContext] user manually selected:', wallet.name);
