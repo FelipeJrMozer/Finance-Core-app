@@ -1,10 +1,11 @@
 import React from 'react';
 import {
-  Modal, View, Text, StyleSheet, Pressable, FlatList, ActivityIndicator
+  Modal, View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { useWallet, type Wallet } from '@/context/WalletContext';
+import { WalletIcon } from '@/components/WalletIcon';
 import * as Haptics from 'expo-haptics';
 
 interface Props {
@@ -12,9 +13,19 @@ interface Props {
   onClose: () => void;
 }
 
+const WALLET_COLORS = [
+  '#0096C7', '#6C5CE7', '#00B894', '#FD9644', '#E84393',
+  '#2ED573', '#F53B57', '#1E90FF', '#A29BFE', '#FDCB6E',
+];
+
+function getWalletColor(wallet: Wallet, index: number): string {
+  if (wallet.color) return wallet.color;
+  return WALLET_COLORS[index % WALLET_COLORS.length];
+}
+
 export function WalletSelectorModal({ visible, onClose }: Props) {
-  const { theme, colors } = useTheme();
-  const { wallets, selectedWallet, selectWallet, isLoading } = useWallet();
+  const { theme, colors, isDark } = useTheme();
+  const { wallets, selectedWallet, selectWallet, isLoading, refreshWallets } = useWallet();
 
   const handleSelect = async (wallet: Wallet) => {
     Haptics.selectionAsync();
@@ -22,88 +33,156 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
     onClose();
   };
 
+  const handleManage = () => {
+    Haptics.selectionAsync();
+    Linking.openURL('https://pilarfinanceiro.replit.app');
+    onClose();
+  };
+
+  const handleNew = () => {
+    Haptics.selectionAsync();
+    Linking.openURL('https://pilarfinanceiro.replit.app');
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <Pressable style={styles.overlay} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+
+      <View style={[
+        styles.sheet,
+        {
+          backgroundColor: isDark ? '#1A1A2E' : '#fff',
+          borderColor: theme.border,
+          shadowColor: '#000',
+        }
+      ]}>
+        {/* Handle */}
         <View style={[styles.handle, { backgroundColor: theme.border }]} />
 
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-            Carteiras
-          </Text>
-          <Pressable onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.surfaceElevated }]}>
-            <Feather name="x" size={18} color={theme.textSecondary} />
+          <View style={styles.headerLeft}>
+            <WalletIcon size={20} color={colors.primary} />
+            <Text style={[styles.title, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+              Carteiras
+            </Text>
+          </View>
+          <Pressable
+            onPress={onClose}
+            style={[styles.closeBtn, { backgroundColor: theme.surfaceElevated }]}
+            hitSlop={8}
+          >
+            <Feather name="x" size={16} color={theme.textSecondary} />
           </Pressable>
         </View>
 
-        <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-          Selecione a carteira para visualizar os dados
-        </Text>
-
+        {/* Wallet list */}
         {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginVertical: 32 }} />
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
         ) : wallets.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Feather name="briefcase" size={40} color={theme.textTertiary} />
+            <WalletIcon size={36} color={theme.textTertiary} />
             <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
               Nenhuma carteira encontrada
             </Text>
             <Text style={[styles.emptyHint, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-              Crie uma carteira no sistema web do Pilar Financeiro
+              Crie uma carteira no sistema web
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={wallets}
-            keyExtractor={(w) => w.id}
-            contentContainerStyle={{ gap: 8, paddingBottom: 16 }}
-            renderItem={({ item }) => {
-              const isSelected = selectedWallet?.id === item.id;
+          <ScrollView
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            style={{ maxHeight: 260 }}
+          >
+            {wallets.map((wallet, index) => {
+              const isSelected = selectedWallet?.id === wallet.id;
+              const dotColor = getWalletColor(wallet, index);
               return (
                 <Pressable
-                  onPress={() => handleSelect(item)}
+                  key={wallet.id}
+                  onPress={() => handleSelect(wallet)}
                   style={({ pressed }) => [
                     styles.walletRow,
                     {
-                      backgroundColor: isSelected ? `${colors.primary}15` : theme.surfaceElevated,
-                      borderColor: isSelected ? colors.primary : theme.border,
-                      opacity: pressed ? 0.8 : 1,
+                      backgroundColor: isSelected
+                        ? `${dotColor}12`
+                        : pressed ? theme.surfaceElevated : 'transparent',
                     },
                   ]}
                 >
-                  <View style={[styles.walletIcon, { backgroundColor: `${colors.primary}20` }]}>
-                    <Feather name="briefcase" size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.walletInfo}>
-                    <Text style={[styles.walletName, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-                      {item.name}
-                    </Text>
-                    {item.description ? (
-                      <Text style={[styles.walletDesc, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>
-                        {item.description}
-                      </Text>
-                    ) : item.isDefault ? (
-                      <Text style={[styles.walletDesc, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>
-                        Carteira padrão
-                      </Text>
-                    ) : null}
-                  </View>
+                  {/* Colored dot */}
+                  <View style={[styles.dot, { backgroundColor: dotColor }]} />
+
+                  {/* Name */}
+                  <Text
+                    style={[
+                      styles.walletName,
+                      {
+                        color: isSelected ? dotColor : theme.text,
+                        fontFamily: isSelected ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                        flex: 1,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {wallet.name}
+                  </Text>
+
+                  {/* Checkmark */}
                   {isSelected && (
-                    <View style={[styles.checkCircle, { backgroundColor: colors.primary }]}>
-                      <Feather name="check" size={14} color="#fff" />
-                    </View>
+                    <Feather name="check" size={16} color={dotColor} />
                   )}
                 </Pressable>
               );
-            }}
-          />
+            })}
+          </ScrollView>
         )}
+
+        {/* Divider */}
+        <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+        {/* Actions — like web's "Gerenciar carteiras" and "Nova carteira" */}
+        <Pressable
+          onPress={handleManage}
+          style={({ pressed }) => [
+            styles.actionRow,
+            { backgroundColor: pressed ? theme.surfaceElevated : 'transparent' },
+          ]}
+        >
+          <View style={[styles.actionIcon, { backgroundColor: `${colors.primary}15` }]}>
+            <Feather name="settings" size={14} color={colors.primary} />
+          </View>
+          <Text style={[styles.actionText, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+            Gerenciar carteiras
+          </Text>
+          <Feather name="external-link" size={13} color={theme.textTertiary} />
+        </Pressable>
+
+        <Pressable
+          onPress={handleNew}
+          style={({ pressed }) => [
+            styles.actionRow,
+            { backgroundColor: pressed ? theme.surfaceElevated : 'transparent' },
+          ]}
+        >
+          <View style={[styles.actionIcon, { backgroundColor: `${colors.success || '#00B894'}15` }]}>
+            <Feather name="plus" size={14} color={colors.success || '#00B894'} />
+          </View>
+          <Text style={[styles.actionText, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+            Nova carteira
+          </Text>
+          <Feather name="external-link" size={13} color={theme.textTertiary} />
+        </Pressable>
       </View>
     </Modal>
   );
@@ -111,87 +190,107 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     borderTopWidth: 1,
-    padding: 20,
-    maxHeight: '70%',
+    paddingBottom: 32,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 20,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 14,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    marginBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 16,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  subtitle: {
-    fontSize: 13,
-    marginBottom: 16,
+  loadingBox: {
+    paddingVertical: 24,
+    alignItems: 'center',
   },
   emptyBox: {
     alignItems: 'center',
-    paddingVertical: 32,
-    gap: 8,
+    paddingVertical: 24,
+    gap: 6,
+    paddingHorizontal: 24,
   },
   emptyText: {
-    fontSize: 15,
-    marginTop: 8,
+    fontSize: 14,
+    marginTop: 6,
   },
   emptyHint: {
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
-    paddingHorizontal: 16,
   },
   walletRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    gap: 10,
   },
-  walletIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  walletInfo: {
-    flex: 1,
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   walletName: {
-    fontSize: 15,
+    fontSize: 14,
   },
-  walletDesc: {
-    fontSize: 12,
-    marginTop: 2,
+  divider: {
+    height: 1,
+    marginVertical: 8,
+    marginHorizontal: 18,
   },
-  checkCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  actionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  actionText: {
+    fontSize: 14,
+    flex: 1,
   },
 });

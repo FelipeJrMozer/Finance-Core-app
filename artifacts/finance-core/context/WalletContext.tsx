@@ -8,8 +8,20 @@ export interface Wallet {
   name: string;
   isDefault?: boolean;
   currency?: string;
-  color?: string;
+  color: string;
   description?: string;
+}
+
+const PALETTE = [
+  '#0096C7', '#6C5CE7', '#00B894', '#FD9644', '#E84393',
+  '#2ED573', '#F53B57', '#1E90FF', '#A29BFE', '#FDCB6E',
+];
+
+function assignColors(list: Omit<Wallet, 'color'>[]): Wallet[] {
+  return list.map((w, i) => ({
+    ...w,
+    color: (w as Record<string, unknown>).color as string || PALETTE[i % PALETTE.length],
+  }));
 }
 
 interface WalletContextType {
@@ -34,8 +46,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) return;
     setIsLoading(true);
     try {
-      const data = await apiGet<Wallet[]>('/api/wallets');
-      const list = Array.isArray(data) ? data : [];
+      const data = await apiGet<Omit<Wallet, 'color'>[]>('/api/wallets');
+      const raw = Array.isArray(data) ? data : [];
+      const list = assignColors(raw);
       setWallets(list);
 
       const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);

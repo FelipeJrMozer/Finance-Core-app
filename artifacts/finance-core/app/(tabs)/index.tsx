@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { useWallet } from '@/context/WalletContext';
 import { WalletSelectorModal } from '@/components/WalletSelectorModal';
+import { WalletIcon } from '@/components/WalletIcon';
 import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
@@ -270,7 +271,7 @@ export default function DashboardScreen() {
     netResult, healthScore,
     transactions, budgets, isLoading, accounts, investments, creditCards
   } = useFinance();
-  const { selectedWallet, wallets } = useWallet();
+  const { selectedWallet } = useWallet();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalVisible, setWalletModalVisible] = useState(false);
@@ -334,27 +335,34 @@ export default function DashboardScreen() {
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <View style={styles.headerTop}>
-            <View>
+            <View style={{ gap: 2 }}>
               <Text style={[styles.greeting, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
                 Olá, {user?.name?.split(' ')[0] || 'Usuário'} 👋
               </Text>
               <Text style={[styles.headerTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
                 Visão Geral
               </Text>
-            </View>
-            <View style={styles.headerActions}>
-              {wallets.length > 0 && (
+              {selectedWallet && (
                 <Pressable
                   onPress={() => { Haptics.selectionAsync(); setWalletModalVisible(true); }}
-                  style={[styles.walletBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+                  style={styles.walletBadge}
                 >
-                  <Feather name="briefcase" size={13} color={colors.primary} />
-                  <Text style={[styles.walletBtnText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
-                    {selectedWallet?.name || 'Carteira'}
+                  <View style={[styles.walletDot, { backgroundColor: selectedWallet.color || colors.primary }]} />
+                  <Text style={[styles.walletBadgeText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>
+                    {selectedWallet.name}
                   </Text>
-                  <Feather name="chevron-down" size={13} color={colors.primary} />
+                  <Feather name="chevron-down" size={11} color={theme.textTertiary} />
                 </Pressable>
               )}
+            </View>
+            <View style={styles.headerActions}>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); setWalletModalVisible(true); }}
+                style={[styles.iconBtn, { backgroundColor: `${colors.primary}15`, borderColor: `${colors.primary}30` }]}
+                testID="wallet-selector"
+              >
+                <WalletIcon size={18} color={colors.primary} />
+              </Pressable>
               <Pressable
                 testID="toggle-all-values"
                 onPress={() => { toggleValuesVisible(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
@@ -637,8 +645,9 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   greeting: { fontSize: 14 },
   headerTitle: { fontSize: 26 },
-  walletBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, borderWidth: 1, maxWidth: 130 },
-  walletBtnText: { fontSize: 12, flex: 1 },
+  walletBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
+  walletDot: { width: 7, height: 7, borderRadius: 4 },
+  walletBadgeText: { fontSize: 12 },
   iconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   avatarBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   avatarInitial: { color: '#000', fontSize: 20 },
