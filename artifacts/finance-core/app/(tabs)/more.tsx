@@ -178,7 +178,7 @@ export default function MoreScreen() {
             subtitle="Faturamento, DAS, clientes e retiradas"
             badge="Novo"
             badgeColor={colors.success}
-            onPress={() => router.push('/(more)/pj/index')}
+            onPress={() => router.push('/(more)/pj')}
           />
           <MenuItem
             testID="menu-ai"

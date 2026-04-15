@@ -26,7 +26,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="investment-report" options={{ title: 'Relatório de Investimentos' }} />
       <Stack.Screen name="custom-alerts" options={{ title: 'Alertas Personalizados' }} />
       <Stack.Screen name="pending-transactions" options={{ title: 'Lançamentos Pendentes' }} />
-      <Stack.Screen name="pj/index" options={{ title: 'Módulo PJ / MEI' }} />
+      <Stack.Screen name="pj" options={{ title: 'Módulo PJ / MEI' }} />
       <Stack.Screen name="pj/receitas" options={{ title: 'Receitas PJ' }} />
       <Stack.Screen name="pj/despesas" options={{ title: 'Despesas PJ' }} />
       <Stack.Screen name="pj/clientes" options={{ title: 'Clientes' }} />
