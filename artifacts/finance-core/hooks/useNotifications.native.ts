@@ -69,6 +69,14 @@ export function useNotifications() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     let tapSub: { remove: () => void } | null = null;
+    const isExpoGo = (() => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Constants = require('expo-constants').default;
+        return Constants.appOwnership === 'expo';
+      } catch { return false; }
+    })();
+    if (isExpoGo) return;
     import('expo-notifications').then((Notifications) => {
       tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
         const data = response.notification.request.content.data as { screen?: string };

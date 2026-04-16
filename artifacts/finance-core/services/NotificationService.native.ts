@@ -1,5 +1,3 @@
-import * as Notifications from 'expo-notifications';
-import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -7,29 +5,54 @@ function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';
 }
 
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-} catch {
+async function getNotifs() {
+  if (isExpoGo() || Platform.OS === 'web') return null;
+  try {
+    return await import('expo-notifications');
+  } catch {
+    return null;
+  }
+}
+
+async function getDevice() {
+  try {
+    return await import('expo-device');
+  } catch {
+    return null;
+  }
+}
+
+export async function initNotificationHandler() {
+  if (isExpoGo() || Platform.OS === 'web') return;
+  try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch {}
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
-  if (isExpoGo()) return false;
+  if (isExpoGo() || Platform.OS === 'web') return false;
   try {
-    if (!Device.isDevice) return true;
+    const [Notifications, Device] = await Promise.all([getNotifs(), getDevice()]);
+    if (!Notifications) return false;
+    if (!Device?.isDevice) return true;
+
     const { status: existing } = await Notifications.getPermissionsAsync();
     if (existing === 'granted') return true;
+
     const { status } = await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true, allowAnnouncements: true },
     });
+
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('finance-core', {
         name: 'Pilar Financeiro',
@@ -56,8 +79,10 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 }
 
 export async function getNotificationPermissionStatus(): Promise<'granted' | 'denied' | 'undetermined'> {
-  if (Platform.OS === 'web' || isExpoGo()) return 'denied';
+  if (isExpoGo() || Platform.OS === 'web') return 'denied';
   try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return 'denied';
     const { status } = await Notifications.getPermissionsAsync();
     return status as 'granted' | 'denied' | 'undetermined';
   } catch {
@@ -66,38 +91,16 @@ export async function getNotificationPermissionStatus(): Promise<'granted' | 'de
 }
 
 async function cancelByIdentifier(prefix: string) {
-  if (isExpoGo()) return;
+  if (isExpoGo() || Platform.OS === 'web') return;
   try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of scheduled) {
       if (n.identifier.startsWith(prefix)) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
     }
-  } catch {}
-}
-
-async function scheduleNotification(
-  identifier: string,
-  title: string,
-  body: string,
-  data: Record<string, unknown>,
-  trigger: Notifications.NotificationTriggerInput,
-  channelId?: string
-) {
-  if (isExpoGo()) return;
-  try {
-    await Notifications.scheduleNotificationAsync({
-      identifier,
-      content: {
-        title,
-        body,
-        data,
-        sound: 'default',
-        ...(Platform.OS === 'android' && channelId ? { channelId } : {}),
-      },
-      trigger,
-    });
   } catch {}
 }
 
@@ -111,29 +114,31 @@ export interface DARFLike {
 }
 
 export async function scheduleDARFNotifications(darfs: DARFLike[]) {
-  if (Platform.OS === 'web' || isExpoGo()) return;
-  await cancelByIdentifier('darf-');
-  const unpaid = darfs.filter((d) => !d.paid);
-  for (const darf of unpaid) {
-    const due = new Date(darf.dueDate);
-    const now = new Date();
-    const daysUntilDue = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    const amt = formatBRL(darf.amount);
-    const dt = formatDate(darf.dueDate);
-    if (daysUntilDue < 0) {
-      await scheduleNotification(`darf-overdue-${darf.id}`, '⚠️ DARF Vencido!',
-        `${darf.type} — ${amt} vencido em ${dt}. Regularize com multa e juros.`,
-        { screen: '/(more)/ir', tab: 'darfs' }, null as unknown as Notifications.NotificationTriggerInput, 'finance-core');
-    } else if (daysUntilDue <= 3) {
-      const notifyAt = new Date(due); notifyAt.setHours(9, 0, 0, 0);
-      if (notifyAt > now) {
-        await scheduleNotification(`darf-soon-${darf.id}`, '📋 DARF vence em breve',
-          `${darf.type} — ${amt} vence ${daysUntilDue === 0 ? 'hoje' : `em ${daysUntilDue} dia(s)`}.`,
-          { screen: '/(more)/ir', tab: 'darfs' },
-          { type: Notifications.SchedulableTriggerInputTypes.DATE, date: notifyAt }, 'finance-core');
+  if (isExpoGo() || Platform.OS === 'web') return;
+  try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
+    await cancelByIdentifier('darf-');
+    const unpaid = darfs.filter((d) => !d.paid);
+    for (const darf of unpaid) {
+      const due = new Date(darf.dueDate);
+      const now = new Date();
+      const days = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (days < 0) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: `darf-overdue-${darf.id}`,
+          content: {
+            title: 'DARF Vencido!',
+            body: `${darf.type} — ${formatBRL(darf.amount)} vencido em ${formatDate(darf.dueDate)}.`,
+            data: { screen: '/(more)/ir' },
+            sound: 'default',
+            ...(Platform.OS === 'android' ? { channelId: 'finance-core' } : {}),
+          },
+          trigger: null,
+        });
       }
     }
-  }
+  } catch {}
 }
 
 export interface BudgetLike {
@@ -145,20 +150,27 @@ export interface BudgetLike {
 }
 
 export async function checkAndNotifyBudgets(budgets: BudgetLike[]) {
-  if (Platform.OS === 'web' || isExpoGo()) return;
-  await cancelByIdentifier('budget-');
-  for (const budget of budgets) {
-    const pct = budget.limit > 0 ? budget.spent / budget.limit : 0;
-    if (pct >= 1.0) {
-      await scheduleNotification(`budget-exceeded-${budget.id}`, '🔴 Orçamento estourado!',
-        `${budget.category}: ${formatBRL(budget.spent)} de ${formatBRL(budget.limit)} (${Math.round(pct * 100)}%).`,
-        { screen: '/(more)/budgets' }, null as unknown as Notifications.NotificationTriggerInput, 'budget-alerts');
-    } else if (pct >= 0.8) {
-      await scheduleNotification(`budget-warning-${budget.id}`, '🟡 Orçamento quase no limite',
-        `${budget.category}: ${formatBRL(budget.spent)} de ${formatBRL(budget.limit)} (${Math.round(pct * 100)}%).`,
-        { screen: '/(more)/budgets' }, null as unknown as Notifications.NotificationTriggerInput, 'budget-alerts');
+  if (isExpoGo() || Platform.OS === 'web') return;
+  try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
+    await cancelByIdentifier('budget-');
+    for (const budget of budgets) {
+      const pct = budget.limit > 0 ? budget.spent / budget.limit : 0;
+      if (pct >= 1.0) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: `budget-exceeded-${budget.id}`,
+          content: {
+            title: 'Orcamento estourado!',
+            body: `${budget.category}: ${Math.round(pct * 100)}% usado.`,
+            data: { screen: '/(more)/budgets' },
+            ...(Platform.OS === 'android' ? { channelId: 'budget-alerts' } : {}),
+          },
+          trigger: null,
+        });
+      }
     }
-  }
+  } catch {}
 }
 
 export interface SubscriptionLike {
@@ -170,44 +182,67 @@ export interface SubscriptionLike {
 }
 
 export async function scheduleSubscriptionReminders(subscriptions: SubscriptionLike[]) {
-  if (Platform.OS === 'web' || isExpoGo()) return;
-  await cancelByIdentifier('sub-');
-  const now = new Date();
-  for (const sub of subscriptions.filter((s) => s.active)) {
-    const billing = new Date(sub.nextBillingDate);
-    const daysUntil = Math.floor((billing.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysUntil >= 0 && daysUntil <= 3) {
-      const notifyAt = new Date(billing); notifyAt.setHours(9, 0, 0, 0);
-      if (notifyAt > now) {
-        await scheduleNotification(`sub-${sub.id}`, '💳 Assinatura a vencer',
-          `${sub.name} — ${formatBRL(sub.amount)} será cobrado ${daysUntil === 0 ? 'hoje' : `em ${daysUntil} dia(s)`}.`,
-          { screen: '/(more)/family' },
-          { type: Notifications.SchedulableTriggerInputTypes.DATE, date: notifyAt }, 'finance-core');
+  if (isExpoGo() || Platform.OS === 'web') return;
+  try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
+    await cancelByIdentifier('sub-');
+    const now = new Date();
+    for (const sub of subscriptions.filter((s) => s.active)) {
+      const billing = new Date(sub.nextBillingDate);
+      const daysUntil = Math.floor((billing.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysUntil >= 0 && daysUntil <= 3) {
+        const notifyAt = new Date(billing);
+        notifyAt.setHours(9, 0, 0, 0);
+        if (notifyAt > now) {
+          await Notifications.scheduleNotificationAsync({
+            identifier: `sub-${sub.id}`,
+            content: {
+              title: 'Assinatura a vencer',
+              body: `${sub.name} — ${formatBRL(sub.amount)} em ${daysUntil === 0 ? 'hoje' : `${daysUntil} dia(s)`}.`,
+              data: { screen: '/(more)/family' },
+              ...(Platform.OS === 'android' ? { channelId: 'finance-core' } : {}),
+            },
+            trigger: { type: 'date' as any, date: notifyAt },
+          });
+        }
       }
     }
-  }
+  } catch {}
 }
 
 export async function scheduleWeeklySummary(monthlyExpenses: number, monthlyIncome: number, netResult: number) {
-  if (Platform.OS === 'web' || isExpoGo()) return;
-  await cancelByIdentifier('weekly-');
-  const now = new Date();
-  const nextMonday = new Date(now);
-  const day = nextMonday.getDay();
-  nextMonday.setDate(nextMonday.getDate() + (day === 1 ? 7 : (8 - day) % 7));
-  nextMonday.setHours(9, 0, 0, 0);
-  const summaryLine = netResult >= 0
-    ? `Saldo positivo de ${formatBRL(netResult)}. Continue assim! 💪`
-    : `Saldo negativo de ${formatBRL(Math.abs(netResult))}. Revise seus gastos. 📊`;
-  await scheduleNotification('weekly-summary-next', '📊 Resumo Semanal — Pilar Financeiro',
-    `Receitas: ${formatBRL(monthlyIncome)} | Gastos: ${formatBRL(monthlyExpenses)} | ${summaryLine}`,
-    { screen: '/(tabs)' },
-    { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextMonday }, 'weekly-summary');
+  if (isExpoGo() || Platform.OS === 'web') return;
+  try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
+    await cancelByIdentifier('weekly-');
+    const now = new Date();
+    const nextMonday = new Date(now);
+    const day = nextMonday.getDay();
+    nextMonday.setDate(nextMonday.getDate() + (day === 1 ? 7 : (8 - day) % 7));
+    nextMonday.setHours(9, 0, 0, 0);
+    const line = netResult >= 0
+      ? `Saldo positivo de ${formatBRL(netResult)}.`
+      : `Saldo negativo de ${formatBRL(Math.abs(netResult))}.`;
+    await Notifications.scheduleNotificationAsync({
+      identifier: 'weekly-summary-next',
+      content: {
+        title: 'Resumo Semanal — Pilar Financeiro',
+        body: `Receitas: ${formatBRL(monthlyIncome)} | Gastos: ${formatBRL(monthlyExpenses)} | ${line}`,
+        data: { screen: '/(tabs)' },
+        ...(Platform.OS === 'android' ? { channelId: 'weekly-summary' } : {}),
+      },
+      trigger: { type: 'date' as any, date: nextMonday },
+    });
+  } catch {}
 }
 
 export async function cancelAllNotifications() {
-  if (isExpoGo()) return;
+  if (isExpoGo() || Platform.OS === 'web') return;
   try {
+    const Notifications = await getNotifs();
+    if (!Notifications) return;
     await Notifications.cancelAllScheduledNotificationsAsync();
     await Notifications.dismissAllNotificationsAsync();
   } catch {}
@@ -218,6 +253,6 @@ function formatBRL(value: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-');
+  const [y, m, d] = dateStr.split('T')[0].split('-');
   return `${d}/${m}/${y}`;
 }
