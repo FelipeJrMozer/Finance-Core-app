@@ -18,6 +18,7 @@ export interface Transaction {
   accountId: string;
   toAccountId?: string;
   date: string;
+  transactionDate?: string;
   installments?: number;
   currentInstallment?: number;
   totalInstallments?: number;
@@ -217,6 +218,7 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
     accountId: raw.accountId as string,
     toAccountId: (raw.toAccountId as string) || undefined,
     date: parseDate(raw.date as string),
+    transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
     currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
     totalInstallments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
     installments: raw.totalInstallments && Number(raw.totalInstallments) > 1 ? Number(raw.totalInstallments) : undefined,
@@ -390,6 +392,8 @@ function transformGoal(raw: Record<string, unknown>): Goal {
  */
 function computeTxNet(accountId: string, txs: Transaction[]): number {
   return txs.reduce((net, t) => {
+    // Pending transactions don't affect the balance (matches backend behavior).
+    if (t.isPaid === false) return net;
     if (t.accountId === accountId) {
       if (t.type === 'income') return net + t.amount;
       if (t.type === 'expense') return net - t.amount;
@@ -650,8 +654,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
-  const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
-  const prevMonthTx = transactions.filter((t) => t.date.startsWith(prevMonth));
+  // Group by competence date (transactionDate for card purchases, date otherwise)
+  // so card expenses appear in the month they were actually made — matching web.
+  const monthlyTx = transactions.filter((t) => {
+    const effectiveDate = t.transactionDate ?? t.date;
+    return effectiveDate.startsWith(currentMonth);
+  });
+  const prevMonthTx = transactions.filter((t) => {
+    const effectiveDate = t.transactionDate ?? t.date;
+    return effectiveDate.startsWith(prevMonth);
+  });
   // Recompute account balances from local transactions so any optimistic update
   // (add/delete transaction) is instantly reflected without waiting for an API refresh.
   // openingBalance (captured once after loadAll) + currentTxNet = live balance.
@@ -672,12 +684,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
       const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
       const used = transactions
-        .filter((t) =>
-          t.accountId === card.accountId &&
-          t.type === 'expense' &&
-          !isInvoicePayment(t) &&
-          t.date >= start && t.date <= end
-        )
+        .filter((t) => {
+          if (t.creditCardId !== card.id) return false;
+          if (t.type !== 'expense') return false;
+          if (isInvoicePayment(t)) return false;
+          // Use the original purchase date for the billing window, not the due date.
+          const purchaseDate = t.transactionDate ?? t.date;
+          return purchaseDate >= start && purchaseDate <= end;
+        })
         .reduce((s, t) => s + t.amount, 0);
       return { ...card, used };
     });
@@ -934,7 +948,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       if (desc.startsWith('transferência') || desc.startsWith('transferencia')) return false;
       if (month) {
         const { start, end } = getBillingPeriod(card.closingDay, month);
-        return t.date >= start && t.date <= end;
+        const purchaseDate = t.transactionDate ?? t.date;
+        return purchaseDate >= start && purchaseDate <= end;
       }
       return true;
     });

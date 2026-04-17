@@ -1,0 +1,249 @@
+## Pilar Financeiro Mobile — Correção de Bugs de Regra de Negócio (Cálculos de Cartão, Saldo e Transações)
+### Contexto
+Foram identificados 5 bugs que causam divergência de valores entre a versão web e o app mobile.
+Todos os bugs estão concentrados em `artifacts/finance-core/context/FinanceContext.tsx` e nas telas de cartões.
+Implementar na ordem abaixo — o Bug 1 é pré-requisito para os demais.
+---
+### Bug 1 — `transformTransaction` não mapeia `creditCardId` nem `transactionDate`
+**Arquivo:** `artifacts/finance-core/context/FinanceContext.tsx`
+**Problema:** O backend `/api/transactions` retorna transações de cartão com os campos `cardId` (ID do cartão) e `transactionDate` (data original da compra). A função `transformTransaction` não mapeia esses campos, então `t.creditCardId` fica sempre `undefined` para todas as transações, fazendo com que o app não consiga identificar a qual cartão cada transação pertence.
+**Passo 1a — Adicionar `transactionDate` à interface `Transaction`:**
+```typescript
+export interface Transaction {
+  id: string;
+  description: string;
+  amount: number;
+  type: TransactionType;
+  category: string;
+  categoryId?: string;
+  accountId: string;
+  toAccountId?: string;
+  date: string;
+  transactionDate?: string;  // ← ADICIONAR: data original da compra (para cartões)
+  creditCardId?: string;     // já existe na interface
+  installments?: number;
+  currentInstallment?: number;
+  totalInstallments?: number;
+  recurring?: boolean;
+  isFixed?: boolean;
+  isPaid?: boolean;
+  tags?: string[];
+  notes?: string;
+  attachmentUrl?: string;
+  currency?: string;
+  transferGroupId?: string;
+  recurrenceType?: string | null;
+}
+
+Passo 1b — Atualizar a função transformTransaction para mapear os dois novos campos:
+
+function transformTransaction(raw: Record<string, unknown>, catMap: Record<string, ApiCategory>): Transaction {
+  const cat = catMap[raw.categoryId as string];
+  const categoryKey = cat
+    ? (cat.type === 'income' ? 'income' : catNameToKey(cat.name))
+    : (raw.type === 'income' ? 'income' : 'other');
+  return {
+    id: raw.id as string,
+    description: raw.description as string,
+    amount: Math.abs(parseFloat(raw.amount as string)),
+    type: raw.type as TransactionType,
+    category: categoryKey,
+    categoryId: raw.categoryId as string | undefined,
+    accountId: raw.accountId as string,
+    toAccountId: (raw.toAccountId as string) || undefined,
+    date: parseDate(raw.date as string),
+    // ✅ NOVO: mapear creditCardId a partir de raw.cardId ou raw.creditCardId
+    creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+    // ✅ NOVO: mapear data original da compra (para cartões, diferente de date=vencimento)
+    transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+    currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
+    totalInstallments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
+    installments: raw.totalInstallments && Number(raw.totalInstallments) > 1 ? Number(raw.totalInstallments) : undefined,
+    recurring: (raw.isRecurring as boolean) || false,
+    isFixed: raw.isFixed as boolean,
+    isPaid: raw.isPaid as boolean,
+    tags: (raw.tags as string[]) || [],
+    notes: (raw.notes as string) || undefined,
+    attachmentUrl: (raw.attachmentUrl as string) || undefined,
+    currency: (raw.currency as string) || 'BRL',
+    transferGroupId: (raw.transferGroupId as string) || undefined,
+    recurrenceType: (raw.recurrenceType as string) || null,
+  };
+}
+
+Bug 2 — computedCreditCards usa o campo errado para identificar transações do cartão e usa data incorreta para o período de fatura
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+Problema: O computedCreditCards filtra por t.accountId === card.accountId (ID da conta bancária), mas transações de cartão retornadas pelo backend têm accountId = cardId (ID do cartão). Nunca batem → card.used sempre R$0.
+
+Além disso, usa t.date (data de vencimento da fatura) para filtrar o período de fatura, quando deveria usar t.transactionDate (data original da compra).
+
+Localizar o bloco atual:
+
+// ATUAL — ERRADO (por volta da linha 634):
+const computedCreditCards = useMemo(() => {
+  const now = new Date();
+  return creditCards.map((card) => {
+    const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+    const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+    const used = transactions
+      .filter((t) => t.accountId === card.accountId && t.type === 'expense' && t.date >= start && t.date <= end)
+      .reduce((s, t) => s + t.amount, 0);
+    return { ...card, used };
+  });
+}, [creditCards, transactions]);
+
+Substituir por:
+
+// CORRETO:
+const computedCreditCards = useMemo(() => {
+  const now = new Date();
+  return creditCards.map((card) => {
+    const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+    const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+    const used = transactions
+      .filter((t) => {
+        // Identificar transações deste cartão pelo creditCardId (mapeado do raw.cardId)
+        if (t.creditCardId !== card.id) return false;
+        if (t.type !== 'expense') return false;
+        if (isInvoicePayment(t)) return false;
+        // Usar data original da compra para o período de fatura (não a data de vencimento)
+        const purchaseDate = t.transactionDate ?? t.date;
+        return purchaseDate >= start && purchaseDate <= end;
+      })
+      .reduce((s, t) => s + t.amount, 0);
+    return { ...card, used };
+  });
+}, [creditCards, transactions]);
+
+Bug 3 — computeTxNet não filtra por isPaid, divergindo do cálculo do backend
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+Problema: O backend calcula computedBalance contando apenas transações com isPaid = true. O mobile inclui todas as transações (incluindo pendentes), fazendo o saldo diferir quando há transações pendentes.
+
+Localizar:
+
+// ATUAL — ERRADO (por volta da linha 364):
+function computeTxNet(accountId: string, txs: Transaction[]): number {
+  return txs.reduce((net, t) => {
+    if (t.accountId === accountId) {
+      if (t.type === 'income') return net + t.amount;
+      if (t.type === 'expense') return net - t.amount;
+      if (t.type === 'transfer') return net - t.amount;
+    }
+    if (t.toAccountId === accountId && t.type === 'transfer') return net + t.amount;
+    return net;
+  }, 0);
+}
+
+Substituir por:
+
+// CORRETO — ignora transações pendentes (isPaid === false), igual ao backend:
+function computeTxNet(accountId: string, txs: Transaction[]): number {
+  return txs.reduce((net, t) => {
+    // Transações pendentes não afetam o saldo (consistente com backend)
+    if (t.isPaid === false) return net;
+    if (t.accountId === accountId) {
+      if (t.type === 'income') return net + t.amount;
+      if (t.type === 'expense') return net - t.amount;
+      if (t.type === 'transfer') return net - t.amount;
+    }
+    if (t.toAccountId === accountId && t.type === 'transfer') return net + t.amount;
+    return net;
+  }, 0);
+}
+
+Bug 4 — monthlyTx agrupa por t.date (vencimento) em vez de transactionDate (competência)
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+Problema: Compras de cartão feitas em novembro (período de fatura Out16–Nov15) têm t.date = 25/nov (vencimento). Mas 25/nov > 15/nov então:
+
+Se currentMonth = "2024-11", a compra aparece em novembro no mobile
+No web (que usa data da compra = transactionDate), ela também aparece em novembro ✅
+O problema ocorre nos meses em que o vencimento cai no mês seguinte (ex.: compra em Nov16, vencimento em Dez05 → mobile mostra em Dezembro, web mostra em Novembro)
+Localizar monthlyTx e prevMonthTx (em torno das linhas 625-635, antes do computedCreditCards).
+Podem estar definidos como const monthlyTx = transactions.filter(t => t.date.startsWith(currentMonth)) ou dentro de um useMemo.
+
+Substituir por:
+
+// Usar a data de competência (transactionDate para cartões, date para o resto)
+// para agrupar por mês, igual ao critério do web
+const monthlyTx = useMemo(() =>
+  transactions.filter((t) => {
+    const effectiveDate = t.transactionDate ?? t.date;
+    return effectiveDate.startsWith(currentMonth);
+  }),
+[transactions, currentMonth]);
+const prevMonthTx = useMemo(() =>
+  transactions.filter((t) => {
+    const effectiveDate = t.transactionDate ?? t.date;
+    return effectiveDate.startsWith(prevMonth);
+  }),
+[transactions, prevMonth]);
+
+Onde currentMonth e prevMonth são as strings "YYYY-MM" para o mês atual e anterior.
+Se já forem strings calculadas localmente, manter a mesma lógica de cálculo delas.
+
+Bug 5 — Tela de cartões filtra período de fatura pela data errada
+Arquivos: artifacts/finance-core/app/(more)/cards.tsx e artifacts/finance-core/app/card/[id].tsx
+
+Problema: Ambas as telas filtram as transações do período da fatura por t.date >= start && t.date <= end, mas t.date é a data de vencimento (após o fechamento), não a data da compra. Compras feitas dentro do período aparecem na fatura errada.
+
+Em cards.tsx, localizar o periodTx filter e substituir:
+
+// ANTES (errado):
+const periodTx = transactions.filter((t) => {
+  if (!belongsToCard(t)) return false;
+  if (t.type !== 'expense') return false;
+  if (isInvoicePayment(t)) return false;
+  return t.date >= start && t.date <= end;
+});
+// DEPOIS (correto):
+const periodTx = transactions.filter((t) => {
+  if (!belongsToCard(t)) return false;
+  if (t.type !== 'expense') return false;
+  if (isInvoicePayment(t)) return false;
+  // Usar data de compra para filtrar período de fatura
+  const purchaseDate = t.transactionDate ?? t.date;
+  return purchaseDate >= start && purchaseDate <= end;
+});
+
+Adicionalmente, atualizar a função belongsToCard para usar creditCardId corretamente:
+
+// ANTES:
+const anyHasCardId = transactions.some((t) => t.creditCardId);
+const belongsToCard = (t) =>
+  anyHasCardId ? t.creditCardId === card.id : t.accountId === card.accountId;
+// DEPOIS (após o Bug 1 corrigir o mapeamento, anyHasCardId sempre será true para usuários com cartões):
+// Manter a mesma lógica — com o Bug 1 corrigido, t.creditCardId agora é populado corretamente
+// então anyHasCardId = true e t.creditCardId === card.id funciona
+
+Em card/[id].tsx, localizar qualquer filtro de data t.date >= start && t.date <= end e aplicar o mesmo fix:
+
+const purchaseDate = (t as any).transactionDate ?? t.date;
+return purchaseDate >= start && purchaseDate <= end;
+
+Verificação após implementar
+Depois de aplicar todos os 5 bugs, verificar:
+
+Saldo de conta bancária com transação pendente:
+
+Adicionar uma transação de despesa com isPaid = false
+O saldo NÃO deve mudar (apenas transações pagas afetam o saldo)
+Fatura do cartão:
+
+Fazer uma compra no cartão
+A fatura aberta deve mostrar o valor correto (Bug 1 + Bug 2)
+A compra deve aparecer na fatura do mês correto (Bug 5)
+Despesas do mês no dashboard:
+
+Compras de cartão feitas neste mês devem aparecer nas despesas do mês atual (Bug 4)
+Saldo correto no dashboard:
+
+O total de contas deve excluir contas de crédito (já corrigido anteriormente)
+O saldo deve bater com o web
+Notas técnicas
+A função parseDate já existe em FinanceContext — usá-la para formatar transactionDate
+isInvoicePayment verifica se a descrição começa com "Pagamento de fatura" — manter essa checagem
+O campo card.id é o ID da entidade cartão na tabela cards; card.accountId é a conta bancária vinculada — são campos diferentes
+Não remover a lógica de recalibrateOpeningBalances — ela continua necessária para o saldo otimista ao adicionar transações localmente

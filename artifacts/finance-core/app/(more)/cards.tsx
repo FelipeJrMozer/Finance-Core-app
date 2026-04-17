@@ -68,7 +68,9 @@ export default function CardsScreen() {
         if (isInvoicePayment(t)) return false;
         const desc = (t.description || '').toLowerCase();
         if (desc.startsWith('transferência') || desc.startsWith('transferencia')) return false;
-        return t.date >= start && t.date <= end;
+        // Use the original purchase date, not the due date.
+        const purchaseDate = t.transactionDate ?? t.date;
+        return purchaseDate >= start && purchaseDate <= end;
       });
       const invoice = periodTx.reduce((s, t) => s + t.amount, 0);
       const { end: nextEnd } = getBillingPeriod(card.closingDay, shiftMonth(selectedMonth, 1));
