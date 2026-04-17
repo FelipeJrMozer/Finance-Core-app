@@ -231,9 +231,10 @@ function QuickActions() {
   const { colors } = useTheme();
   const actions = [
     { icon: 'plus-circle' as const, label: 'Transação', color: colors.primary, route: '/transaction/add' },
-    { icon: 'trending-up' as const, label: 'Investimento', color: colors.info, route: '/investment/add' },
-    { icon: 'target' as const, label: 'Metas', color: '#9C27B0', route: '/(more)/goals' },
-    { icon: 'cpu' as const, label: 'IA Financeira', color: colors.accent, route: '/chat' },
+    { icon: 'repeat' as const, label: 'Transferir', color: '#26C6DA', route: '/transfer' },
+    { icon: 'trending-up' as const, label: 'Investir', color: colors.info, route: '/investment/add' },
+    { icon: 'users' as const, label: 'Família', color: '#7C3AED', route: '/(more)/familia' },
+    { icon: 'cpu' as const, label: 'IA', color: colors.accent, route: '/chat' },
   ];
 
   return (

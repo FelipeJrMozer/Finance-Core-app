@@ -172,6 +172,15 @@ export default function MoreScreen() {
             onPress={() => router.push('/(more)/investment-report')}
           />
           <MenuItem
+            testID="menu-familia"
+            icon="users"
+            label="Família"
+            subtitle="Membros, despesas compartilhadas e caixinha"
+            badge="Novo"
+            badgeColor="#7C3AED"
+            onPress={() => router.push('/(more)/familia')}
+          />
+          <MenuItem
             testID="menu-pj"
             icon="briefcase"
             label="Módulo PJ / MEI"

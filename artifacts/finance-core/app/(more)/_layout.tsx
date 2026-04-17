@@ -35,6 +35,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="pj/clientes" options={{ title: 'Clientes' }} />
       <Stack.Screen name="pj/das" options={{ title: 'DAS / Guias' }} />
       <Stack.Screen name="pj/retiradas" options={{ title: 'Pró-labore e Retiradas' }} />
+      <Stack.Screen name="familia" options={{ title: 'Família' }} />
     </Stack>
   );
 }

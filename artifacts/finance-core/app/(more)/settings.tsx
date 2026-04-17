@@ -200,6 +200,28 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleExportJSON = async () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      app: 'Pilar Financeiro',
+      version: '1.0.0',
+      user: user ? { name: user.name, email: user.email, plan: user.plan } : null,
+      counts: { transactions: transactions.length, accounts: accounts.length, investments: investments.length },
+      transactions,
+      accounts,
+      investments,
+    };
+    try {
+      await Share.share({
+        message: JSON.stringify(payload, null, 2),
+        title: 'Pilar Financeiro — Backup JSON',
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar o backup.');
+    }
+  };
+
   const handleClearData = () => {
     Alert.alert(
       'Limpar Dados',
@@ -512,6 +534,13 @@ export default function SettingsScreen() {
             label="Exportar CSV"
             subtitle={`${transactions.length} transações disponíveis para exportar`}
             onPress={handleExportCSV}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsRow
+            icon="package"
+            label="Exportar Backup (JSON)"
+            subtitle="Salvar transações, contas e investimentos"
+            onPress={handleExportJSON}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
