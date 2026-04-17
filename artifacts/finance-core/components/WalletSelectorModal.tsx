@@ -5,8 +5,10 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 import { useWallet, type Wallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 import { WalletIcon } from '@/components/WalletIcon';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 
 interface Props {
   visible: boolean;
@@ -25,6 +27,15 @@ function getWalletColor(wallet: Wallet, index: number): string {
 export function WalletSelectorModal({ visible, onClose }: Props) {
   const { theme, colors, isDark } = useTheme();
   const { wallets, selectedWallet, selectWallet, isLoading, walletError, refreshWallets } = useWallet();
+  const { logout } = useAuth();
+  const router = useRouter();
+
+  const handleReLogin = async () => {
+    Haptics.selectionAsync();
+    onClose();
+    await logout();
+    router.replace('/(auth)/login');
+  };
 
   const handleSelect = async (wallet: Wallet) => {
     Haptics.selectionAsync();
@@ -120,6 +131,15 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
             <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
               Faça login novamente para carregar suas carteiras
             </Text>
+            <Pressable
+              onPress={handleReLogin}
+              style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+            >
+              <Feather name="log-in" size={14} color="#fff" />
+              <Text style={[styles.retryTextAlt, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
+                Fazer login
+              </Text>
+            </Pressable>
           </View>
         ) : walletError ? (
           <View style={styles.centerBox}>
