@@ -277,6 +277,11 @@ function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
   return `${y}-${String(m).padStart(2, '0')}`;
 }
 
+function isInvoicePayment(t: Transaction): boolean {
+  const d = (t.description || '').toLowerCase();
+  return d.startsWith('pagamento de fatura') || d.startsWith('pagamento fatura');
+}
+
 function transformCard(raw: Record<string, unknown>, transactions: Transaction[]): CreditCard {
   const now = new Date();
   const year = now.getFullYear();
@@ -286,16 +291,26 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
   const formatDay = (day: number) =>
     `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  // Compute used from the CURRENT OPEN billing cycle, not all-time
+  // Prefer backend-provided invoice when present, else compute locally.
+  const backendInvoice = raw.currentInvoice ?? raw.invoiceTotal ?? raw.currentBalance;
+
+  // Compute used from the CURRENT OPEN billing cycle, not all-time.
+  // Exclude invoice payments (they're recorded as expenses on the card account
+  // but represent payments, not new charges).
   const openInvoiceMonth = getCurrentInvoiceMonth(closingDay, now);
   const { start: billingStart, end: billingEnd } = getBillingPeriod(closingDay, openInvoiceMonth);
-  const used = transactions
+  const computedUsed = transactions
     .filter((t) => {
       if (t.accountId !== (raw.accountId as string)) return false;
       if (t.type !== 'expense') return false;
+      if (isInvoicePayment(t)) return false;
       return t.date >= billingStart && t.date <= billingEnd;
     })
     .reduce((s, t) => s + t.amount, 0);
+
+  const used = backendInvoice !== undefined && backendInvoice !== null
+    ? Math.abs(parseFloat(backendInvoice as string))
+    : computedUsed;
   return {
     id: raw.id as string,
     accountId: (raw.accountId as string) || '',
@@ -639,7 +654,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
       const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
       const used = transactions
-        .filter((t) => t.accountId === card.accountId && t.type === 'expense' && t.date >= start && t.date <= end)
+        .filter((t) =>
+          t.accountId === card.accountId &&
+          t.type === 'expense' &&
+          !isInvoicePayment(t) &&
+          t.date >= start && t.date <= end
+        )
         .reduce((s, t) => s + t.amount, 0);
       return { ...card, used };
     });
@@ -882,6 +902,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return transactions.filter((t) => {
       if (t.accountId !== card.accountId) return false;
       if (t.type === 'transfer') return false;
+      if (isInvoicePayment(t)) return false;
       if (month) {
         // Use billing cycle dates instead of calendar month
         const { start, end } = getBillingPeriod(card.closingDay, month);

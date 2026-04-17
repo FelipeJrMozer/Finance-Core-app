@@ -29,7 +29,12 @@ export default function AccountDetailScreen() {
   if (!account) return null;
 
   const currentMonth = getCurrentMonth();
-  const allAccountTx = transactions.filter((t) => t.accountId === id);
+  const today = new Date().toISOString().split('T')[0];
+  // Don't show future-dated transactions in the ledger (e.g. future installments
+  // that haven't actually been paid yet).
+  const allAccountTx = transactions
+    .filter((t) => t.accountId === id && t.date <= today)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const recentTx = allAccountTx.slice(0, 30);
   const monthlyTx = allAccountTx.filter((t) => t.date.startsWith(currentMonth));
   const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
