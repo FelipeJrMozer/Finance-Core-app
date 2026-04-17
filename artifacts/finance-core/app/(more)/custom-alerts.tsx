@@ -98,6 +98,13 @@ export default function CustomAlertsScreen() {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 32 }}
     >
+      <View style={[styles.offlineNote, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}25` }]}>
+        <Feather name="info" size={13} color={colors.warning} />
+        <Text style={[styles.offlineText, { color: colors.warning, fontFamily: 'Inter_500Medium' }]}>
+          Alertas salvos neste dispositivo
+        </Text>
+      </View>
+
       <Pressable
         onPress={() => { Haptics.selectionAsync(); setShowForm(!showForm); }}
         style={[styles.addBtn, { backgroundColor: colors.primary }]}
@@ -196,4 +203,6 @@ const styles = StyleSheet.create({
   alertIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   alertDesc: { fontSize: 14 },
   alertStatus: { fontSize: 12, marginTop: 2 },
+  offlineNote: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
+  offlineText: { fontSize: 12, flex: 1 },
 });

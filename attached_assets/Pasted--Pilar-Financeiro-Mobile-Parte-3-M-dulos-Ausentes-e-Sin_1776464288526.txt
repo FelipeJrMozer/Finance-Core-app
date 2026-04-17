@@ -1,0 +1,565 @@
+## Pilar Financeiro Mobile — Parte 3: Módulos Ausentes e Sincronização
+---
+### MÓDULO 1 — Menu "Mais": adicionar atalhos para Bills, Debts e Sinking Funds
+**Arquivo:** `artifacts/finance-core/app/(tabs)/more.tsx`
+Na seção de itens do menu (onde estão "Metas", "Contas", "Pendentes" etc.), adicionar três novos itens.
+Localizar onde ficam os MenuItems da seção "CONTROLE" ou "FERRAMENTAS" e incluir:
+```typescript
+<MenuItem
+  icon="calendar"
+  label="Contas a Pagar"
+  subtitle="Despesas recorrentes e fixas"
+  onPress={() => router.push('/(more)/bills')}
+  testID="menu-bills"
+/>
+<MenuItem
+  icon="alert-triangle"
+  label="Dívidas"
+  subtitle="Controle de dívidas e parcelamentos"
+  onPress={() => router.push('/(more)/debts')}
+  testID="menu-debts"
+/>
+<MenuItem
+  icon="layers"
+  label="Reservas Programadas"
+  subtitle="Fundos para objetivos futuros"
+  onPress={() => router.push('/(more)/sinking-funds')}
+  testID="menu-sinking-funds"
+/>
+
+Adicionar também a rota /(more)/bills ao arquivo de navegação (se usar Expo Router com
+_layout.tsx na pasta (more), a rota é criada automaticamente ao criar o arquivo da tela).
+
+MÓDULO 2 — Criar tela Bills (Contas a Pagar)
+Arquivo a criar: artifacts/finance-core/app/(more)/bills.tsx
+
+Criar uma tela que lista as contas recorrentes do usuário. Os dados vêm do endpoint:
+
+GET /api/bills — retorna lista de bills com campos: id, description, amount,
+dueDay (dia do mês), category, isPaid, isRecurring, nextDueDate
+A tela deve mostrar:
+
+Cards de contas próximas ao vencimento (vencendo em até 7 dias) com destaque visual
+Lista completa das contas recorrentes agrupadas por status: "Pendentes" e "Pagas este mês"
+Total pendente no topo (soma das não pagas do mês atual)
+Botão para marcar como paga (PATCH /api/bills/:id com { isPaid: true })
+Botão "+" para adicionar nova conta (POST /api/bills)
+Para criar/editar: campos de description, amount, dueDay (1-31), category, isRecurring
+Estrutura básica:
+
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, RefreshControl, StyleSheet, Alert } from 'react-native';
+import { Stack } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { formatBRL } from '@/utils/formatters';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
+interface Bill {
+  id: string;
+  description: string;
+  amount: number;
+  dueDay: number;
+  category: string;
+  isPaid: boolean;
+  isRecurring: boolean;
+  nextDueDate?: string;
+}
+export default function BillsScreen() {
+  const { theme, colors } = useTheme();
+  const { token } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const fetchBills = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/bills`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setBills(await res.json());
+    } catch {}
+  }, [token]);
+  React.useEffect(() => {
+    setLoading(true);
+    fetchBills().finally(() => setLoading(false));
+  }, [fetchBills]);
+  const markAsPaid = async (bill: Bill) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await fetch(`${API_URL}/api/bills/${bill.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPaid: true }),
+      });
+      await fetchBills();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível atualizar a conta');
+    }
+  };
+  const today = new Date().getDate();
+  const pending = bills.filter((b) => !b.isPaid);
+  const paid = bills.filter((b) => b.isPaid);
+  const totalPending = pending.reduce((s, b) => s + b.amount, 0);
+  const urgent = pending.filter((b) => b.dueDay - today <= 7 && b.dueDay >= today);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchBills();
+    setRefreshing(false);
+  };
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 32 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
+      <Stack.Screen options={{ title: 'Contas a Pagar', headerShown: true }} />
+      {/* Resumo */}
+      {pending.length > 0 && (
+        <View style={[s.summaryCard, { backgroundColor: `${colors.danger}12`, borderColor: `${colors.danger}30` }]}>
+          <Feather name="alert-circle" size={18} color={colors.danger} />
+          <View>
+            <Text style={[s.summaryLabel, { color: colors.danger }]}>
+              {pending.length} conta{pending.length > 1 ? 's' : ''} pendente{pending.length > 1 ? 's' : ''}
+            </Text>
+            <Text style={[s.summaryValue, { color: theme.text }]}>{formatBRL(totalPending)}</Text>
+          </View>
+        </View>
+      )}
+      {/* Vencendo em breve */}
+      {urgent.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[s.sectionLabel, { color: theme.textSecondary }]}>VENCENDO EM BREVE</Text>
+          {urgent.map((b) => (
+            <View key={b.id} style={[s.card, { backgroundColor: `${colors.warning}10`, borderColor: `${colors.warning}30` }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.desc, { color: theme.text }]}>{b.description}</Text>
+                <Text style={[s.sub, { color: theme.textTertiary }]}>Dia {b.dueDay} · {formatBRL(b.amount)}</Text>
+              </View>
+              <Pressable onPress={() => markAsPaid(b)} style={[s.payBtn, { backgroundColor: colors.primary }]}>
+                <Feather name="check" size={16} color="#000" />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      {/* Pendentes */}
+      {pending.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[s.sectionLabel, { color: theme.textSecondary }]}>PENDENTES</Text>
+          {pending.map((b) => (
+            <View key={b.id} style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Feather name="circle" size={16} color={colors.danger} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.desc, { color: theme.text }]}>{b.description}</Text>
+                <Text style={[s.sub, { color: theme.textTertiary }]}>Dia {b.dueDay} · {b.category}</Text>
+              </View>
+              <Text style={[s.amount, { color: colors.danger }]}>{formatBRL(b.amount)}</Text>
+              <Pressable onPress={() => markAsPaid(b)} style={[s.payBtn, { backgroundColor: `${colors.primary}20` }]}>
+                <Feather name="check" size={14} color={colors.primary} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+      {/* Pagas */}
+      {paid.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={[s.sectionLabel, { color: theme.textSecondary }]}>PAGAS ESTE MÊS</Text>
+          {paid.map((b) => (
+            <View key={b.id} style={[s.card, { backgroundColor: theme.surface, borderColor: theme.border, opacity: 0.6 }]}>
+              <Feather name="check-circle" size={16} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.desc, { color: theme.text }]}>{b.description}</Text>
+                <Text style={[s.sub, { color: theme.textTertiary }]}>Dia {b.dueDay}</Text>
+              </View>
+              <Text style={[s.amount, { color: theme.textSecondary }]}>{formatBRL(b.amount)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {bills.length === 0 && !loading && (
+        <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
+          <Feather name="calendar" size={40} color={theme.textTertiary} />
+          <Text style={{ color: theme.textTertiary }}>Nenhuma conta cadastrada</Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+const s = StyleSheet.create({
+  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 12, borderWidth: 1 },
+  summaryLabel: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  summaryValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  sectionLabel: { fontSize: 11, fontFamily: 'Inter_500Medium', letterSpacing: 0.5 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 12, borderWidth: 1 },
+  desc: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  sub: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  amount: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  payBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+});
+
+MÓDULO 3 — Criar tela Debts (Dívidas)
+Arquivo a criar: artifacts/finance-core/app/(more)/debts.tsx
+
+Tela que exibe as dívidas cadastradas. Endpoint: GET /api/debts
+Campos retornados: id, creditor, description, totalAmount, remainingAmount,
+monthlyPayment, interestRate, startDate, dueDate, type (personal/credit_card/student/mortgage/auto/other)
+
+A tela deve mostrar:
+
+Resumo no topo: total de dívidas, total pago, progresso geral
+Card por dívida com barra de progresso, valor restante, parcela mensal e taxa de juros
+Estratégia de quitação: ordenar por maior juros primeiro (avalanche)
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Pressable } from 'react-native';
+import { Stack } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { formatBRL } from '@/utils/formatters';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
+interface Debt {
+  id: string;
+  creditor: string;
+  description?: string;
+  totalAmount: number;
+  remainingAmount: number;
+  monthlyPayment: number;
+  interestRate: number;
+  type: string;
+  dueDate?: string;
+}
+const DEBT_TYPE_LABELS: Record<string, string> = {
+  personal: 'Pessoal', credit_card: 'Cartão', student: 'Estudantil',
+  mortgage: 'Imóvel', auto: 'Veículo', other: 'Outro',
+};
+export default function DebtsScreen() {
+  const { theme, colors } = useTheme();
+  const { token } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [debts, setDebts] = useState<Debt[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const fetchDebts = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/debts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setDebts(await res.json());
+    } catch {}
+  }, [token]);
+  React.useEffect(() => {
+    setLoading(true);
+    fetchDebts().finally(() => setLoading(false));
+  }, [fetchDebts]);
+  const totalDebt = debts.reduce((s, d) => s + d.remainingAmount, 0);
+  const totalOriginal = debts.reduce((s, d) => s + d.totalAmount, 0);
+  const totalPaid = totalOriginal - totalDebt;
+  const overallPct = totalOriginal > 0 ? (totalPaid / totalOriginal) : 0;
+  const totalMonthly = debts.reduce((s, d) => s + d.monthlyPayment, 0);
+  // Ordenar por maior taxa de juros (estratégia avalanche)
+  const sortedDebts = [...debts].sort((a, b) => b.interestRate - a.interestRate);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchDebts();
+    setRefreshing(false);
+  };
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 32 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
+      <Stack.Screen options={{ title: 'Dívidas', headerShown: true }} />
+      {/* Resumo */}
+      {debts.length > 0 && (
+        <View style={[s.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={s.summaryRow}>
+            <View>
+              <Text style={[s.summaryLabel, { color: theme.textTertiary }]}>Total em dívidas</Text>
+              <Text style={[s.summaryValue, { color: colors.danger }]}>{formatBRL(totalDebt)}</Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[s.summaryLabel, { color: theme.textTertiary }]}>Parcelas/mês</Text>
+              <Text style={[s.summaryValue, { color: theme.text }]}>{formatBRL(totalMonthly)}</Text>
+            </View>
+          </View>
+          <View style={[s.barBg, { backgroundColor: theme.surfaceElevated }]}>
+            <View style={[s.barFill, { width: `${overallPct * 100}%`, backgroundColor: colors.primary }]} />
+          </View>
+          <Text style={[s.pctLabel, { color: theme.textTertiary }]}>
+            {formatBRL(totalPaid)} pagos de {formatBRL(totalOriginal)} ({(overallPct * 100).toFixed(0)}%)
+          </Text>
+        </View>
+      )}
+      {/* Estratégia */}
+      {debts.length > 0 && (
+        <View style={[s.strategyBadge, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}25` }]}>
+          <Feather name="trending-down" size={14} color={colors.primary} />
+          <Text style={[s.strategyText, { color: colors.primary }]}>
+            Estratégia avalanche: quitar primeiro a de maior juros
+          </Text>
+        </View>
+      )}
+      {/* Lista de dívidas */}
+      {sortedDebts.map((d, idx) => {
+        const pct = d.totalAmount > 0 ? (d.totalAmount - d.remainingAmount) / d.totalAmount : 0;
+        const isFirst = idx === 0;
+        return (
+          <View key={d.id} style={[s.debtCard, { backgroundColor: theme.surface, borderColor: isFirst ? colors.primary : theme.border }]}>
+            {isFirst && (
+              <View style={[s.priorityBadge, { backgroundColor: `${colors.primary}20` }]}>
+                <Text style={[s.priorityText, { color: colors.primary }]}>Prioridade alta</Text>
+              </View>
+            )}
+            <View style={s.debtHeader}>
+              <View>
+                <Text style={[s.creditor, { color: theme.text }]}>{d.creditor}</Text>
+                <Text style={[s.debtType, { color: theme.textTertiary }]}>
+                  {DEBT_TYPE_LABELS[d.type] || d.type} · {d.interestRate.toFixed(1)}% a.m.
+                </Text>
+              </View>
+              <Text style={[s.remaining, { color: colors.danger }]}>{formatBRL(d.remainingAmount)}</Text>
+            </View>
+            <View style={[s.barBg, { backgroundColor: theme.surfaceElevated }]}>
+              <View style={[s.barFill, { width: `${pct * 100}%`, backgroundColor: colors.primary }]} />
+            </View>
+            <View style={s.debtFooter}>
+              <Text style={[s.footerText, { color: theme.textTertiary }]}>
+                {(pct * 100).toFixed(0)}% pago
+              </Text>
+              <Text style={[s.footerText, { color: theme.textSecondary }]}>
+                {formatBRL(d.monthlyPayment)}/mês
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+      {debts.length === 0 && !loading && (
+        <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
+          <Feather name="check-circle" size={40} color={colors.primary} />
+          <Text style={{ color: theme.textTertiary }}>Nenhuma dívida cadastrada</Text>
+          <Text style={{ color: theme.textTertiary, fontSize: 13, textAlign: 'center' }}>
+            Seu controle de dívidas aparecerá aqui
+          </Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+const s = StyleSheet.create({
+  summaryCard: { borderRadius: 16, padding: 16, gap: 12, borderWidth: 1 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  summaryLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  summaryValue: { fontSize: 20, fontFamily: 'Inter_700Bold' },
+  barBg: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
+  pctLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  strategyBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+  strategyText: { fontSize: 13, fontFamily: 'Inter_500Medium', flex: 1 },
+  debtCard: { borderRadius: 14, padding: 16, gap: 10, borderWidth: 1 },
+  priorityBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  priorityText: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  debtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  creditor: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  debtType: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  remaining: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  debtFooter: { flexDirection: 'row', justifyContent: 'space-between' },
+  footerText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+});
+
+MÓDULO 4 — Criar tela Sinking Funds (Reservas Programadas)
+Arquivo a criar: artifacts/finance-core/app/(more)/sinking-funds.tsx
+
+Tela que exibe os fundos programados (reservas para objetivos de curto prazo com data alvo).
+Endpoint: GET /api/sinking-funds
+Campos: id, name, targetAmount, currentAmount, targetDate, color, monthlyContribution
+
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, RefreshControl, StyleSheet } from 'react-native';
+import { Stack } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { formatBRL } from '@/utils/formatters';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
+interface SinkingFund {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string;
+  color?: string;
+  monthlyContribution?: number;
+}
+export default function SinkingFundsScreen() {
+  const { theme, colors } = useTheme();
+  const { token } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [funds, setFunds] = useState<SinkingFund[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const fetchFunds = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/sinking-funds`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) setFunds(await res.json());
+    } catch {}
+  }, [token]);
+  React.useEffect(() => {
+    setLoading(true);
+    fetchFunds().finally(() => setLoading(false));
+  }, [fetchFunds]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchFunds();
+    setRefreshing(false);
+  };
+  const totalSaved = funds.reduce((s, f) => s + f.currentAmount, 0);
+  const totalTarget = funds.reduce((s, f) => s + f.targetAmount, 0);
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 32 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+    >
+      <Stack.Screen options={{ title: 'Reservas Programadas', headerShown: true }} />
+      {/* Resumo */}
+      {funds.length > 0 && (
+        <View style={[s.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[s.summaryLabel, { color: theme.textTertiary }]}>Total acumulado</Text>
+          <Text style={[s.summaryValue, { color: colors.primary }]}>{formatBRL(totalSaved)}</Text>
+          <Text style={[s.summaryLabel, { color: theme.textTertiary }]}>
+            de {formatBRL(totalTarget)} em {funds.length} reserva{funds.length > 1 ? 's' : ''}
+          </Text>
+        </View>
+      )}
+      {/* Cards por reserva */}
+      {funds.map((f) => {
+        const pct = f.targetAmount > 0 ? Math.min(f.currentAmount / f.targetAmount, 1) : 0;
+        const remaining = f.targetAmount - f.currentAmount;
+        const deadline = new Date(f.targetDate);
+        const now = new Date();
+        const monthsLeft = Math.max(0,
+          (deadline.getFullYear() - now.getFullYear()) * 12 +
+          (deadline.getMonth() - now.getMonth())
+        );
+        const color = f.color || colors.primary;
+        return (
+          <View key={f.id} style={[s.fundCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={s.fundHeader}>
+              <View style={[s.colorDot, { backgroundColor: color }]} />
+              <Text style={[s.fundName, { color: theme.text }]}>{f.name}</Text>
+              <Text style={[s.fundPct, { color }]}>{(pct * 100).toFixed(0)}%</Text>
+            </View>
+            <View style={[s.barBg, { backgroundColor: theme.surfaceElevated }]}>
+              <View style={[s.barFill, { width: `${pct * 100}%`, backgroundColor: color }]} />
+            </View>
+            <View style={s.fundFooter}>
+              <Text style={[s.footerLabel, { color: theme.textTertiary }]}>
+                {formatBRL(f.currentAmount)} / {formatBRL(f.targetAmount)}
+              </Text>
+              <Text style={[s.footerLabel, { color: theme.textTertiary }]}>
+                {monthsLeft > 0 ? `${monthsLeft} meses restantes` : 'Prazo atingido'}
+              </Text>
+            </View>
+            {remaining > 0 && monthsLeft > 0 && (
+              <Text style={[s.monthlyHint, { color: theme.textSecondary }]}>
+                Guardar {formatBRL(remaining / monthsLeft)}/mês para atingir a meta
+              </Text>
+            )}
+          </View>
+        );
+      })}
+      {funds.length === 0 && !loading && (
+        <View style={{ alignItems: 'center', paddingVertical: 48, gap: 12 }}>
+          <Feather name="layers" size={40} color={theme.textTertiary} />
+          <Text style={{ color: theme.textTertiary }}>Nenhuma reserva programada</Text>
+          <Text style={{ color: theme.textTertiary, fontSize: 13, textAlign: 'center' }}>
+            Crie reservas para viagens, reformas e outros objetivos de curto prazo
+          </Text>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+const s = StyleSheet.create({
+  summaryCard: { borderRadius: 16, padding: 16, gap: 4, borderWidth: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  summaryValue: { fontSize: 28, fontFamily: 'Inter_700Bold' },
+  fundCard: { borderRadius: 14, padding: 16, gap: 10, borderWidth: 1 },
+  fundHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  colorDot: { width: 10, height: 10, borderRadius: 5 },
+  fundName: { flex: 1, fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  fundPct: { fontSize: 14, fontFamily: 'Inter_700Bold' },
+  barBg: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4 },
+  fundFooter: { flexDirection: 'row', justifyContent: 'space-between' },
+  footerLabel: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  monthlyHint: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+});
+
+MÓDULO 5 — Custom Alerts: sincronizar com backend
+Arquivo: artifacts/finance-core/app/(more)/custom-alerts.tsx
+
+Atualmente os alertas ficam apenas em AsyncStorage local. Verificar se existe o endpoint
+GET /api/alerts/custom e POST /api/alerts/custom no backend.
+
+Se os endpoints existirem, substituir o AsyncStorage por chamadas à API:
+
+// Trocar load() para buscar da API:
+const load = useCallback(async () => {
+  try {
+    const res = await fetch(`${API_URL}/api/alerts/custom`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) setAlerts(await res.json());
+    else {
+      // Fallback para AsyncStorage se API não tiver o endpoint
+      const data = await AsyncStorage.getItem(STORAGE_KEY);
+      if (data) setAlerts(JSON.parse(data));
+    }
+  } catch {
+    const data = await AsyncStorage.getItem(STORAGE_KEY);
+    if (data) setAlerts(JSON.parse(data));
+  }
+}, [token]);
+// Trocar saveAlert() para POST na API:
+const newAlert = { type: selectedType, threshold: parseFloat(threshold), active: true };
+const res = await fetch(`${API_URL}/api/alerts/custom`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify(newAlert),
+});
+if (res.ok) await load();
+else {
+  // Fallback para AsyncStorage
+  // ... código original de save no AsyncStorage
+}
+
+Se os endpoints NÃO existirem, manter o AsyncStorage mas adicionar um aviso na tela:
+
+// Adicionar abaixo do título da tela:
+<View style={[s.offlineNote, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}25` }]}>
+  <Feather name="info" size={13} color={colors.warning} />
+  <Text style={[s.offlineText, { color: colors.warning }]}>
+    Alertas salvos neste dispositivo
+  </Text>
+</View>
+
+VERIFICAÇÃO APÓS IMPLEMENTAR
+No menu "Mais", aparecem os três novos itens: Contas a Pagar, Dívidas, Reservas Programadas
+Cada tela abre corretamente e exibe dados da API (ou estado vazio se não há dados)
+Na tela de Contas a Pagar, o botão "Pagar" funciona e atualiza o status
+Na tela de Dívidas, as dívidas aparecem ordenadas por maior taxa de juros
+Na tela de Reservas, o cálculo "guardar X/mês" está correto
+Não há erros de TypeScript em nenhum dos novos arquivos
