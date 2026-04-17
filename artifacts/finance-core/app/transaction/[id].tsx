@@ -76,7 +76,7 @@ export default function TransactionDetailScreen() {
   const sourceIcon = linkedCard ? 'credit-card' as const : 'layers' as const;
 
   const rows = [
-    { label: 'Data', value: formatDate(transaction.date), icon: 'calendar' as const },
+    { label: 'Data', value: formatDate(transaction.transactionDate ?? transaction.date), icon: 'calendar' as const },
     { label: sourceLabel, value: sourceValue, icon: sourceIcon },
     ...(isTransfer && toAccount ? [{ label: 'Conta de destino', value: toAccount.name, icon: 'arrow-right-circle' as const }] : []),
     ...(!isTransfer ? [{ label: 'Categoria', value: info.label, icon: 'tag' as const }] : []),

@@ -58,20 +58,21 @@ export default function TransactionsScreen() {
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
-      if (!t.date.startsWith(selectedMonth)) return false;
+      const effectiveDate = t.transactionDate ?? t.date;
+      if (!effectiveDate.startsWith(selectedMonth)) return false;
       if (filter !== 'all' && t.type !== filter) return false;
       if (accountFilter !== 'all' && t.accountId !== accountFilter) return false;
       if (search.trim()) {
         return t.description.toLowerCase().includes(search.toLowerCase());
       }
       return true;
-    }).sort((a, b) => b.date.localeCompare(a.date));
+    }).sort((a, b) => (b.transactionDate ?? b.date).localeCompare(a.transactionDate ?? a.date));
   }, [transactions, filter, accountFilter, search, selectedMonth]);
 
   const sections = useMemo(() => {
     const byDate: Record<string, Transaction[]> = {};
     filtered.forEach((t) => {
-      const d = t.date;
+      const d = (t.transactionDate ?? t.date).substring(0, 10);
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(t);
     });
@@ -107,7 +108,7 @@ export default function TransactionsScreen() {
       const accountName = accounts.find((a) => a.id === t.accountId)?.name || '';
       const status = t.isPaid === false ? 'Pendente' : 'Pago';
       return [
-        t.date,
+        t.transactionDate ?? t.date,
         t.type === 'income' ? 'Receita' : t.type === 'expense' ? 'Despesa' : 'Transferência',
         `"${t.description.replace(/"/g, '""')}"`,
         t.category || '',

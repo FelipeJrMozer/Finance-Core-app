@@ -1,0 +1,129 @@
+## Pilar Financeiro Mobile — Parte 4: Correções de Datas e Saldos de Fatura
+---
+### PROBLEMA 1 — Data exibida nas transações de cartão mostra vencimento, não a compra
+Transações de cartão chegam da API com:
+- `t.date` = data de vencimento da fatura (ex: "2026-05-10")
+- `t.transactionDate` = data real da compra (ex: "2026-04-20")
+A UI da tela de transações, ao exibir a data, deve usar a data da compra.
+**Arquivos a corrigir:** Qualquer componente/tela que renderiza a data de uma transação no formato de lista.
+Localizar onde `item.date` ou `t.date` é formatado para exibição e trocar por:
+```typescript
+// ANTES:
+const displayDate = t.date;
+// DEPOIS:
+const displayDate = t.transactionDate ?? t.date;
+
+Também aplicar a mesma correção no agrupamento da lista por data (quando as transações
+são agrupadas por dia para renderização):
+
+// ANTES (agrupamento):
+const groupKey = t.date.substring(0, 10);
+// DEPOIS:
+const groupKey = (t.transactionDate ?? t.date).substring(0, 10);
+
+PROBLEMA 2 — monthlyTx no dashboard/home usa data errada para despesas mensais
+Arquivo: artifacts/finance-core/app/(tabs)/index.tsx
+
+Localizar onde as despesas mensais do dashboard são calculadas (a monthlyTx ou equivalente
+que filtra as transações do mês atual para exibir o resumo mensal de gastos):
+
+// ANTES (usa t.date = data do vencimento da fatura):
+const monthlyExpenses = transactions
+  .filter((t) => t.date.startsWith(currentMonth) && t.type === 'expense')
+  .reduce((s, t) => s + t.amount, 0);
+// DEPOIS (usa data da compra, consistente com o mobile):
+const monthlyExpenses = transactions
+  .filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth) && t.type === 'expense')
+  .reduce((s, t) => s + t.amount, 0);
+
+Aplicar a mesma lógica em QUALQUER outro lugar no arquivo index.tsx que filtre transações
+por mês usando t.date (ex: renda mensal, saldo do mês, etc.):
+
+// Padrão geral — trocar TODA ocorrência de:
+t.date.startsWith(someMonth)
+// Por:
+(t.transactionDate ?? t.date).startsWith(someMonth)
+
+PROBLEMA 3 — Fatura do cartão inclui lançamentos pendentes sem indicação visual
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+Localizar computedCreditCards (linha ~681). Atualmente calcula used incluindo
+transações pendentes (isPaid === false). Separar em dois valores:
+
+// ANTES:
+const computedCreditCards = useMemo(() => {
+  const now = new Date();
+  return creditCards.map((card) => {
+    const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+    const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+    const used = transactions
+      .filter((t) => {
+        if (t.creditCardId !== card.id) return false;
+        if (t.type !== 'expense') return false;
+        if (isInvoicePayment(t)) return false;
+        const purchaseDate = t.transactionDate ?? t.date;
+        return purchaseDate >= start && purchaseDate <= end;
+      })
+      .reduce((s, t) => s + t.amount, 0);
+    return { ...card, used };
+  });
+}, [creditCards, transactions]);
+// DEPOIS — separar posted (confirmado) de pending (pendente):
+const computedCreditCards = useMemo(() => {
+  const now = new Date();
+  return creditCards.map((card) => {
+    const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+    const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+    const billingTx = transactions.filter((t) => {
+      if (t.creditCardId !== card.id) return false;
+      if (t.type !== 'expense') return false;
+      if (isInvoicePayment(t)) return false;
+      const purchaseDate = t.transactionDate ?? t.date;
+      return purchaseDate >= start && purchaseDate <= end;
+    });
+    // Lançamentos confirmados (posted)
+    const usedPosted = billingTx
+      .filter((t) => t.isPaid !== false)
+      .reduce((s, t) => s + t.amount, 0);
+    // Lançamentos pendentes (ainda não confirmados)
+    const usedPending = billingTx
+      .filter((t) => t.isPaid === false)
+      .reduce((s, t) => s + t.amount, 0);
+    // `used` = total da fatura (posted + pending), para exibição do valor total comprometido
+    const used = usedPosted + usedPending;
+    return { ...card, used, usedPosted, usedPending };
+  });
+}, [creditCards, transactions]);
+
+Atualizar a interface CreditCard para incluir os novos campos:
+Localizar onde a interface/tipo CreditCard é definida e adicionar:
+
+interface CreditCard {
+  // ... campos existentes ...
+  used: number;
+  usedPosted?: number;   // Lançamentos confirmados
+  usedPending?: number;  // Lançamentos pendentes
+}
+
+Atualizar a tela de detalhe do cartão para mostrar o breakdown quando há pendentes:
+No arquivo do card detail (algo como app/card/[id].tsx ou similar), localizar onde
+card.used é exibido e adicionar indicação quando há pendentes:
+
+// Exibir o total da fatura normalmente, mas com nota de pendentes:
+{(card.usedPending ?? 0) > 0 && (
+  <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+    <Feather name="clock" size={12} color={colors.warning} />
+    <Text style={{ color: colors.warning, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+      {formatBRL(card.usedPending ?? 0)} pendente de confirmação
+    </Text>
+  </View>
+)}
+
+VERIFICAÇÃO APÓS IMPLEMENTAR
+Na lista de transações, uma compra feita no dia 20/abril deve aparecer com data 20/abril,
+não com a data de vencimento da fatura (ex: 10/maio)
+No dashboard, as despesas do mês de abril devem incluir compras feitas em abril
+(mesmo que a fatura vença em maio)
+Na tela do cartão, quando há lançamentos pendentes, deve aparecer um aviso indicando
+o valor ainda não confirmado separado do valor total da fatura
+O total card.used não muda — continua sendo a soma de tudo (posted + pending)

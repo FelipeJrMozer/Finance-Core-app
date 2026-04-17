@@ -54,6 +54,8 @@ export interface CreditCard {
   lastFourDigits?: string;
   limit: number;
   used: number;
+  usedPosted?: number;
+  usedPending?: number;
   dueDate: string;
   closingDate: string;
   dueDay: number;
@@ -683,17 +685,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     return creditCards.map((card) => {
       const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
       const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
-      const used = transactions
-        .filter((t) => {
-          if (t.creditCardId !== card.id) return false;
-          if (t.type !== 'expense') return false;
-          if (isInvoicePayment(t)) return false;
-          // Use the original purchase date for the billing window, not the due date.
-          const purchaseDate = t.transactionDate ?? t.date;
-          return purchaseDate >= start && purchaseDate <= end;
-        })
+      const billingTx = transactions.filter((t) => {
+        if (t.creditCardId !== card.id) return false;
+        if (t.type !== 'expense') return false;
+        if (isInvoicePayment(t)) return false;
+        // Use the original purchase date for the billing window, not the due date.
+        const purchaseDate = t.transactionDate ?? t.date;
+        return purchaseDate >= start && purchaseDate <= end;
+      });
+      const usedPosted = billingTx
+        .filter((t) => t.isPaid !== false)
         .reduce((s, t) => s + t.amount, 0);
-      return { ...card, used };
+      const usedPending = billingTx
+        .filter((t) => t.isPaid === false)
+        .reduce((s, t) => s + t.amount, 0);
+      const used = usedPosted + usedPending;
+      return { ...card, used, usedPosted, usedPending };
     });
   }, [creditCards, transactions]);
 

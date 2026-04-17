@@ -283,7 +283,7 @@ export default function DashboardScreen() {
 
   const recentTransactions = transactions.slice(0, 5);
   const currentMonth = getCurrentMonth();
-  const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+  const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
 
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const totalCreditUsed = creditCards.reduce((s, c) => s + c.used, 0);

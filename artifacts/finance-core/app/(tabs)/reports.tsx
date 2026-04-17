@@ -150,7 +150,7 @@ export default function ReportsScreen() {
 
   const currentMonth = getCurrentMonth();
   const currentMonthTx = useMemo(() =>
-    transactions.filter((t) => t.date.startsWith(selectedMonth)), [transactions, selectedMonth]
+    transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(selectedMonth)), [transactions, selectedMonth]
   );
   const totalIncome = currentMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = currentMonthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -174,7 +174,7 @@ export default function ReportsScreen() {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
     const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const monthTx = transactions.filter((t) => t.date.startsWith(m));
+    const monthTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(m));
     const inc = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const exp = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     return { label: formatMonthYear(m), income: inc, expense: exp, net: inc - exp, month: m };
@@ -207,7 +207,7 @@ export default function ReportsScreen() {
     currentMonthTx
       .filter((t) => t.type === 'expense')
       .forEach((t) => {
-        const d = parseInt(t.date.split('-')[2], 10);
+        const d = parseInt((t.transactionDate ?? t.date).split('-')[2], 10);
         if (d >= 1 && d <= dayOfMonth) days[d - 1] += t.amount;
       });
     return days.map((v) => ({ value: v }));

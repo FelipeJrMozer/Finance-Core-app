@@ -254,6 +254,15 @@ export default function CardDetailScreen() {
             </View>
           </View>
 
+          {(card.usedPending ?? 0) > 0 && (
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 4 }}>
+              <Feather name="clock" size={12} color="#FFD580" />
+              <Text style={{ color: '#FFD580', fontSize: 12, fontFamily: 'Inter_500Medium' }}>
+                {maskValue(formatBRL(card.usedPending ?? 0))} pendente de confirmação
+              </Text>
+            </View>
+          )}
+
           <View style={styles.progressBg}>
             <View style={[styles.progressFill, { width: `${usedPct * 100}%`, backgroundColor: usedPct > 0.8 ? '#FF6B6B' : 'rgba(255,255,255,0.9)' }]} />
           </View>
