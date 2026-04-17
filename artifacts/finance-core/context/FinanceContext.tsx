@@ -251,7 +251,7 @@ function transformAccount(raw: Record<string, unknown>): Account {
  * Returns the billing period {start, end} for a given displayMonth ("YYYY-MM") and closingDay.
  * e.g. closingDay=5, displayMonth="2026-03" → { start:"2026-02-06", end:"2026-03-05" }
  */
-function getBillingPeriod(closingDay: number, displayMonth: string): { start: string; end: string } {
+export function getBillingPeriod(closingDay: number, displayMonth: string): { start: string; end: string } {
   const [y, m] = displayMonth.split('-').map(Number);
   const endDate = new Date(y, m - 1, closingDay);
   const startDate = new Date(y, m - 2, closingDay + 1);
@@ -265,7 +265,7 @@ function getBillingPeriod(closingDay: number, displayMonth: string): { start: st
  * If today > closingDay: the open invoice belongs to NEXT month's label
  * If today <= closingDay: the open invoice belongs to THIS month's label
  */
-function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
+export function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
   const d = now.getDate();
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
@@ -277,7 +277,7 @@ function getCurrentInvoiceMonth(closingDay: number, now: Date): string {
   return `${y}-${String(m).padStart(2, '0')}`;
 }
 
-function isInvoicePayment(t: Transaction): boolean {
+export function isInvoicePayment(t: Transaction): boolean {
   const d = (t.description || '').toLowerCase();
   return d.startsWith('pagamento de fatura') || d.startsWith('pagamento fatura');
 }

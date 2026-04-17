@@ -57,7 +57,7 @@ function formatBillingDate(dateStr: string): string {
 }
 
 export default function CardDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, month: initialMonth } = useLocalSearchParams<{ id: string; month?: string }>();
   const { theme, colors, maskValue } = useTheme();
   const { creditCards, accounts, transactions, addCardExpense, payCardInvoice, deleteCreditCard, deleteTransaction, advanceInstallment, getCardTransactions } = useFinance();
   const insets = useSafeAreaInsets();
@@ -66,7 +66,7 @@ export default function CardDetailScreen() {
   const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   const [tab, setTab] = useState<Tab>('invoice');
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth || currentMonthStr);
 
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
