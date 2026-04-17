@@ -94,7 +94,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       if (res.ok) {
         const text = await res.text();
-        console.log('[WalletContext] response:', text.slice(0, 400));
+        const trimmed = text.trim();
+        // Backend doesn't have /api/wallets endpoint - returns SPA HTML
+        if (trimmed.startsWith('<') || trimmed.startsWith('<!DOCTYPE')) {
+          console.log('[WalletContext] /api/wallets returned HTML - feature not supported by backend');
+          setWallets([]);
+          setWalletError('not_supported');
+          setIsReady(true);
+          setIsLoading(false);
+          return;
+        }
         let parsed: unknown;
         try { parsed = JSON.parse(text); } catch { parsed = []; }
         const raw = extractWallets(parsed);

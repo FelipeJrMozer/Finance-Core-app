@@ -23,6 +23,13 @@ const TYPE_LABELS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   stocks: '#2196F3', fii: '#9C27B0', reit: '#FF9800', fixed: '#4CAF50', crypto: '#FF6B35', etf: '#00BCD4'
 };
+const FALLBACK_TYPE_COLOR = '#7C7C8A';
+function typeColor(t: string): string {
+  return TYPE_COLORS[t] || FALLBACK_TYPE_COLOR;
+}
+function typeLabel(t: string): string {
+  return TYPE_LABELS[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Outros');
+}
 const TYPE_RISK: Record<string, number> = {
   fixed: 1, fii: 3, reit: 3, etf: 4, stocks: 7, crypto: 10
 };
@@ -58,7 +65,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
   const current = investment.quantity * investment.currentPrice;
   const profit = current - invested;
   const pctReturn = invested > 0 ? ((current - invested) / invested) * 100 : 0;
-  const typeColor = TYPE_COLORS[investment.type] || colors.primary;
+  const typeColor = typeColor(investment.type) || colors.primary;
   const isGain = profit >= 0;
 
   return (
@@ -72,7 +79,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
               <View style={inv.tickerRow}>
                 <Text style={[inv.ticker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{investment.ticker}</Text>
                 <View style={[inv.typeTag, { backgroundColor: `${typeColor}15` }]}>
-                  <Text style={[inv.typeText, { color: typeColor, fontFamily: 'Inter_600SemiBold' }]}>{TYPE_LABELS[investment.type]}</Text>
+                  <Text style={[inv.typeText, { color: typeColor, fontFamily: 'Inter_600SemiBold' }]}>{typeLabel(investment.type)}</Text>
                 </View>
               </View>
               <Text style={[inv.name, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>
@@ -159,7 +166,7 @@ export default function InvestmentsScreen() {
 
   const pieData = useMemo(() => byType.map(([type, value]) => ({
     value,
-    color: TYPE_COLORS[type] || '#999',
+    color: typeColor(type) || '#999',
     text: `${((value / totalCurrent) * 100).toFixed(0)}%`,
   })), [byType, totalCurrent]);
 
@@ -326,9 +333,9 @@ export default function InvestmentsScreen() {
                 <View style={styles.allocLegend}>
                   {byType.map(([type, value]) => (
                     <View key={type} style={styles.allocItem}>
-                      <View style={[styles.allocDot, { backgroundColor: TYPE_COLORS[type] }]} />
+                      <View style={[styles.allocDot, { backgroundColor: typeColor(type) }]} />
                       <Text style={[styles.allocLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                        {TYPE_LABELS[type]}
+                        {typeLabel(type)}
                       </Text>
                       <Text style={[styles.allocPct, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
                         {((value / totalCurrent) * 100).toFixed(1)}%
@@ -341,10 +348,10 @@ export default function InvestmentsScreen() {
                 <View style={{ gap: 6 }}>
                   {byType.map(([type, value]) => (
                     <View key={type} style={alloc.row}>
-                      <Text style={[alloc.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{TYPE_LABELS[type]}</Text>
+                      <Text style={[alloc.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{typeLabel(type)}</Text>
                       <View style={[alloc.track, { backgroundColor: theme.surfaceElevated }]}>
                         <LinearGradient
-                          colors={[TYPE_COLORS[type], `${TYPE_COLORS[type]}80`]}
+                          colors={[typeColor(type), `${typeColor(type)}80`]}
                           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                           style={[alloc.fill, { width: `${(value / totalCurrent) * 100}%` }]}
                         />
@@ -426,7 +433,7 @@ export default function InvestmentsScreen() {
                       {formatPercent(((sortedPerformers[0].currentPrice - sortedPerformers[0].avgPrice) / sortedPerformers[0].avgPrice) * 100)}
                     </Text>
                     <Text style={[styles.perfName, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>
-                      {TYPE_LABELS[sortedPerformers[0].type]}
+                      {typeLabel(sortedPerformers[0].type)}
                     </Text>
                   </View>
                   <View style={[styles.perfCard, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}25` }]}>
@@ -439,7 +446,7 @@ export default function InvestmentsScreen() {
                       {formatPercent(((sortedPerformers[sortedPerformers.length - 1].currentPrice - sortedPerformers[sortedPerformers.length - 1].avgPrice) / sortedPerformers[sortedPerformers.length - 1].avgPrice) * 100)}
                     </Text>
                     <Text style={[styles.perfName, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>
-                      {TYPE_LABELS[sortedPerformers[sortedPerformers.length - 1].type]}
+                      {typeLabel(sortedPerformers[sortedPerformers.length - 1].type)}
                     </Text>
                   </View>
                 </View>
@@ -473,7 +480,7 @@ export default function InvestmentsScreen() {
                       style={[styles.filterChip, { backgroundColor: filter === type ? colors.primary : theme.surfaceElevated, borderColor: filter === type ? colors.primary : theme.border }]}
                     >
                       <Text style={[styles.filterText, { color: filter === type ? '#000' : theme.textSecondary, fontFamily: filter === type ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
-                        {type === 'all' ? 'Todos' : TYPE_LABELS[type]}
+                        {type === 'all' ? 'Todos' : typeLabel(type)}
                       </Text>
                     </Pressable>
                   ))}

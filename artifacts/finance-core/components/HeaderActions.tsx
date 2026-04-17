@@ -16,27 +16,30 @@ interface Props {
 export function HeaderActions({ showProfile = true }: Props) {
   const { theme, colors, valuesVisible, toggleValuesVisible } = useTheme();
   const { user } = useAuth();
-  const { selectedWallet } = useWallet();
+  const { selectedWallet, walletError, wallets } = useWallet();
   const [walletVisible, setWalletVisible] = useState(false);
+  const showWalletSelector = walletError !== 'not_supported' && (wallets.length > 0 || !walletError);
 
   return (
     <>
       <WalletSelectorModal visible={walletVisible} onClose={() => setWalletVisible(false)} />
       <View style={styles.row}>
         {/* Carteira */}
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); setWalletVisible(true); }}
-          style={[styles.iconBtn, {
-            backgroundColor: `${colors.primary}15`,
-            borderColor: `${colors.primary}30`,
-          }]}
-          testID="wallet-selector"
-        >
-          {selectedWallet && (
-            <View style={[styles.walletDot, { backgroundColor: selectedWallet.color || colors.primary }]} />
-          )}
-          <WalletIcon size={17} color={colors.primary} />
-        </Pressable>
+        {showWalletSelector && (
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); setWalletVisible(true); }}
+            style={[styles.iconBtn, {
+              backgroundColor: `${colors.primary}15`,
+              borderColor: `${colors.primary}30`,
+            }]}
+            testID="wallet-selector"
+          >
+            {selectedWallet && (
+              <View style={[styles.walletDot, { backgroundColor: selectedWallet.color || colors.primary }]} />
+            )}
+            <WalletIcon size={17} color={colors.primary} />
+          </Pressable>
+        )}
 
         {/* Visualizar (ocultar/mostrar valores) */}
         <Pressable

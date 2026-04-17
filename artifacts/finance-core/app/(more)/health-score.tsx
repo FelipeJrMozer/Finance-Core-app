@@ -205,14 +205,18 @@ export default function HealthScoreScreen() {
 
   const [history, setHistory] = useState<any[]>([]);
 
+  const safeSetHistory = useCallback((h: any) => {
+    setHistory(Array.isArray(h) ? h : []);
+  }, []);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchHealth(), fetchHistory().then(setHistory)]).finally(() => setLoading(false));
-  }, [fetchHealth, fetchHistory]);
+    Promise.all([fetchHealth(), fetchHistory().then(safeSetHistory)]).finally(() => setLoading(false));
+  }, [fetchHealth, fetchHistory, safeSetHistory]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchHealth(), fetchHistory().then(setHistory)]);
+    await Promise.all([fetchHealth(), fetchHistory().then(safeSetHistory)]);
     setRefreshing(false);
   };
 
