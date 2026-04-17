@@ -3,9 +3,11 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-  useFonts,
 } from "@expo-google-fonts/inter";
+import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const FeatherFont = require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf");
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -89,6 +91,7 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Feather: FeatherFont,
     ...Feather.font,
   });
 
