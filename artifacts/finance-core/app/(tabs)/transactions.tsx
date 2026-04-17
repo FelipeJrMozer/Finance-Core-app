@@ -11,7 +11,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Transaction } from '@/context/FinanceContext';
 import { TransactionItem } from '@/components/TransactionItem';
 import { formatBRL } from '@/utils/formatters';
-import { HeaderActions } from '@/components/HeaderActions';
 
 type FilterType = 'all' | 'income' | 'expense' | 'transfer';
 
@@ -297,7 +296,6 @@ export default function TransactionsScreen() {
       <View style={[styles.headerSection, { paddingTop: topPad + 16 }]}>
         <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Transações</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <HeaderActions />
           <View style={[{ width: 1, height: 24, backgroundColor: 'transparent' }]} />
           <View style={styles.headerActions}>
           {filtered.length > 0 && (

@@ -11,7 +11,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, formatMonthYear, getCurrentMonth, getMonthName } from '@/utils/formatters';
 import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
-import { HeaderActions } from '@/components/HeaderActions';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
@@ -280,7 +279,6 @@ export default function ReportsScreen() {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Relatórios</Text>
-            <HeaderActions />
           </View>
           <View style={[styles.monthNav, { backgroundColor: `${theme.surface}80`, borderColor: `${theme.border}60` }]}>
             <Pressable
