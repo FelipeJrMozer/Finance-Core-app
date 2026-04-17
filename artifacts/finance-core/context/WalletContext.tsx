@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiFetch, getApiBaseUrl, setCurrentWalletId } from '@/services/api';
+import { apiFetch, getApiBaseUrl, setCurrentWalletId, getAccessToken } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
 export interface Wallet {
@@ -66,6 +66,7 @@ interface WalletContextType {
   isLoading: boolean;
   isReady: boolean;
   walletError: string | null;
+  walletDebug: string;
   selectWallet: (wallet: Wallet) => Promise<void>;
   refreshWallets: () => Promise<void>;
 }
@@ -81,17 +82,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletDebug, setWalletDebug] = useState<string>('');
 
   const refreshWallets = useCallback(async () => {
     if (!isAuthenticated) return;
     setIsLoading(true);
     setWalletError(null);
 
-    console.log('[WalletContext] fetching wallets from:', getApiBaseUrl() + '/api/workspaces');
+    const tok = getAccessToken();
+    const tokenInfo = tok ? `${tok.slice(0, 10)}…${tok.slice(-6)} (${tok.length}c)` : 'NULL';
+    console.log('[WalletContext] fetching wallets, token:', tokenInfo);
 
     try {
       const res = await apiFetch('/api/workspaces');
       console.log('[WalletContext] /api/workspaces status:', res.status);
+
+      const ct = res.headers.get('content-type') || '';
 
       if (res.ok) {
         const text = await res.text();
@@ -100,6 +106,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           console.log('[WalletContext] /api/workspaces returned HTML - endpoint missing');
           setWallets([]);
           setWalletError('not_supported');
+          setWalletDebug(`200 HTML (${ct})`);
           setIsReady(true);
           setIsLoading(false);
           return;
@@ -107,6 +114,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         let parsed: unknown;
         try { parsed = JSON.parse(text); } catch { parsed = []; }
         const raw = extractWallets(parsed);
+        setWalletDebug(`OK ${raw.length} | tok ${tokenInfo}`);
         console.log('[WalletContext] wallet count:', raw.length, '| names:', raw.map((w) => (w as Record<string, unknown>).name));
         const list = assignColors(raw);
         setWallets(list);
@@ -142,12 +150,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } else if (res.status === 401) {
-        console.warn('[WalletContext] 401 - session expired');
+        const body = await res.text().catch(() => '');
+        console.warn('[WalletContext] 401 body:', body.slice(0, 200), '| ct:', ct, '| token:', tokenInfo);
         setWalletError('session_expired');
+        setWalletDebug(`401 | tok ${tokenInfo} | ${body.slice(0, 80)}`);
       } else {
         const body = await res.text().catch(() => '');
         console.warn('[WalletContext] error', res.status, body.slice(0, 100));
         setWalletError(`HTTP ${res.status}`);
+        setWalletDebug(`${res.status} | tok ${tokenInfo} | ${body.slice(0, 80)}`);
       }
     } catch (e) {
       const msg = String(e);
@@ -196,6 +207,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isReady,
         walletError,
+        walletDebug,
         selectWallet,
         refreshWallets,
       }}

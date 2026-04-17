@@ -26,7 +26,7 @@ function getWalletColor(wallet: Wallet, index: number): string {
 
 export function WalletSelectorModal({ visible, onClose }: Props) {
   const { theme, colors, isDark } = useTheme();
-  const { wallets, selectedWallet, selectWallet, isLoading, walletError, refreshWallets } = useWallet();
+  const { wallets, selectedWallet, selectWallet, isLoading, walletError, walletDebug, refreshWallets } = useWallet();
   const { logout } = useAuth();
   const router = useRouter();
 
@@ -131,15 +131,31 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
             <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
               Faça login novamente para carregar suas carteiras
             </Text>
-            <Pressable
-              onPress={handleReLogin}
-              style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-            >
-              <Feather name="log-in" size={14} color="#fff" />
-              <Text style={[styles.retryTextAlt, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
-                Fazer login
+            {walletDebug ? (
+              <Text selectable style={{ fontSize: 10, color: theme.textTertiary, marginTop: 8, paddingHorizontal: 8, textAlign: 'center' }}>
+                {walletDebug}
               </Text>
-            </Pressable>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={handleRetry}
+                style={[styles.retryBtn, { backgroundColor: `${colors.primary}20` }]}
+              >
+                <Feather name="refresh-cw" size={14} color={colors.primary} />
+                <Text style={[styles.retryTextAlt, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                  Tentar de novo
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleReLogin}
+                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+              >
+                <Feather name="log-in" size={14} color="#fff" />
+                <Text style={[styles.retryTextAlt, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
+                  Fazer login
+                </Text>
+              </Pressable>
+            </View>
           </View>
         ) : walletError ? (
           <View style={styles.centerBox}>
