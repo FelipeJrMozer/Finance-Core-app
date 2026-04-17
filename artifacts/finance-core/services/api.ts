@@ -16,7 +16,7 @@ export function setCurrentWalletId(id: string | null) {
 }
 
 export function getApiBaseUrl() {
-  return (process.env.EXPO_PUBLIC_API_URL || 'https://pilarfinanceiro.replit.app').replace(/\/$/, '');
+  return (process.env.EXPO_PUBLIC_API_URL || 'https://pilar-financeiro.replit.app').replace(/\/$/, '');
 }
 
 export async function initApiSession() {

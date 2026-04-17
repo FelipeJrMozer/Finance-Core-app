@@ -34,13 +34,13 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
 
   const handleManage = () => {
     Haptics.selectionAsync();
-    Linking.openURL('https://pilarfinanceiro.replit.app');
+    Linking.openURL('https://pilar-financeiro.replit.app');
     onClose();
   };
 
   const handleNew = () => {
     Haptics.selectionAsync();
-    Linking.openURL('https://pilarfinanceiro.replit.app');
+    Linking.openURL('https://pilar-financeiro.replit.app');
     onClose();
   };
 
