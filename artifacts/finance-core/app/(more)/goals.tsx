@@ -16,8 +16,15 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) 
   const { theme, colors, maskValue } = useTheme();
   const pct = Math.min(goal.currentAmount / goal.targetAmount, 1);
   const remaining = goal.targetAmount - goal.currentAmount;
-  const daysLeft = Math.max(0, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / 86400000));
-  const monthlyNeeded = daysLeft > 0 ? remaining / (daysLeft / 30) : 0;
+  const now = new Date();
+  const deadline = new Date(goal.deadline);
+  const monthsLeft = Math.max(0,
+    (deadline.getFullYear() - now.getFullYear()) * 12 +
+    (deadline.getMonth() - now.getMonth()) +
+    (deadline.getDate() >= now.getDate() ? 0 : -1)
+  );
+  const daysLeft = Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / 86400000));
+  const monthlyNeeded = monthsLeft > 0 ? remaining / monthsLeft : remaining;
 
   return (
     <View style={[styles.goalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>

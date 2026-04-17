@@ -31,7 +31,10 @@ function WeeklyChart() {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dayName = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getDay()];
     const expense = transactions
-      .filter((t) => t.date === dateStr && t.type === 'expense')
+      .filter((t) => {
+        const effectiveDate = t.transactionDate ?? t.date;
+        return effectiveDate === dateStr && t.type === 'expense';
+      })
       .reduce((s, t) => s + t.amount, 0);
     return { dayName, expense, isToday: i === 6 };
   });
@@ -93,7 +96,7 @@ const wStyles = StyleSheet.create({
 // ── Health Score Gauge ──────────────────────────────────────
 function HealthGauge({ score }: { score: number }) {
   const { theme, colors } = useTheme();
-  const pct = Math.min(score / 1000, 1);
+  const pct = Math.min(score / 100, 1);
   const getColor = () => {
     if (pct >= 0.7) return colors.primary;
     if (pct >= 0.4) return colors.warning;
@@ -129,7 +132,7 @@ function HealthGauge({ score }: { score: number }) {
       <View style={hgStyles.scoreRow}>
         <View>
           <Text style={[hgStyles.scoreNum, { color, fontFamily: 'Inter_700Bold' }]}>{score}</Text>
-          <Text style={[hgStyles.scoreMax, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>/1000</Text>
+          <Text style={[hgStyles.scoreMax, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>/100</Text>
         </View>
         <View style={[hgStyles.labelPill, { backgroundColor: `${color}20` }]}>
           <Feather name="award" size={13} color={color} />

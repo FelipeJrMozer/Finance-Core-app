@@ -1,0 +1,212 @@
+## Pilar Financeiro Mobile — Correções Parte 2
+## Health Score, Net Worth, Budgets e Menu
+---
+### CORREÇÃO 1 — Dashboard: Gauge do Health Score exibe escala errada (/1000 em vez de /100)
+**Arquivo:** `artifacts/finance-core/app/(tabs)/index.tsx`
+Localizar o componente `HealthGauge` (função por volta das primeiras linhas do arquivo).
+Dentro dela, encontrar e corrigir dois pontos:
+**Ponto 1a — cálculo do pct:**
+```typescript
+// ANTES:
+const pct = Math.min(score / 1000, 1);
+// DEPOIS:
+const pct = Math.min(score / 100, 1);
+
+Ponto 1b — texto da escala:
+
+// ANTES:
+<Text ...>/1000</Text>
+// DEPOIS:
+<Text ...>/100</Text>
+
+Motivo: healthScore no contexto é calculado como Math.min(100, ...) — máximo é 100, não 1000.
+Com /1000, um score de 80 aparece como 8% do gauge (quase vazio), o que é visualmente errado.
+
+CORREÇÃO 2 — Tela Health Score: endpoint errado + mapeamento incorreto dos pilares
+Arquivo: artifacts/finance-core/app/(more)/health-score.tsx
+
+Problema A — endpoints inexistentes:
+
+// ANTES (endpoints que não existem no backend):
+const res = await fetch(`${API_URL}/api/health-score`, ...);
+const res = await fetch(`${API_URL}/api/health-score/history`, ...);
+// DEPOIS (endpoints reais):
+const res = await fetch(`${API_URL}/api/analytics/financial-score`, ...);
+const res = await fetch(`${API_URL}/api/analytics/score-history`, ...);
+
+Problema B — mapeamento dos pilares da API:
+A API retorna { totalScore, components: [{ id, name, score, maxScore, status, tip }] }.
+O mobile espera healthData.pillars mas a API não tem esse campo.
+Adicionar o mapeamento após receber a resposta do fetchHealth:
+
+// Dentro de fetchHealth, após confirmar res.ok:
+const data = await res.json();
+// Mapear components para pillars no formato que a tela usa
+const pillarsMap: Record<string, number> = {};
+for (const comp of (data.components || [])) {
+  const pct = comp.maxScore > 0 ? Math.round((comp.score / comp.maxScore) * 100) : 0;
+  if (comp.id === 'savings_rate')      pillarsMap.gastos = pct;
+  if (comp.id === 'emergency_fund')    pillarsMap.reserva = pct;
+  if (comp.id === 'debt_ratio')        pillarsMap.credito = pct;
+  if (comp.id === 'income_stability')  pillarsMap.investimentos = pct;
+  if (comp.id === 'expense_control')   pillarsMap.planejamento = pct;
+}
+setHealthData({
+  score: data.totalScore ?? 0,
+  pillars: pillarsMap,
+  recommendations: (data.components || []).map((c: any) => c.tip).filter(Boolean),
+});
+
+Problema C — computedPillars: reserva usa 3 meses, web usa 6:
+
+// ANTES:
+const targetReserva = monthExpense * 3;
+// DEPOIS:
+const targetReserva = monthExpense * 6;
+
+Problema D — computedPillars: gastosScore tem viés artificial de +20:
+
+// ANTES:
+const gastosScore = Math.max(0, Math.min(100, Math.round((1 - ratio) * 100 + 20)));
+// DEPOIS:
+const gastosScore = Math.max(0, Math.min(100, Math.round((1 - ratio) * 100)));
+
+Problema E — monthTx usa t.date em vez de data de competência:
+
+// ANTES:
+const monthTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+// DEPOIS:
+const monthTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
+
+Problema F — reservaScore usa todas as contas, deveria usar só contas líquidas:
+
+// ANTES:
+const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
+// DEPOIS:
+const liquidBalance = accounts
+  .filter((a) => a.type !== 'credit' && !a.archived)
+  .reduce((s, a) => s + a.balance, 0);
+// E usar liquidBalance no lugar de totalBalance nos cálculos de reservaScore
+const reservaScore = Math.min(100, Math.round((liquidBalance / Math.max(targetReserva, 1)) * 100));
+
+CORREÇÃO 3 — More screen: Net Worth não deduz uso do crédito
+Arquivo: artifacts/finance-core/app/(tabs)/more.tsx
+
+Localizar o cálculo de netWorth (por volta das primeiras linhas do componente MoreScreen):
+
+// ANTES:
+const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+const netWorth = totalBalance + totalInvestments;
+// DEPOIS:
+const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+const totalCreditUsed = creditCards.reduce((s, c) => s + (c.used || 0), 0);
+const netWorth = totalBalance + totalInvestments - totalCreditUsed;
+
+Também garantir que creditCards está sendo extraído do useFinance:
+
+const { budgets, goals, transactions, totalBalance, investments, notifications, creditCards } = useFinance();
+
+CORREÇÃO 4 — Budgets: getBudgetSpent usa chave de categoria errada e não filtra pagos
+Arquivo: artifacts/finance-core/app/(more)/budgets.tsx
+
+Problema A — usa t.category (string key) em vez de categoryId:
+
+// ANTES:
+const getBudgetSpent = (cat: string) =>
+  monthlyTx.filter((t) => t.category === cat && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+// DEPOIS — recebe o budget inteiro e usa categoryId quando disponível:
+const getBudgetSpent = (budget: Budget) =>
+  monthlyTx
+    .filter((t) => {
+      if (t.isPaid === false) return false;
+      if (t.type !== 'expense') return false;
+      if (budget.categoryId && t.categoryId) return t.categoryId === budget.categoryId;
+      return t.category === budget.category;
+    })
+    .reduce((s, t) => s + t.amount, 0);
+
+Problema B — monthlyTx usa t.date em vez de data de competência:
+
+// ANTES:
+const monthlyTx = transactions.filter((t) => t.date.startsWith(selectedMonth));
+// DEPOIS:
+const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(selectedMonth));
+
+Problema C — atualizar chamadas de getBudgetSpent:
+Onde a função era chamada com getBudgetSpent(b.category), passar o budget inteiro:
+
+// ANTES:
+spent={getBudgetSpent(b.category)}
+// DEPOIS:
+spent={getBudgetSpent(b)}
+
+CORREÇÃO 5 — More screen: monthlyTx usa t.date em vez de data de competência
+Arquivo: artifacts/finance-core/app/(tabs)/more.tsx
+
+// ANTES:
+const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+// DEPOIS:
+const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
+
+CORREÇÃO 6 — Dashboard: WeeklyChart usa t.date em vez de data de competência
+Arquivo: artifacts/finance-core/app/(tabs)/index.tsx
+
+Dentro da função WeeklyChart, localizar o filtro de despesas por dia:
+
+// ANTES:
+const expense = transactions
+  .filter((t) => t.date === dateStr && t.type === 'expense')
+  .reduce((s, t) => s + t.amount, 0);
+// DEPOIS:
+const expense = transactions
+  .filter((t) => {
+    const effectiveDate = t.transactionDate ?? t.date;
+    return effectiveDate === dateStr && t.type === 'expense';
+  })
+  .reduce((s, t) => s + t.amount, 0);
+
+CORREÇÃO 7 — Goals: monthlyNeeded usa dias/30 (impreciso), usar meses de calendário
+Arquivo: artifacts/finance-core/app/(more)/goals.tsx
+
+Dentro do componente GoalCard:
+
+// ANTES:
+const daysLeft = Math.max(0, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / 86400000));
+const monthlyNeeded = daysLeft > 0 ? remaining / (daysLeft / 30) : 0;
+// DEPOIS:
+const now = new Date();
+const deadline = new Date(goal.deadline);
+const monthsLeft = Math.max(0,
+  (deadline.getFullYear() - now.getFullYear()) * 12 +
+  (deadline.getMonth() - now.getMonth()) +
+  (deadline.getDate() >= now.getDate() ? 0 : -1)
+);
+const daysLeft = Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / 86400000));
+const monthlyNeeded = monthsLeft > 0 ? remaining / monthsLeft : remaining;
+
+CORREÇÃO 8 — Investment Report: gráfico de histórico usa dados interpolados fictícios
+Arquivo: artifacts/finance-core/app/(more)/investment-report.tsx
+
+Localizar o historyData que interpola linearmente entre 0 e o retorno atual.
+Substituir por dados reais do backend, ou enquanto não há endpoint, deixar explícito que é estimativa:
+
+// ANTES — dados falsos interpolados:
+const historyData = Array.from({ length: 6 }, (_, i) => {
+  const base = totalInvested * (1 + (totalReturn / 100) * (i / 5));
+  return { value: Math.round(base), label: months[i] };
+});
+// DEPOIS — buscar do backend (tentar GET /api/investments/summary ou /api/analytics/portfolio-history):
+// Se o endpoint não existir ainda, manter os dados mas adicionar nota de que é estimativa:
+const historyData = Array.from({ length: 6 }, (_, i) => {
+  const base = totalInvested * (1 + (totalReturn / 100) * (i / 5));
+  return { value: Math.round(base), label: months[i] };
+});
+// E adicionar label de aviso abaixo do gráfico:
+// <Text>*Estimativa baseada no retorno acumulado atual</Text>
+
+VERIFICAÇÃO APÓS IMPLEMENTAR
+No dashboard, o gauge de saúde deve mostrar 80/100 (não 80/1000) para um score de 80
+Na tela Health Score, os pilares devem vir da API real — verificar se API_URL/api/analytics/financial-score retorna dados
+Na tela More, o Patrimônio total deve ser menor quando há cartões com saldo devedor
+Nos Orçamentos, os gastos por categoria devem bater com os da versão web para o mesmo mês
+O gráfico semanal no dashboard deve refletir compras de cartão pelo dia da compra, não pelo vencimento

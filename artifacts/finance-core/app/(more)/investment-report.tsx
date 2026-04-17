@@ -177,6 +177,9 @@ export default function InvestmentReportScreen() {
               noOfSections={4}
               isAnimated
             />
+            <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+              *Estimativa baseada no retorno acumulado atual
+            </Text>
           </View>
         )}
       </ScrollView>

@@ -60,13 +60,13 @@ function MenuItem({ icon, label, subtitle, badge, badgeColor, onPress, testID, r
 export default function MoreScreen() {
   const { theme, colors, isDark, accentId } = useTheme();
   const { user, logout } = useAuth();
-  const { budgets, goals, transactions, totalBalance, investments, notifications, settings } = useFinance();
+  const { budgets, goals, transactions, totalBalance, investments, notifications, settings, creditCards } = useFinance();
   const unreadNotifs = notifications.filter((n) => !n.read).length;
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
   const currentMonth = getCurrentMonth();
-  const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+  const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
   const getBudgetSpent = (b: { category: string; categoryId?: string }) =>
     monthlyTx
       .filter((t) => {
@@ -79,7 +79,8 @@ export default function MoreScreen() {
   const pendingGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
   const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
-  const netWorth = totalBalance + totalInvestments;
+  const totalCreditUsed = creditCards.reduce((s, c) => s + (c.used || 0), 0);
+  const netWorth = totalBalance + totalInvestments - totalCreditUsed;
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 

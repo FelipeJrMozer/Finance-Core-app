@@ -142,18 +142,20 @@ export default function HealthScoreScreen() {
   const [healthData, setHealthData] = useState<any>(null);
 
   const currentMonth = getCurrentMonth();
-  const monthTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+  const monthTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
   const monthIncome = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const monthExpense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
   // Compute pillars locally when API returns nothing useful
   const computedPillars = React.useMemo(() => {
     const ratio = monthIncome > 0 ? monthExpense / monthIncome : 1;
-    const gastosScore = Math.max(0, Math.min(100, Math.round((1 - ratio) * 100 + 20)));
+    const gastosScore = Math.max(0, Math.min(100, Math.round((1 - ratio) * 100)));
 
-    const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-    const targetReserva = monthExpense * 3;
-    const reservaScore = Math.min(100, Math.round((totalBalance / Math.max(targetReserva, 1)) * 100));
+    const liquidBalance = accounts
+      .filter((a: any) => a.type !== 'credit' && !a.archived)
+      .reduce((s, a) => s + a.balance, 0);
+    const targetReserva = monthExpense * 6;
+    const reservaScore = Math.min(100, Math.round((liquidBalance / Math.max(targetReserva, 1)) * 100));
 
     const totalCreditUsed = creditCards.reduce((s, c) => s + (c.used || 0), 0);
     const totalCreditLimit = creditCards.reduce((s, c) => s + c.limit, 0);
@@ -161,7 +163,7 @@ export default function HealthScoreScreen() {
     const creditoScore = Math.max(0, Math.min(100, Math.round((1 - creditRatio) * 100)));
 
     const totalInvest = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
-    const investScore = totalInvest > 0 ? Math.min(100, Math.round((totalInvest / Math.max(totalBalance + totalInvest, 1)) * 200)) : 0;
+    const investScore = totalInvest > 0 ? Math.min(100, Math.round((totalInvest / Math.max(liquidBalance + totalInvest, 1)) * 200)) : 0;
 
     const budgetsDone = budgets.length;
     const planScore = Math.min(100, budgetsDone * 20 + (monthIncome > 0 ? 20 : 0));
@@ -182,12 +184,27 @@ export default function HealthScoreScreen() {
   const fetchHealth = useCallback(async () => {
     if (!API_URL || !token) return;
     try {
-      const res = await fetch(`${API_URL}/api/health-score`, {
+      const res = await fetch(`${API_URL}/api/analytics/financial-score`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
       if (res.ok) {
         const data = await res.json();
-        setHealthData(data);
+        // Map API response { totalScore, components: [{ id, score, maxScore, tip }] }
+        // into the shape the screen consumes: { score, pillars, recommendations }.
+        const pillarsMap: Record<string, number> = {};
+        for (const comp of (data.components || [])) {
+          const pct = comp.maxScore > 0 ? Math.round((comp.score / comp.maxScore) * 100) : 0;
+          if (comp.id === 'savings_rate')      pillarsMap.gastos = pct;
+          if (comp.id === 'emergency_fund')    pillarsMap.reserva = pct;
+          if (comp.id === 'debt_ratio')        pillarsMap.credito = pct;
+          if (comp.id === 'income_stability')  pillarsMap.investimentos = pct;
+          if (comp.id === 'expense_control')   pillarsMap.planejamento = pct;
+        }
+        setHealthData({
+          score: data.totalScore ?? 0,
+          pillars: pillarsMap,
+          recommendations: (data.components || []).map((c: any) => c.tip).filter(Boolean),
+        });
       }
     } catch {}
   }, [token]);
@@ -195,7 +212,7 @@ export default function HealthScoreScreen() {
   const fetchHistory = useCallback(async () => {
     if (!API_URL || !token) return;
     try {
-      const res = await fetch(`${API_URL}/api/health-score/history`, {
+      const res = await fetch(`${API_URL}/api/analytics/score-history`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
       if (res.ok) return await res.json();

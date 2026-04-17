@@ -38,10 +38,11 @@ export default function BudgetsScreen() {
   const isCurrentMonth = selectedMonth === currentMonth;
 
   const monthBudgets = budgets.filter((b) => b.month === selectedMonth);
-  const monthlyTx = transactions.filter((t) => t.date.startsWith(selectedMonth));
+  const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(selectedMonth));
 
   const getBudgetSpent = (b: { category: string; categoryId?: string }) =>
     monthlyTx
+      .filter((t) => t.isPaid !== false)
       .filter((t) => {
         if (t.type !== 'expense') return false;
         if (b.categoryId && t.categoryId) return t.categoryId === b.categoryId;
