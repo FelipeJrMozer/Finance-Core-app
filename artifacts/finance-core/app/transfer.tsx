@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Modal,
 } from 'react-native';
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -80,7 +80,6 @@ export default function TransferScreen() {
   if (eligible.length < 2) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top + 60 }]}>
-        <Stack.Screen options={{ title: 'Transferir' }} />
         <View style={styles.empty}>
           <Feather name="alert-circle" size={48} color={theme.textTertiary} />
           <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
@@ -134,8 +133,8 @@ export default function TransferScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <Stack.Screen options={{ title: 'Transferir' }} />
       <ScrollView
+        style={{ flex: 1, width: '100%' }}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32, gap: 14 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
