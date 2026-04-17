@@ -219,6 +219,7 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
     toAccountId: (raw.toAccountId as string) || undefined,
     date: parseDate(raw.date as string),
     transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+    creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
     currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
     totalInstallments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
     installments: raw.totalInstallments && Number(raw.totalInstallments) > 1 ? Number(raw.totalInstallments) : undefined,
@@ -231,7 +232,6 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
     currency: (raw.currency as string) || 'BRL',
     transferGroupId: (raw.transferGroupId as string) || undefined,
     recurrenceType: (raw.recurrenceType as string) || null,
-    creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
   };
 }
 

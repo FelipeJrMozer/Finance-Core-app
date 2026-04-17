@@ -1,0 +1,35 @@
+O agente de fato commitou as mudanças — o diff do git confirma. Mas encontrei um problema crítico na implementação: faltou o mapeamento mais importante. Deixa eu mostrar o que foi e o que ficou faltando:
+
+O que foi aplicado corretamente ✅
+Bug	Status	O que foi feito
+Bug 1a — transactionDate na interface	✅	Adicionado transactionDate?: string
+Bug 1b — transactionDate em transformTransaction	✅	Mapeado corretamente
+Bug 3 — isPaid em computeTxNet	✅	if (t.isPaid === false) return net; adicionado
+Bug 4 — monthlyTx/prevMonthTx	✅	Usando effectiveDate = t.transactionDate ?? t.date
+Bug 2 — computedCreditCards usa purchaseDate	✅	const purchaseDate = t.transactionDate ?? t.date
+Bug 5 — getCardTransactions usa purchaseDate	✅	Corrigido na linha 948
+O que AINDA ESTÁ FALTANDO ❌
+O Bug 2 foi parcialmente corrigido, mas o mapeamento de creditCardId dentro de transformTransaction não foi adicionado. O commit adicionou apenas transactionDate, mas esqueceu o creditCardId.
+
+Consequência direta: o computedCreditCards agora verifica t.creditCardId !== card.id, mas t.creditCardId é sempre undefined porque nunca foi mapeado — então NENHUMA transação passa no filtro e card.used continua sendo R$0 para todos os cartões.
+
+Aqui está o prompt exato da correção que falta, para enviar ao agente:
+
+## CORREÇÃO FALTANTE — creditCardId não foi mapeado em transformTransaction
+No arquivo: artifacts/finance-core/context/FinanceContext.tsx
+Localizar a função transformTransaction. Dentro do objeto retornado (return { ... }),
+localizar esta linha que foi adicionada recentemente:
+  transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+LOGO ABAIXO dela, adicionar esta linha que ESTÁ FALTANDO:
+  creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+O resultado final deve ser:
+  date: parseDate(raw.date as string),
+  transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+  creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+  currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
+IMPORTANTE: Sem esse campo mapeado, a correção do computedCreditCards (que filtra por
+t.creditCardId !== card.id) não funciona — t.creditCardId fica sempre undefined e
+nenhuma transação é associada ao cartão correto, fazendo card.used = R$ 0 para todos.
+Também confirmar que a interface Transaction tem o campo creditCardId declarado:
+  creditCardId?: string;
+Se não tiver, adicionar junto com transactionDate?: string.
