@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, Modal,
+  KeyboardAvoidingView, Platform, useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,6 +16,7 @@ export default function TransferScreen() {
   const { theme, colors } = useTheme();
   const { accounts, addTransfer } = useFinance();
   const insets = useSafeAreaInsets();
+  const { width: winWidth } = useWindowDimensions();
 
   const eligible = useMemo(() => accounts.filter((a) => !a.archived && a.type !== 'credit'), [accounts]);
 
@@ -132,10 +135,14 @@ export default function TransferScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: theme.background }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
-        style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 16 }}
+        style={{ flex: 1, backgroundColor: theme.background, width: '100%' }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 32, gap: 14, alignItems: 'stretch', width: '100%', maxWidth: 720, alignSelf: 'center' }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -215,6 +222,7 @@ export default function TransferScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Account picker modal */}
       <Modal
@@ -269,7 +277,7 @@ export default function TransferScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
