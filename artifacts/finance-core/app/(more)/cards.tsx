@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
-import { useFinance, getBillingPeriod, getCurrentInvoiceMonth, isInvoicePayment } from '@/context/FinanceContext';
+import { useFinance, getBillingPeriod, isInvoicePayment } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
 
 const MONTH_LABELS = [
@@ -41,12 +41,16 @@ export default function CardsScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  // Default to the current open invoice month using the FIRST card's closing day
-  // (or fall back to the system's current month).
+  // Default to the LAST CLOSED invoice month (matches the web default).
+  // If today's day > closingDay, the just-closed invoice is the current calendar
+  // month; otherwise it's the previous month.
   const defaultMonth = useMemo(() => {
     const now = new Date();
-    if (creditCards[0]) return getCurrentInvoiceMonth(creditCards[0].closingDay, now);
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const closingDay = creditCards[0]?.closingDay ?? 1;
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const ref = now.getDate() > closingDay ? new Date(y, m - 1, 1) : new Date(y, m - 2, 1);
+    return `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
   }, [creditCards]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(defaultMonth);
