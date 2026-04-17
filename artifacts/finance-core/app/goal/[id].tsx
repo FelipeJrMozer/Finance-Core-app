@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, formatDate } from '@/utils/formatters';
+import { safeFeatherIcon } from '@/utils/icons';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -40,7 +41,7 @@ export default function GoalDetailScreen() {
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
     >
       <LinearGradient colors={[goal.color, `${goal.color}99`]} style={styles.hero}>
-        <Feather name={goal.icon as any || 'target'} size={40} color="#fff" />
+        <Feather name={safeFeatherIcon(goal.icon, 'target')} size={40} color="#fff" />
         <Text style={[styles.heroName, { fontFamily: 'Inter_700Bold' }]}>{goal.name}</Text>
         <Text style={[styles.heroPct, { fontFamily: 'Inter_700Bold' }]}>{(pct * 100).toFixed(1)}%</Text>
         <View style={[styles.heroBar, { backgroundColor: 'rgba(255,255,255,0.3)' }]}>

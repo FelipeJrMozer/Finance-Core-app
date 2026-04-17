@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Goal } from '@/context/FinanceContext';
 import { formatBRL, formatDate } from '@/utils/formatters';
+import { safeFeatherIcon } from '@/utils/icons';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -22,7 +23,7 @@ function GoalCard({ goal, onContribute }: { goal: Goal; onContribute: (g: Goal) 
     <View style={[styles.goalCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <View style={styles.goalHeader}>
         <View style={[styles.goalIconBadge, { backgroundColor: `${goal.color}20` }]}>
-          <Feather name={goal.icon as any || 'target'} size={20} color={goal.color} />
+          <Feather name={safeFeatherIcon(goal.icon, 'target')} size={20} color={goal.color} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.goalName, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{goal.name}</Text>

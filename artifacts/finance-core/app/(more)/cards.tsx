@@ -1,32 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
 
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  checking: 'Conta Corrente', savings: 'Poupança', investment: 'Investimentos', credit: 'Crédito'
-};
-
-const ACCOUNT_TYPE_ICONS: Record<string, string> = {
-  checking: 'briefcase', savings: 'database', investment: 'trending-up', credit: 'credit-card'
-};
-
-export default function AccountsScreen() {
+export default function CardsScreen() {
   const { theme, colors, maskValue } = useTheme();
-  const { accounts, creditCards, updateAccount } = useFinance();
+  const { creditCards } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
 
-  const activeAccounts = accounts.filter((a) => !a.archived);
-  const totalBalance = activeAccounts.reduce((s, a) => s + a.balance, 0);
   const totalCardUsed = creditCards.reduce((s, c) => s + c.used, 0);
   const totalCardLimit = creditCards.reduce((s, c) => s + c.limit, 0);
+  const totalAvailable = totalCardLimit - totalCardUsed;
+  const utilizationPct = totalCardLimit > 0 ? Math.min(totalCardUsed / totalCardLimit, 1) : 0;
 
   return (
     <ScrollView
@@ -40,88 +31,29 @@ export default function AccountsScreen() {
         />
       }
     >
-      <View style={[styles.summaryCard, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}>
-        <Text style={[styles.summaryLabel, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>Saldo total em contas</Text>
-        <Text style={[styles.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalBalance))}</Text>
-        <Text style={[styles.summarySub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{activeAccounts.length} conta{activeAccounts.length !== 1 ? 's' : ''} ativa{activeAccounts.length !== 1 ? 's' : ''}</Text>
-      </View>
-
-      <View>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-            Contas Bancárias
-          </Text>
-          <Pressable
-            onPress={() => router.push('/account/add')}
-            style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          >
-            <Feather name="plus" size={18} color="#000" />
-          </Pressable>
-        </View>
-
-        {activeAccounts.length === 0 ? (
-          <View style={styles.empty}>
-            <Feather name="briefcase" size={40} color={theme.textTertiary} />
-            <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-              Nenhuma conta cadastrada
-            </Text>
+      <View style={[styles.summaryCard, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+        <View style={styles.summaryRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.summaryLabel, { color: colors.danger, fontFamily: 'Inter_400Regular' }]}>Fatura total</Text>
+            <Text style={[styles.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalCardUsed))}</Text>
+            <Text style={[styles.summarySub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>de {maskValue(formatBRL(totalCardLimit))} de limite</Text>
           </View>
-        ) : (
-          <View style={styles.list}>
-            {activeAccounts.map((acc) => (
-              <Pressable
-                key={acc.id}
-                onPress={() => router.push({ pathname: '/account/[id]', params: { id: acc.id } })}
-                style={[styles.accountCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              >
-                <LinearGradient colors={[`${acc.color}20`, `${acc.color}05`]} style={styles.cardGrad}>
-                  <View style={styles.accountTop}>
-                    <View style={[styles.accountIcon, { backgroundColor: `${acc.color}25` }]}>
-                      <Feather name={(ACCOUNT_TYPE_ICONS[acc.type] || 'credit-card') as any} size={20} color={acc.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.accountName, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{acc.name}</Text>
-                      <Text style={[styles.accountInst, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                        {acc.institution} • {ACCOUNT_TYPE_LABELS[acc.type]}
-                      </Text>
-                    </View>
-                    <View style={styles.accountActions}>
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          Alert.alert('Arquivar conta', `Deseja arquivar "${acc.name}"?`, [
-                            { text: 'Cancelar', style: 'cancel' },
-                            {
-                              text: 'Arquivar',
-                              onPress: () => {
-                                updateAccount(acc.id, { archived: true });
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                              },
-                            },
-                          ]);
-                        }}
-                        hitSlop={8}
-                      >
-                        <Feather name="archive" size={16} color={theme.textTertiary} />
-                      </Pressable>
-                      <Feather name="chevron-right" size={16} color={theme.textTertiary} />
-                    </View>
-                  </View>
-                  <Text style={[styles.accountBalance, { color: acc.color, fontFamily: 'Inter_700Bold' }]}>
-                    {maskValue(formatBRL(acc.balance))}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-            ))}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={[styles.summaryLabel, { color: colors.success, fontFamily: 'Inter_400Regular' }]}>Disponível</Text>
+            <Text style={[styles.summarySubValue, { color: colors.success, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(totalAvailable))}</Text>
+          </View>
+        </View>
+        {totalCardLimit > 0 && (
+          <View style={[styles.bar, { backgroundColor: theme.surfaceElevated, marginTop: 12 }]}>
+            <View style={[styles.barFill, { width: `${utilizationPct * 100}%`, backgroundColor: utilizationPct > 0.8 ? colors.danger : colors.warning }]} />
           </View>
         )}
       </View>
 
-      {false && (
       <View>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-            Cartões de Crédito
+            Meus Cartões
           </Text>
           <Pressable
             onPress={() => router.push('/card/add')}
@@ -150,7 +82,7 @@ export default function AccountsScreen() {
         ) : (
           <View style={styles.list}>
             {creditCards.map((card) => {
-              const usedPct = Math.min(card.used / card.limit, 1);
+              const usedPct = card.limit > 0 ? Math.min(card.used / card.limit, 1) : 0;
               const isHighUsage = usedPct > 0.8;
               return (
                 <Pressable
@@ -197,12 +129,7 @@ export default function AccountsScreen() {
                     </View>
 
                     <View style={[styles.usageBar, { backgroundColor: theme.surfaceElevated }]}>
-                      <View
-                        style={[
-                          styles.usageFill,
-                          { backgroundColor: isHighUsage ? colors.danger : card.color, width: `${usedPct * 100}%` }
-                        ]}
-                      />
+                      <View style={[styles.usageFill, { backgroundColor: isHighUsage ? colors.danger : card.color, width: `${usedPct * 100}%` }]} />
                     </View>
 
                     <View style={styles.cardFooter}>
@@ -220,32 +147,28 @@ export default function AccountsScreen() {
           </View>
         )}
       </View>
-      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   summaryCard: { borderRadius: 16, padding: 16, borderWidth: 1 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   summaryLabel: { fontSize: 12, marginBottom: 4 },
-  summaryValue: { fontSize: 26 },
+  summaryValue: { fontSize: 24 },
   summarySub: { fontSize: 11, marginTop: 4 },
-  summarySubValue: { fontSize: 20 },
+  summarySubValue: { fontSize: 18 },
+  bar: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18 },
   addBtn: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   list: { gap: 12 },
-  accountCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
-  cardGrad: { padding: 16, gap: 10 },
-  cardInner: { padding: 16, gap: 10 },
-  accountTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   accountIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   accountName: { fontSize: 15 },
   accountInst: { fontSize: 12, marginTop: 2 },
-  accountActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  accountBalance: { fontSize: 28 },
   cardCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
+  cardInner: { padding: 16, gap: 10 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   cardUsage: { gap: 4 },
   cardAmounts: { flexDirection: 'row', alignItems: 'baseline' },

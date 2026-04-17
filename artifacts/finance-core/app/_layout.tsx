@@ -4,11 +4,8 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import * as Font from "expo-font";
 import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const FeatherFont = require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf");
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -69,20 +66,20 @@ function RootLayoutNav() {
       }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="transaction/[id]" options={{ title: 'Transação', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação', presentation: 'formSheet', sheetAllowedDetents: [0.9, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="transaction/[id]" options={{ title: 'Transação' }} />
+        <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação' }} />
         <Stack.Screen name="account/[id]" options={{ title: 'Conta' }} />
-        <Stack.Screen name="account/add" options={{ title: 'Nova Conta', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="account/add" options={{ title: 'Nova Conta' }} />
         <Stack.Screen name="investment/[id]" options={{ title: 'Ativo' }} />
-        <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'formSheet', sheetAllowedDetents: [0.8, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo' }} />
         <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
-        <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'formSheet', sheetAllowedDetents: [0.75, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="goal/add" options={{ title: 'Nova Meta' }} />
         <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
-        <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="card/add" options={{ title: 'Novo Cartão' }} />
         <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
         <Stack.Screen name="wallets/index" options={{ title: 'Carteiras' }} />
-        <Stack.Screen name="wallets/add" options={{ title: 'Carteira', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="transfer" options={{ title: 'Transferir', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="wallets/add" options={{ title: 'Carteira' }} />
+        <Stack.Screen name="transfer" options={{ title: 'Transferir' }} />
       </Stack>
     </>
   );
@@ -95,25 +92,15 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
     ...Feather.font,
-    Feather: FeatherFont,
   });
-  const [iconsReady, setIconsReady] = React.useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    Font.loadAsync({ Feather: FeatherFont })
-      .catch((e) => console.warn("[fonts] Feather load failed", e))
-      .finally(() => { if (!cancelled) setIconsReady(true); });
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if ((fontsLoaded || fontError) && iconsReady) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError, iconsReady]);
+  }, [fontsLoaded, fontError]);
 
-  if ((!fontsLoaded && !fontError) || !iconsReady) return null;
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>

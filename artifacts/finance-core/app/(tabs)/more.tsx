@@ -211,10 +211,17 @@ export default function MoreScreen() {
           />
           <MenuItem
             testID="menu-accounts"
-            icon="credit-card"
-            label="Contas e Cartões"
-            subtitle="Gerencie suas contas bancárias"
+            icon="briefcase"
+            label="Contas Bancárias"
+            subtitle="Saldos, contas correntes e poupanças"
             onPress={() => router.push('/(more)/accounts')}
+          />
+          <MenuItem
+            testID="menu-cards"
+            icon="credit-card"
+            label="Cartões de Crédito"
+            subtitle="Faturas, limites e vencimentos"
+            onPress={() => router.push('/(more)/cards')}
           />
           <MenuItem
             testID="menu-pending"

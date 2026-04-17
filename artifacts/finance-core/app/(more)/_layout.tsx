@@ -13,7 +13,8 @@ export default function MoreSubLayout() {
   };
   return (
     <Stack screenOptions={screenOptions}>
-      <Stack.Screen name="accounts" options={{ title: 'Contas e Cartões' }} />
+      <Stack.Screen name="accounts" options={{ title: 'Contas Bancárias' }} />
+      <Stack.Screen name="cards" options={{ title: 'Cartões de Crédito' }} />
       <Stack.Screen name="goals" options={{ title: 'Metas Financeiras' }} />
       <Stack.Screen name="budgets" options={{ title: 'Orçamentos' }} />
       <Stack.Screen name="settings" options={{ title: 'Configurações' }} />

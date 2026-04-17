@@ -102,7 +102,7 @@ export default function CustomAlertsScreen() {
         onPress={() => { Haptics.selectionAsync(); setShowForm(!showForm); }}
         style={[styles.addBtn, { backgroundColor: colors.primary }]}
       >
-        <Feather name={showForm ? 'x' : 'bell-plus' as any} size={18} color="#fff" />
+        <Feather name={showForm ? 'x' : 'bell'} size={18} color="#fff" />
         <Text style={[styles.addBtnText, { fontFamily: 'Inter_600SemiBold' }]}>
           {showForm ? 'Cancelar' : 'Novo Alerta'}
         </Text>
