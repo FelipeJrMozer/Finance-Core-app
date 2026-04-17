@@ -95,11 +95,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const text = await res.text();
         const trimmed = text.trim();
-        // Backend doesn't have /api/wallets endpoint - returns SPA HTML
+        // Backend doesn't have /api/wallets endpoint - returns SPA HTML.
+        // Fall back to a single virtual wallet representing all user accounts.
         if (trimmed.startsWith('<') || trimmed.startsWith('<!DOCTYPE')) {
-          console.log('[WalletContext] /api/wallets returned HTML - feature not supported by backend');
-          setWallets([]);
-          setWalletError('not_supported');
+          console.log('[WalletContext] /api/wallets returned HTML - using virtual single wallet');
+          const virtual: Wallet = {
+            id: 'default',
+            name: 'Minha Carteira',
+            isDefault: true,
+            color: PALETTE[0],
+            description: 'Todas as suas contas e cartões',
+          };
+          setWallets([virtual]);
+          setSelectedWallet(virtual);
+          setWalletError(null);
           setIsReady(true);
           setIsLoading(false);
           return;
