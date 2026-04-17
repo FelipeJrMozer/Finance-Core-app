@@ -85,7 +85,9 @@ export default function DebtsScreen() {
   useEffect(() => { load(); }, [load]);
   const onRefresh = () => { setRefreshing(true); load(); };
 
-  const activeDebts = debts.filter((d) => d.status !== 'paid');
+  const activeDebts = debts
+    .filter((d) => d.status !== 'paid')
+    .sort((a, b) => (Number(b.interestRate) || 0) - (Number(a.interestRate) || 0));
   const totalRemaining = activeDebts.reduce((s, d) => s + (Number(d.remainingAmount) || 0), 0);
   const totalPaid = debts.reduce((s, d) => s + (Number(d.paidAmount) || 0), 0);
   const totalOriginal = debts.reduce((s, d) => s + (Number(d.totalAmount) || 0), 0);
