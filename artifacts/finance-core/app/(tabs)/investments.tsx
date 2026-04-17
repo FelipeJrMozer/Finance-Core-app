@@ -65,7 +65,7 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
   const current = investment.quantity * investment.currentPrice;
   const profit = current - invested;
   const pctReturn = invested > 0 ? ((current - invested) / invested) * 100 : 0;
-  const typeColor = typeColor(investment.type) || colors.primary;
+  const tColor = typeColor(investment.type) || colors.primary;
   const isGain = profit >= 0;
 
   return (
@@ -78,8 +78,8 @@ function InvestmentCard({ investment, onPress }: { investment: Investment; onPre
             <View>
               <View style={inv.tickerRow}>
                 <Text style={[inv.ticker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{investment.ticker}</Text>
-                <View style={[inv.typeTag, { backgroundColor: `${typeColor}15` }]}>
-                  <Text style={[inv.typeText, { color: typeColor, fontFamily: 'Inter_600SemiBold' }]}>{typeLabel(investment.type)}</Text>
+                <View style={[inv.typeTag, { backgroundColor: `${tColor}15` }]}>
+                  <Text style={[inv.typeText, { color: tColor, fontFamily: 'Inter_600SemiBold' }]}>{typeLabel(investment.type)}</Text>
                 </View>
               </View>
               <Text style={[inv.name, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]} numberOfLines={1}>

@@ -4,6 +4,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import * as Font from "expo-font";
 import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -93,17 +94,26 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    Feather: FeatherFont,
     ...Feather.font,
+    Feather: FeatherFont,
   });
+  const [iconsReady, setIconsReady] = React.useState(false);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    let cancelled = false;
+    Font.loadAsync({ Feather: FeatherFont })
+      .catch((e) => console.warn("[fonts] Feather load failed", e))
+      .finally(() => { if (!cancelled) setIconsReady(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && iconsReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, iconsReady]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || !iconsReady) return null;
 
   return (
     <SafeAreaProvider>

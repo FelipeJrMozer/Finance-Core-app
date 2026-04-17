@@ -403,14 +403,17 @@ export default function DashboardScreen() {
               {/* Net Worth */}
               <View style={[styles.netWorthCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.netWorthHeader}>
-                  <View>
-                    <Text style={[styles.netWorthLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                      Patrimônio Líquido
-                    </Text>
-                    <Text style={[styles.netWorthValue, { color: netWorth >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_700Bold' }]}>
-                      {maskValue(formatBRL(netWorth))}
-                    </Text>
-                  </View>
+                  <Text style={[styles.netWorthLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                    Patrimônio Líquido
+                  </Text>
+                  <Text
+                    style={[styles.netWorthValue, { color: netWorth >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_700Bold' }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
+                    {maskValue(formatBRL(netWorth))}
+                  </Text>
                   <View style={styles.netWorthBreakdown}>
                     <View style={styles.nwRow}>
                       <View style={[styles.nwDot, { backgroundColor: colors.primary }]} />
@@ -637,7 +640,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
   summaryRow: { flexDirection: 'row', gap: 12 },
   netWorthCard: { borderRadius: 16, padding: 16, borderWidth: 1 },
-  netWorthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  netWorthHeader: { gap: 8 },
   netWorthLabel: { fontSize: 13, marginBottom: 4 },
   netWorthValue: { fontSize: 28 },
   netWorthBreakdown: { gap: 6 },
