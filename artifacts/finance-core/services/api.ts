@@ -90,7 +90,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   }
 
   if (_walletId) {
-    headers['x-wallet-id'] = _walletId;
+    headers['X-Wallet-Id'] = _walletId;
   }
 
   const res = await fetch(`${base}${path}`, { ...options, headers });

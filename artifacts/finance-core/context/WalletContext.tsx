@@ -28,6 +28,7 @@ function extractWallets(data: unknown): Omit<Wallet, 'color'>[] {
   if (Array.isArray(data)) return data;
   if (data && typeof data === 'object') {
     const obj = data as Record<string, unknown>;
+    if (Array.isArray(obj.workspaces)) return obj.workspaces as Omit<Wallet, 'color'>[];
     if (Array.isArray(obj.wallets)) return obj.wallets as Omit<Wallet, 'color'>[];
     if (Array.isArray(obj.data)) return obj.data as Omit<Wallet, 'color'>[];
     if (Array.isArray(obj.items)) return obj.items as Omit<Wallet, 'color'>[];
@@ -86,29 +87,19 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setWalletError(null);
 
-    console.log('[WalletContext] fetching wallets from:', getApiBaseUrl() + '/api/wallets');
+    console.log('[WalletContext] fetching wallets from:', getApiBaseUrl() + '/api/workspaces');
 
     try {
-      const res = await apiFetch('/api/wallets');
-      console.log('[WalletContext] /api/wallets status:', res.status);
+      const res = await apiFetch('/api/workspaces');
+      console.log('[WalletContext] /api/workspaces status:', res.status);
 
       if (res.ok) {
         const text = await res.text();
         const trimmed = text.trim();
-        // Backend doesn't have /api/wallets endpoint - returns SPA HTML.
-        // Fall back to a single virtual wallet representing all user accounts.
         if (trimmed.startsWith('<') || trimmed.startsWith('<!DOCTYPE')) {
-          console.log('[WalletContext] /api/wallets returned HTML - using virtual single wallet');
-          const virtual: Wallet = {
-            id: 'default',
-            name: 'Minha Carteira',
-            isDefault: true,
-            color: PALETTE[0],
-            description: 'Todas as suas contas e cartões',
-          };
-          setWallets([virtual]);
-          setSelectedWallet(virtual);
-          setWalletError(null);
+          console.log('[WalletContext] /api/workspaces returned HTML - endpoint missing');
+          setWallets([]);
+          setWalletError('not_supported');
           setIsReady(true);
           setIsLoading(false);
           return;
