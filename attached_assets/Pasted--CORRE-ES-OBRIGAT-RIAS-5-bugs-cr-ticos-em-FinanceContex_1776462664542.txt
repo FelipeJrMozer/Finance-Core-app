@@ -1,0 +1,146 @@
+## CORREÇÕES OBRIGATÓRIAS — 5 bugs críticos em FinanceContext.tsx e card/[id].tsx
+## ATENÇÃO: Nenhuma das correções anteriores foi aplicada. Aplicar TODAS agora.
+
+---
+
+## ARQUIVO 1: artifacts/finance-core/context/FinanceContext.tsx
+
+### CORREÇÃO 1 — Linha 217 (dentro de transformTransaction)
+Após a linha:
+  date: parseDate(raw.date as string),
+
+INSERIR estas duas linhas logo abaixo:
+  creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+  transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+
+O resultado deve ficar:
+  date: parseDate(raw.date as string),
+  creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+  transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+  currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
+
+
+### CORREÇÃO 2 — Linha 364 (função computeTxNet)
+SUBSTITUIR a função inteira de linha 364 a 374:
+
+ANTES (remover):
+function computeTxNet(accountId: string, txs: Transaction[]): number {
+  return txs.reduce((net, t) => {
+    if (t.accountId === accountId) {
+      if (t.type === 'income') return net + t.amount;
+      if (t.type === 'expense') return net - t.amount;
+      if (t.type === 'transfer') return net - t.amount;
+    }
+    if (t.toAccountId === accountId && t.type === 'transfer') return net + t.amount;
+    return net;
+  }, 0);
+}
+
+DEPOIS (colocar):
+function computeTxNet(accountId: string, txs: Transaction[]): number {
+  return txs.reduce((net, t) => {
+    if (t.isPaid === false) return net;
+    if (t.accountId === accountId) {
+      if (t.type === 'income') return net + t.amount;
+      if (t.type === 'expense') return net - t.amount;
+      if (t.type === 'transfer') return net - t.amount;
+    }
+    if (t.toAccountId === accountId && t.type === 'transfer') return net + t.amount;
+    return net;
+  }, 0);
+}
+
+
+### CORREÇÃO 3 — Linha 618 (monthlyTx)
+SUBSTITUIR:
+  const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
+POR:
+  const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
+
+
+### CORREÇÃO 4 — Linha 619 (prevMonthTx)
+SUBSTITUIR:
+  const prevMonthTx = transactions.filter((t) => t.date.startsWith(prevMonth));
+POR:
+  const prevMonthTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(prevMonth));
+
+
+### CORREÇÃO 5 — Linhas 634 a 644 (computedCreditCards)
+SUBSTITUIR o bloco inteiro:
+
+ANTES (remover linhas 634-644):
+  const computedCreditCards = useMemo(() => {
+    const now = new Date();
+    return creditCards.map((card) => {
+      const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+      const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+      const used = transactions
+        .filter((t) => t.accountId === card.accountId && t.type === 'expense' && t.date >= start && t.date <= end)
+        .reduce((s, t) => s + t.amount, 0);
+      return { ...card, used };
+    });
+  }, [creditCards, transactions]);
+
+DEPOIS (substituir por):
+  const computedCreditCards = useMemo(() => {
+    const now = new Date();
+    return creditCards.map((card) => {
+      const openInvoiceMonth = getCurrentInvoiceMonth(card.closingDay, now);
+      const { start, end } = getBillingPeriod(card.closingDay, openInvoiceMonth);
+      const used = transactions
+        .filter((t) => {
+          if (t.creditCardId !== card.id) return false;
+          if (t.type !== 'expense') return false;
+          if (isInvoicePayment(t)) return false;
+          const purchaseDate = t.transactionDate ?? t.date;
+          return purchaseDate >= start && purchaseDate <= end;
+        })
+        .reduce((s, t) => s + t.amount, 0);
+      return { ...card, used };
+    });
+  }, [creditCards, transactions]);
+
+
+### CORREÇÃO 6 — Interface Transaction (buscar a declaração da interface Transaction)
+Localizar a interface Transaction (export interface Transaction { ... }).
+Verificar se os campos abaixo já existem. Se NÃO existirem, adicioná-los:
+  creditCardId?: string;
+  transactionDate?: string;
+
+---
+
+## ARQUIVO 2: artifacts/finance-core/app/card/[id].tsx
+
+### CORREÇÃO 7 — Filtro de transações por período de fatura
+Buscar no arquivo qualquer linha que compare t.date com start e end do período de fatura.
+Padrão a procurar: t.date >= start ou t.date <= end
+
+Para CADA ocorrência encontrada, substituir:
+  t.date >= start   →   (t.transactionDate ?? t.date) >= start
+  t.date <= end     →   (t.transactionDate ?? t.date) <= end
+
+Também buscar por t.date.startsWith(selectedMonth) dentro de filtros de transações de cartão e substituir:
+  t.date.startsWith(selectedMonth)   →   (t.transactionDate ?? t.date).startsWith(selectedMonth)
+
+---
+
+## VERIFICAÇÃO OBRIGATÓRIA APÓS FAZER AS CORREÇÕES
+
+Abrir o arquivo FinanceContext.tsx e confirmar:
+
+1. Na função transformTransaction, existem as linhas:
+   creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
+   transactionDate: raw.transactionDate ? parseDate(raw.transactionDate as string) : undefined,
+
+2. Na função computeTxNet, a primeira linha do reduce é:
+   if (t.isPaid === false) return net;
+
+3. monthlyTx contém:
+   (t.transactionDate ?? t.date).startsWith(currentMonth)
+
+4. prevMonthTx contém:
+   (t.transactionDate ?? t.date).startsWith(prevMonth)
+
+5. computedCreditCards usa:
+   if (t.creditCardId !== card.id) return false;
+   const purchaseDate = t.transactionDate ?? t.date;
