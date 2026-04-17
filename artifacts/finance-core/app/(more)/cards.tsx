@@ -53,20 +53,23 @@ export default function CardsScreen() {
 
   // Per-card invoice for the selected month
   const cardData = useMemo(() => {
+    const anyHasCardId = transactions.some((t) => t.creditCardId);
     return creditCards.map((card) => {
       const { start, end } = getBillingPeriod(card.closingDay, selectedMonth);
-      const periodTx = transactions.filter((t) =>
-        t.accountId === card.accountId &&
-        t.type === 'expense' &&
-        !isInvoicePayment(t) &&
-        t.date >= start && t.date <= end
-      );
+      const belongsToCard = (t: typeof transactions[number]) =>
+        anyHasCardId ? t.creditCardId === card.id : t.accountId === card.accountId;
+      const periodTx = transactions.filter((t) => {
+        if (!belongsToCard(t)) return false;
+        if (t.type !== 'expense') return false;
+        if (isInvoicePayment(t)) return false;
+        const desc = (t.description || '').toLowerCase();
+        if (desc.startsWith('transferência') || desc.startsWith('transferencia')) return false;
+        return t.date >= start && t.date <= end;
+      });
       const invoice = periodTx.reduce((s, t) => s + t.amount, 0);
-      // Detect payment: invoice payment transactions in the post-closing window
-      // (between this invoice's close and next invoice close).
       const { end: nextEnd } = getBillingPeriod(card.closingDay, shiftMonth(selectedMonth, 1));
       const paymentTx = transactions.filter((t) =>
-        t.accountId === card.accountId &&
+        belongsToCard(t) &&
         t.type === 'expense' &&
         isInvoicePayment(t) &&
         t.date > end && t.date <= nextEnd

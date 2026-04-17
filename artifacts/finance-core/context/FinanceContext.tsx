@@ -30,6 +30,7 @@ export interface Transaction {
   currency?: string;
   transferGroupId?: string;
   recurrenceType?: string | null;
+  creditCardId?: string;
 }
 
 export interface Account {
@@ -228,6 +229,7 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
     currency: (raw.currency as string) || 'BRL',
     transferGroupId: (raw.transferGroupId as string) || undefined,
     recurrenceType: (raw.recurrenceType as string) || null,
+    creditCardId: (raw.creditCardId as string) || (raw.cardId as string) || undefined,
   };
 }
 
@@ -299,11 +301,19 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
   // but represent payments, not new charges).
   const openInvoiceMonth = getCurrentInvoiceMonth(closingDay, now);
   const { start: billingStart, end: billingEnd } = getBillingPeriod(closingDay, openInvoiceMonth);
+  const cardId = raw.id as string;
+  const anyHasCardId = transactions.some((t) => t.creditCardId);
   const computedUsed = transactions
     .filter((t) => {
-      if (t.accountId !== (raw.accountId as string)) return false;
+      if (anyHasCardId) {
+        if (t.creditCardId !== cardId) return false;
+      } else {
+        if (t.accountId !== (raw.accountId as string)) return false;
+      }
       if (t.type !== 'expense') return false;
       if (isInvoicePayment(t)) return false;
+      const desc = (t.description || '').toLowerCase();
+      if (desc.startsWith('transferência') || desc.startsWith('transferencia')) return false;
       return t.date >= billingStart && t.date <= billingEnd;
     })
     .reduce((s, t) => s + t.amount, 0);
@@ -560,6 +570,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       const txsData = toArray<Record<string, unknown>>(txs.status === 'fulfilled' ? txs.value : []);
       console.log('[FinanceContext] transactions:', txsData.length);
+      if (txsData[0]) {
+        console.log('[FinanceContext] sample tx fields:', Object.keys(txsData[0]).sort().join(','));
+        console.log('[FinanceContext] sample tx 0:', JSON.stringify(txsData[0]));
+      }
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
       transactionsRef.current = mappedTx;
@@ -567,6 +581,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       recalibrateOpeningBalances(mappedAccounts, mappedTx);
 
       const cardsData = toArray<Record<string, unknown>>(cards.status === 'fulfilled' ? cards.value : []);
+      if (cardsData[0]) {
+        console.log('[FinanceContext] sample card fields:', Object.keys(cardsData[0]).sort().join(','));
+        console.log('[FinanceContext] sample card 0:', JSON.stringify(cardsData[0]));
+      }
       console.log('[FinanceContext] cards:', cardsData.length);
       const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
       setCreditCards(mappedCards);
@@ -899,12 +917,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const getCardTransactions = useCallback((cardId: string, month?: string) => {
     const card = creditCards.find((c) => c.id === cardId);
     if (!card) return [];
+    // Prefer the explicit creditCardId link if any transaction in the dataset
+    // carries one (the web backend tags real card purchases this way). Otherwise
+    // fall back to matching the card's underlying account id.
+    const anyHasCardId = transactions.some((t) => t.creditCardId);
     return transactions.filter((t) => {
-      if (t.accountId !== card.accountId) return false;
+      if (anyHasCardId) {
+        if (t.creditCardId !== cardId) return false;
+      } else {
+        if (t.accountId !== card.accountId) return false;
+      }
       if (t.type === 'transfer') return false;
       if (isInvoicePayment(t)) return false;
+      // Defensive: also exclude obvious account transfers wrongly typed as expense
+      const desc = (t.description || '').toLowerCase();
+      if (desc.startsWith('transferência') || desc.startsWith('transferencia')) return false;
       if (month) {
-        // Use billing cycle dates instead of calendar month
         const { start, end } = getBillingPeriod(card.closingDay, month);
         return t.date >= start && t.date <= end;
       }
