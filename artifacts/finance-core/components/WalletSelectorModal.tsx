@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Modal, View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Linking
+  Modal, View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
@@ -45,14 +45,14 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
 
   const handleManage = () => {
     Haptics.selectionAsync();
-    Linking.openURL('https://pilar-financeiro.replit.app');
     onClose();
+    setTimeout(() => router.push('/wallets'), 50);
   };
 
   const handleNew = () => {
     Haptics.selectionAsync();
-    Linking.openURL('https://pilar-financeiro.replit.app');
     onClose();
+    setTimeout(() => router.push('/wallets/add'), 50);
   };
 
   const handleRetry = () => {
@@ -159,7 +159,7 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
               Carteiras indisponíveis
             </Text>
             <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-              Use o sistema web para gerenciar carteiras
+              Verifique sua conexão e tente novamente
             </Text>
             <Pressable
               onPress={handleRetry}
@@ -178,7 +178,7 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
               Nenhuma carteira encontrada
             </Text>
             <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-              Crie uma carteira no sistema web
+              Toque em "Nova carteira" para começar
             </Text>
             <Pressable
               onPress={handleRetry}

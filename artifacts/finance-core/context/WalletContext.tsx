@@ -10,6 +10,7 @@ export interface Wallet {
   currency?: string;
   color: string;
   description?: string;
+  icon?: string;
 }
 
 const PALETTE = [
@@ -69,6 +70,10 @@ interface WalletContextType {
   walletDebug: string;
   selectWallet: (wallet: Wallet) => Promise<void>;
   refreshWallets: () => Promise<void>;
+  createWallet: (data: { name: string; description?: string; color?: string; icon?: string }) => Promise<Wallet>;
+  updateWallet: (id: string, data: Partial<{ name: string; description: string; color: string; icon: string; isDefault: boolean }>) => Promise<Wallet>;
+  deleteWallet: (id: string) => Promise<void>;
+  setDefaultWallet: (id: string) => Promise<void>;
 }
 
 const SELECTED_WALLET_KEY = 'pf_selected_wallet_id';
@@ -198,6 +203,59 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     console.log('[WalletContext] user manually selected:', wallet.name);
   }, []);
 
+  const createWallet = useCallback(async (data: { name: string; description?: string; color?: string; icon?: string }) => {
+    const res = await apiFetch('/api/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Falha ao criar carteira (${res.status}): ${txt.slice(0, 100)}`);
+    }
+    const json = await res.json().catch(() => ({}));
+    const created: Wallet = (json.workspace || json) as Wallet;
+    await refreshWallets();
+    return created;
+  }, [refreshWallets]);
+
+  const updateWallet = useCallback(async (id: string, data: Partial<{ name: string; description: string; color: string; icon: string; isDefault: boolean }>) => {
+    const res = await apiFetch(`/api/workspaces/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Falha ao atualizar carteira (${res.status}): ${txt.slice(0, 100)}`);
+    }
+    const json = await res.json().catch(() => ({}));
+    const updated: Wallet = (json.workspace || json) as Wallet;
+    await refreshWallets();
+    return updated;
+  }, [refreshWallets]);
+
+  const deleteWallet = useCallback(async (id: string) => {
+    const res = await apiFetch(`/api/workspaces/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`Falha ao excluir carteira (${res.status}): ${txt.slice(0, 100)}`);
+    }
+    if (selectedWallet?.id === id) {
+      const remaining = wallets.filter((w) => w.id !== id);
+      if (remaining.length > 0) {
+        const next = findDefaultWallet(remaining) || remaining[0];
+        setSelectedWallet(next);
+        await AsyncStorage.setItem(SELECTED_WALLET_KEY, next.id);
+      } else {
+        setSelectedWallet(null);
+      }
+    }
+    await refreshWallets();
+  }, [refreshWallets, selectedWallet, wallets]);
+
+  const setDefaultWallet = useCallback(async (id: string) => {
+    await updateWallet(id, { isDefault: true });
+  }, [updateWallet]);
+
   return (
     <WalletContext.Provider
       value={{
@@ -210,6 +268,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         walletDebug,
         selectWallet,
         refreshWallets,
+        createWallet,
+        updateWallet,
+        deleteWallet,
+        setDefaultWallet,
       }}
     >
       {children}
