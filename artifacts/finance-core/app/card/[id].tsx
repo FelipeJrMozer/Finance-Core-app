@@ -503,7 +503,7 @@ export default function CardDetailScreen() {
                 const info = getCategoryInfo(tx.category);
                 const remaining = (tx.installments || 1) - (tx.currentInstallment || 1) + 1;
                 const totalPending = tx.amount * remaining;
-                const isCurrentMonth = tx.date.startsWith(currentMonthStr);
+                const isCurrentMonth = (tx.transactionDate ?? tx.date).startsWith(currentMonthStr);
                 return (
                   <View key={tx.id} style={[styles.installCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <View style={styles.installHeader}>
