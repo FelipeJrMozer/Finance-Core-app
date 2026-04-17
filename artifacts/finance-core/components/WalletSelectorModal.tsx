@@ -131,11 +131,6 @@ export function WalletSelectorModal({ visible, onClose }: Props) {
             <Text style={[styles.hintText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
               Faça login novamente para carregar suas carteiras
             </Text>
-            {walletDebug ? (
-              <Text selectable style={{ fontSize: 10, color: theme.textTertiary, marginTop: 8, paddingHorizontal: 8, textAlign: 'center' }}>
-                {walletDebug}
-              </Text>
-            ) : null}
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 onPress={handleRetry}
