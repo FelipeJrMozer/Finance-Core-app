@@ -228,7 +228,7 @@ export default function InvestmentsScreen() {
           style={[styles.header, { paddingTop: topPad + 16 }]}
         >
           <View style={styles.headerTop}>
-            <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Carteira</Text>
+            <Text style={[styles.screenTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Investimentos</Text>
             <Pressable
               testID="add-investment"
               onPress={() => { Haptics.selectionAsync(); router.push('/investment/add'); }}

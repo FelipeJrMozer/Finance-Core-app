@@ -7,6 +7,9 @@ import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -139,7 +142,7 @@ export default function SettingsScreen() {
     notifyDARF, notifyBudget, notifyWeekly, setNotifySetting,
   } = useTheme();
   const { user, updateUser } = useAuth();
-  const { transactions, accounts, investments } = useFinance();
+  const { transactions, accounts, investments, settings, updateSettings } = useFinance();
   const insets = useSafeAreaInsets();
 
   const [editingName, setEditingName] = useState(false);
@@ -150,6 +153,42 @@ export default function SettingsScreen() {
   useEffect(() => {
     getNotificationPermissionStatus().then(setNotifPermission);
   }, []);
+
+  // Restore locally cached avatar URI on mount (in case the auth user object
+  // does not yet have it after a fresh login).
+  useEffect(() => {
+    AsyncStorage.getItem('pf_avatar_uri').then((uri) => {
+      if (uri && !user?.avatar) {
+        updateUser({ avatar: uri });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão necessária', 'Precisamos de acesso à galeria para alterar sua foto.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets[0]?.uri) {
+        const uri = result.assets[0].uri;
+        await AsyncStorage.setItem('pf_avatar_uri', uri);
+        updateUser({ avatar: uri });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      console.warn('[avatar] pick failed', e);
+      Alert.alert('Erro', 'Não foi possível alterar a foto.');
+    }
+  };
 
   const handleNotifToggle = async (key: 'notifyDARF' | 'notifyBudget' | 'notifyWeekly', value: boolean) => {
     if (value && notifPermission !== 'granted') {
@@ -254,11 +293,24 @@ export default function SettingsScreen() {
         colors={isDark ? ['#0A0A0F', '#091520'] : ['#EBF8FF', '#F5F7FA']}
         style={styles.profileCard}
       >
-        <View style={[styles.avatarXL, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.avatarLetter, { fontFamily: 'Inter_700Bold' }]}>
-            {user?.name?.charAt(0).toUpperCase() || 'U'}
-          </Text>
-        </View>
+        <Pressable
+          testID="button-change-avatar"
+          onPress={handlePickAvatar}
+          style={styles.avatarWrap}
+        >
+          {user?.avatar ? (
+            <Image source={{ uri: user.avatar }} style={styles.avatarXL} />
+          ) : (
+            <View style={[styles.avatarXL, { backgroundColor: colors.primary }]}>
+              <Text style={[styles.avatarLetter, { fontFamily: 'Inter_700Bold' }]}>
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.avatarCamera, { backgroundColor: colors.primary, borderColor: theme.background }]}>
+            <Feather name="camera" size={12} color="#000" />
+          </View>
+        </Pressable>
 
         {editingName ? (
           <View style={styles.nameEdit}>
@@ -403,6 +455,26 @@ export default function SettingsScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* Modules */}
+        <SectionTitle title="Módulos" />
+        <View style={[styles.group, { borderColor: theme.border }]}>
+          <ToggleRow
+            icon="file-text"
+            label="Contas a Pagar"
+            subtitle="Lançamento de contas recorrentes e vencimentos"
+            value={settings?.billsEnabled !== false}
+            onChange={(v) => updateSettings({ billsEnabled: v })}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="archive"
+            label="Reservas Programadas"
+            subtitle="Sinking funds para despesas futuras"
+            value={settings?.sinkingFundsEnabled !== false}
+            onChange={(v) => updateSettings({ sinkingFundsEnabled: v })}
+          />
         </View>
 
         {/* Privacy */}
@@ -599,8 +671,10 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   profileCard: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 28, alignItems: 'center', gap: 16 },
+  avatarWrap: { position: 'relative' },
   avatarXL: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   avatarLetter: { fontSize: 40, color: '#000' },
+  avatarCamera: { position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   profileInfo: { alignItems: 'center', gap: 6 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profileName: { fontSize: 24 },

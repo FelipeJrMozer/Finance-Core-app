@@ -307,8 +307,13 @@ export default function DashboardScreen() {
   };
 
   const topBudgets = budgets.filter((b) => b.month === currentMonth).slice(0, 3);
-  const getBudgetSpent = (category: string) =>
-    monthlyTx.filter((t) => t.category === category && t.type === 'expense')
+  const getBudgetSpent = (b: { category: string; categoryId?: string }) =>
+    monthlyTx
+      .filter((t) => {
+        if (t.type !== 'expense') return false;
+        if (b.categoryId && t.categoryId) return t.categoryId === b.categoryId;
+        return (t.category || '').toLowerCase() === (b.category || '').toLowerCase();
+      })
       .reduce((s, t) => s + t.amount, 0);
 
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
@@ -563,7 +568,7 @@ export default function DashboardScreen() {
                 </Pressable>
               </View>
               {topBudgets.map((b) => (
-                <BudgetProgress key={b.id} category={b.category} limit={b.limit} spent={getBudgetSpent(b.category)} compact />
+                <BudgetProgress key={b.id} category={b.category} limit={b.limit} spent={getBudgetSpent(b)} compact />
               ))}
             </View>
           )}

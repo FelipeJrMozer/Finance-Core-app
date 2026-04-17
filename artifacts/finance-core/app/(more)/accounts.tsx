@@ -24,7 +24,10 @@ export default function AccountsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const activeAccounts = accounts.filter((a) => !a.archived);
-  const totalBalance = activeAccounts.reduce((s, a) => s + a.balance, 0);
+  // Bank accounts only — credit accounts have negative balances representing card debt
+  // and would distort the total cash balance shown in this screen.
+  const bankAccounts = activeAccounts.filter((a) => a.type !== 'credit');
+  const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
   const totalCardUsed = creditCards.reduce((s, c) => s + c.used, 0);
   const totalCardLimit = creditCards.reduce((s, c) => s + c.limit, 0);
 
@@ -43,7 +46,7 @@ export default function AccountsScreen() {
       <View style={[styles.summaryCard, { backgroundColor: `${colors.primary}12`, borderColor: `${colors.primary}30` }]}>
         <Text style={[styles.summaryLabel, { color: colors.primary, fontFamily: 'Inter_400Regular' }]}>Saldo total em contas</Text>
         <Text style={[styles.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalBalance))}</Text>
-        <Text style={[styles.summarySub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{activeAccounts.length} conta{activeAccounts.length !== 1 ? 's' : ''} ativa{activeAccounts.length !== 1 ? 's' : ''}</Text>
+        <Text style={[styles.summarySub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{bankAccounts.length} conta{bankAccounts.length !== 1 ? 's' : ''} bancária{bankAccounts.length !== 1 ? 's' : ''}</Text>
       </View>
 
       <View>
@@ -59,7 +62,7 @@ export default function AccountsScreen() {
           </Pressable>
         </View>
 
-        {activeAccounts.length === 0 ? (
+        {bankAccounts.length === 0 ? (
           <View style={styles.empty}>
             <Feather name="briefcase" size={40} color={theme.textTertiary} />
             <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
@@ -68,7 +71,7 @@ export default function AccountsScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {activeAccounts.map((acc) => (
+            {bankAccounts.map((acc) => (
               <Pressable
                 key={acc.id}
                 onPress={() => router.push({ pathname: '/account/[id]', params: { id: acc.id } })}

@@ -45,6 +45,10 @@ export default function PJDashboard() {
     { icon: 'minus-circle' as const, label: 'Despesa', color: colors.danger, route: '/(more)/pj/despesas' },
     { icon: 'users' as const, label: 'Clientes', color: colors.primary, route: '/(more)/pj/clientes' },
     { icon: 'dollar-sign' as const, label: 'Pró-labore', color: colors.warning, route: '/(more)/pj/retiradas' },
+    { icon: 'file-text' as const, label: 'Notas Fiscais', color: colors.primary, route: '/(more)/pj/notas-fiscais' },
+    { icon: 'bar-chart-2' as const, label: 'Fluxo de Caixa', color: colors.success, route: '/(more)/pj/fluxo-caixa' },
+    { icon: 'activity' as const, label: 'Saúde do Negócio', color: colors.warning, route: '/(more)/pj/saude-negocio' },
+    { icon: 'clipboard' as const, label: 'DASN-SIMEI', color: colors.primary, route: '/(more)/pj/dasn-simei' },
   ];
 
   return (

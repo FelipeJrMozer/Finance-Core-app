@@ -1,0 +1,322 @@
+❌ Problemas Encontrados
+CRÍTICOS:
+
+A. accounts.tsx — Saldo total inclui contas de crédito
+
+// BUG: activeAccounts inclui type === 'credit' (saldo negativo)
+const activeAccounts = accounts.filter((a) => !a.archived);
+const totalBalance = activeAccounts.reduce((s, a) => s + a.balance, 0);
+// FIX: 
+const bankAccounts = activeAccounts.filter(a => a.type !== 'credit');
+const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+
+A aba "Contas Bancárias" mostra o total somando contas do tipo "credit" que têm saldo negativo (= dívida no cartão), distorcendo o saldo total exibido.
+
+B. Matching de categoria por nome em vez de ID (frágil)
+
+Em budgets.tsx, more.tsx e possivelmente outros:
+
+// BUG: usa nome string — quebra com acentos, casing, renomes
+t.category === cat
+// FIX: usar categoryId
+t.categoryId === budget.categoryId
+
+O gasto por categoria usa comparação de string com o campo t.category (nome) em vez de t.categoryId. Isso falha quando o usuário renomeia categorias ou há variação de capitalização.
+
+ALTOS:
+
+C. Label da aba "Investimentos" está como "Carteira"
+
+Em app/(tabs)/_layout.tsx — tanto no NativeTabs quanto no Tabs (ClassicTabLayout):
+
+// BUG:
+<Label>Carteira</Label>
+// FIX:
+<Label>Investimentos</Label>
+
+No Tabs (ClassicTabLayout), alterar o tabBarLabel da rota investments de "Carteira" para "Investimentos".
+
+D. Módulo PJ incompleto
+
+Screens existentes: index, receitas, despesas, das, retiradas, clientes
+
+Screens faltando (precisam ser criadas em app/(more)/pj/):
+
+notas-fiscais.tsx — emissão/consulta NFS-e
+fluxo-caixa.tsx — fluxo de caixa do negócio (entradas vs saídas projetadas)
+saude-negocio.tsx — score de saúde do negócio (margem, pró-labore vs faturamento, reserva, impostos)
+dasn-simei.tsx — cálculo e checklist DASN-SIMEI para MEI
+E. Settings sem toggle de módulos
+
+A tela settings.tsx não expõe os toggles billsEnabled e sinkingFundsEnabled. Se esses campos existem no AppSettings, precisam de Switches para ativar/desativar "Contas a Pagar" e "Reservas Programadas".
+
+🔧 Melhorias Médias
+F. wq() adiciona ?walletId= redundante na URL
+
+O backend já recebe o X-Wallet-Id via header (_walletId). A função wq() em FinanceContext ainda appenda ?walletId=xxx na URL — o backend ignora esse query param. Isso não quebra nada mas polui as URLs. Remover o append do walletId no wq() após confirmar que o header basta.
+
+G. transactions.tsx não tem filtro por isPaid
+
+A tela de transações filtra por tipo, conta e busca de texto, mas não tem opção de filtrar só transações isPaid = false (lançamentos pendentes de confirmação). Isso já existe em /api-pending-transactions mas não como filtro nativo na listagem principal.
+
+H. Sem uploader de foto de perfil em Settings
+
+A tela de configurações não tem opção para alterar a foto/avatar do usuário (via PUT /api/user com profileImageUrl).
+
+I. Sem tela de contas/cartões arquivados
+
+Não há forma de visualizar ou restaurar contas e cartões arquivados no mobile.
+
+📋 Prompt para o Agente Mobile — Correções por Estágio
+Cole este prompt no repositório FelipeJrMozer/Finance-Core-app:
+
+## Pilar Financeiro Mobile — Correções de Bugs e Completude (Abril 2026)
+### Estágio 1: Bugs Críticos (implementar primeiro)
+#### Bug 1 — accounts.tsx: Saldo total inclui contas de crédito
+Arquivo: `artifacts/finance-core/app/(more)/accounts.tsx`
+O totalBalance está somando contas do tipo "credit" que têm saldo negativo.
+ANTES:
+```typescript
+const activeAccounts = accounts.filter((a) => !a.archived);
+const totalBalance = activeAccounts.reduce((s, a) => s + a.balance, 0);
+
+DEPOIS:
+
+const activeAccounts = accounts.filter((a) => !a.archived);
+const bankAccounts = activeAccounts.filter((a) => a.type !== 'credit');
+const totalBalance = bankAccounts.reduce((s, a) => s + a.balance, 0);
+
+Também no render, iterar bankAccounts para a seção de "Contas Bancárias" e
+creditCards para a seção de "Cartões de Crédito" (já está assim, mas garantir
+que a iteração de contas não mostra type === 'credit' duplicado, pois eles já
+aparecem via creditCards).
+
+Bug 2 — Matching de categoria por nome frágil
+Arquivos:
+
+artifacts/finance-core/app/(more)/budgets.tsx
+artifacts/finance-core/app/(tabs)/more.tsx
+A função getBudgetSpent(category) usa t.category === category (comparação
+de nome string). Isso falha quando categorias têm variação de capitalização ou
+são renomeadas.
+
+Abordagem correta: usar categoryId. O budget objeto tem categoryId?: string.
+A transação tem categoryId?: string. Comparar por ID quando disponível,
+fallback por nome.
+
+// Em budgets.tsx e more.tsx, substituir getBudgetSpent:
+const getBudgetSpent = (budget: Budget) => {
+  const amount = monthlyTx
+    .filter((t) => {
+      if (t.type !== 'expense') return false;
+      if (budget.categoryId && t.categoryId) {
+        return t.categoryId === budget.categoryId;
+      }
+      return t.category?.toLowerCase() === budget.category?.toLowerCase();
+    })
+    .reduce((s, t) => s + t.amount, 0);
+  return amount;
+};
+
+Atualizar todos os locais onde getBudgetSpent(b.category) é chamado para
+getBudgetSpent(b) (passando o objeto budget inteiro).
+
+Estágio 2: Correções de UX (implementar depois dos críticos)
+Fix 3 — Label da aba "Investimentos"
+Arquivo: artifacts/finance-core/app/(tabs)/_layout.tsx
+
+No NativeTabs:
+
+// ANTES:
+<Label>Carteira</Label>
+// DEPOIS:
+<Label>Investimentos</Label>
+
+No ClassicTabLayout (Tabs component), na rota investments:
+
+tabBarLabel: 'Investimentos'  // era 'Carteira'
+
+Fix 4 — Settings: toggles de módulos
+Arquivo: artifacts/finance-core/app/(more)/settings.tsx
+
+Adicionar uma seção "Módulos" com Switches para:
+
+billsEnabled — "Contas a Pagar"
+sinkingFundsEnabled — "Reservas Programadas"
+Ao toggle, chamar updateSettings({ billsEnabled: newValue }) via FinanceContext.
+O campo já existe no AppSettings interface.
+
+Exemplo de seção a adicionar:
+
+{/* Módulos */}
+<SectionHeader title="Módulos" />
+<SettingRow
+  icon="file-text"
+  label="Contas a Pagar"
+  subtitle="Ativar lançamento de contas recorrentes"
+  right={
+    <Switch
+      value={settings?.billsEnabled ?? true}
+      onValueChange={(v) => updateSettings({ billsEnabled: v })}
+      trackColor={{ false: colors.border, true: `${colors.primary}80` }}
+      thumbColor={settings?.billsEnabled ? colors.primary : colors.textTertiary}
+    />
+  }
+/>
+<SettingRow
+  icon="piggy-bank"
+  label="Reservas Programadas"
+  subtitle="Sinking funds para despesas futuras"
+  right={
+    <Switch
+      value={settings?.sinkingFundsEnabled ?? true}
+      onValueChange={(v) => updateSettings({ sinkingFundsEnabled: v })}
+      trackColor={{ false: colors.border, true: `${colors.primary}80` }}
+      thumbColor={settings?.sinkingFundsEnabled ? colors.primary : colors.textTertiary}
+    />
+  }
+/>
+
+Estágio 3: Módulo PJ Completo
+Criar os seguintes arquivos em artifacts/finance-core/app/(more)/pj/:
+
+3a. fluxo-caixa.tsx — Fluxo de Caixa do Negócio
+Tela com 3 seções:
+
+Resumo do mês atual: entradas PJ (receitas), saídas PJ (despesas + retiradas + DAS)
+Gráfico de barras simples (12 meses): entradas vs saídas mês a mês
+Usar os dados de transactions filtrados por wallet PJ
+Barras usando View com height proporcional (sem libs de chart pesadas)
+Projeção: Se receita média mensal (últimos 3 meses) × 12 < faturamento MEI limite (R$ 81.000), mostrar aviso
+Faixa MEI: até R$ 81.000/ano | ME: R$ 81.001 a R$ 360.000/ano
+Fonte de dados: FinanceContext transactions filtrados pela wallet PJ selecionada.
+
+3b. saude-negocio.tsx — Saúde do Negócio
+Score de 0-100 baseado em 5 métricas (20 pontos cada):
+
+Margem de Lucro = (receitas - despesas - DAS - retiradas) / receitas
+≥ 30%: 20 pts | 15-30%: 14 pts | 10-15%: 8 pts | <10%: 0 pts
+Pró-labore vs Faturamento = retiradas / receitas
+≤ 40%: 20 pts | 40-60%: 14 pts | 60-80%: 8 pts | >80%: 0 pts
+Reserva de Emergência Negócio = saldo contas PJ / despesas médias mensais
+≥ 3 meses: 20 pts | 2-3: 14 pts | 1-2: 8 pts | <1: 0 pts
+DAS em dia = tem pagamento DAS no mês atual → 20 pts | não tem → 0 pts
+Crescimento de Receita = receita mês atual vs média dos 3 meses anteriores
+5% crescimento: 20 pts | 0-5%: 14 pts | queda: 0 pts
+
+Mostrar:
+
+Score total com cor (verde ≥70, amarelo 40-69, vermelho <40)
+Cada métrica individualmente com o valor e pontuação
+Dicas de melhoria para métricas baixas
+3c. dasn-simei.tsx — DASN-SIMEI (MEI anual)
+Tela de checklist e cálculo para a Declaração Anual do MEI:
+
+Campos:
+
+Ano de referência (selector: anos disponíveis)
+Faturamento bruto do ano (calculado de transactions PJ do ano OR campo manual)
+Despesas dedutíveis (calculado de transactions ou campo manual)
+Mostrar:
+
+Faturamento total vs limite MEI (R$ 81.000)
+% do limite utilizado com barra de progresso
+Alerta se ultrapassou limite → "Você ultrapassou o limite do MEI. Considere migrar para ME."
+Checklist de documentos necessários para DASN-SIMEI:
+ CNPJ ativo no Portal do Empreendedor
+ Notas fiscais emitidas (ou livro-caixa)
+ Comprovantes de receitas
+ DAS pagos durante o ano
+Link "Acessar Portal do Empreendedor" → Linking.openURL('https://www.gov.br/empresas-e-negocios/pt-br/empreendedor')
+Prazo: "Prazo: 31 de maio de cada ano"
+Data de entrega em destaque (verde se não passou, vermelho se passou)
+3d. notas-fiscais.tsx — Notas Fiscais (simplificado)
+Como não há integração real com prefeituras, esta tela é um organizador:
+
+Lista de notas fiscais registradas manualmente pelo usuário
+Cada NF tem: número, cliente (de clientes), valor, data de emissão, status (pendente/emitida/cancelada)
+CRUD via /api/pj/invoices (se endpoint não existe, criar um backend simples ou usar localStorage via AsyncStorage como stub)
+Botão "Nova NF" → modal com campos: número, clienteId (picker dos clientes cadastrados), valor, data, descrição, status
+Indicador de NFs pendentes na header (badge)
+Totalizador: "Total emitido este mês: R$ X.XXX,XX"
+Se o endpoint /api/pj/invoices não existir no backend, usar AsyncStorage
+como armazenamento local temporário com a chave pf_pj_invoices.
+
+Estágio 4: Melhorias de Qualidade
+Fix 5 — Remover walletId redundante de wq()
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+A função wq() adiciona ?walletId=xxx à URL, mas o backend lê apenas o
+header X-Wallet-Id (que já é injetado pelo apiFetch via _walletId).
+Remover o append do query param para manter URLs limpas.
+
+// ANTES:
+const wq = useCallback((path: string) => {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}walletId=${selectedWalletId}`;
+}, [selectedWalletId]);
+// DEPOIS:
+const wq = useCallback((path: string) => path, []);
+// O walletId já vai via header X-Wallet-Id no apiFetch.
+// O selectedWalletId é usado apenas para re-trigger do useEffect.
+
+Atenção: O useEffect de loadAll usa selectedWalletId como dependência —
+isso deve permanecer para re-carregar dados ao trocar de carteira.
+
+Fix 6 — Filtro isPaid nas transações
+Arquivo: artifacts/finance-core/app/(tabs)/transactions.tsx
+
+Adicionar um quarto botão de filtro rápido: "Pendentes" que filtra transações
+com isPaid === false (ou isPaid === undefined e não confirmadas).
+
+type FilterType = 'all' | 'income' | 'expense' | 'transfer' | 'pending';
+// Na função de filtragem:
+if (filter === 'pending') {
+  return t.isPaid === false || t.isPaid === undefined;
+}
+
+Botão "Pendentes" com ícone clock (Feather) na barra de filtros, com badge
+mostrando o count de pendentes se > 0.
+
+Fix 7 — Foto de perfil em Settings
+Arquivo: artifacts/finance-core/app/(more)/settings.tsx
+
+No topo da tela de configurações (seção de perfil), adicionar opção de alterar
+a foto do usuário:
+
+import * as ImagePicker from 'expo-image-picker';
+// Função para upload:
+async function handlePickAvatar() {
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permissão necessária', 'Precisamos de acesso à galeria.');
+    return;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.7,
+    base64: false,
+  });
+  if (!result.canceled && result.assets[0].uri) {
+    // Upload via FormData para /api/upload (multipart/form-data)
+    // OU: salvar URI via PUT /api/user com profileImageUrl (para URIs remotas)
+    // Por simplicidade, salvar o URI local no AsyncStorage e exibir com Avatar
+    await AsyncStorage.setItem('pf_avatar_uri', result.assets[0].uri);
+    updateUser({ avatar: result.assets[0].uri });
+  }
+}
+
+Mostrar Avatar (circle) com a foto atual ou fallback de iniciais, com ícone
+de câmera sobreposto (bottom-right) para indicar que é clicável.
+
+Notas Técnicas para Todos os Estágios
+Design tokens: usar sempre colors.primary (#0096C7), nunca hardcode hex.
+Fontes: Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold
+Sem emojis: usar Feather icons para todos os ícones de UI
+Formato monetário: sempre formatBRL() de @/utils/formatters
+Datas: sempre formatDate() de @/utils/formatters
+Sem console.log em produção (usar apenas para debug e remover antes de commit)
+testID em todos os elementos interativos seguindo padrão button-{action}, input-{field}, etc.
+Dark mode: todos os estilos devem referenciar theme.background, theme.surface, theme.text, theme.textSecondary, theme.textTertiary, colors.primary, colors.danger, colors.success, theme.border — nunca cores hardcoded fora de constantes.

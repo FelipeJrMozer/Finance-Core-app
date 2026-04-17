@@ -22,7 +22,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="investments">
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
-        <Label>Carteira</Label>
+        <Label>Investimentos</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="reports">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
@@ -105,7 +105,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="investments"
         options={{
-          title: "Carteira",
+          title: "Investimentos",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="chart.line.uptrend.xyaxis" tintColor={color} size={22} />

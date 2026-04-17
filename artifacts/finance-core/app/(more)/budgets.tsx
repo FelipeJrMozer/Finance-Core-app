@@ -40,11 +40,17 @@ export default function BudgetsScreen() {
   const monthBudgets = budgets.filter((b) => b.month === selectedMonth);
   const monthlyTx = transactions.filter((t) => t.date.startsWith(selectedMonth));
 
-  const getBudgetSpent = (cat: string) =>
-    monthlyTx.filter((t) => t.category === cat && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const getBudgetSpent = (b: { category: string; categoryId?: string }) =>
+    monthlyTx
+      .filter((t) => {
+        if (t.type !== 'expense') return false;
+        if (b.categoryId && t.categoryId) return t.categoryId === b.categoryId;
+        return (t.category || '').toLowerCase() === (b.category || '').toLowerCase();
+      })
+      .reduce((s, t) => s + t.amount, 0);
 
   const totalLimit = monthBudgets.reduce((s, b) => s + b.limit, 0);
-  const totalSpent = monthBudgets.reduce((s, b) => s + getBudgetSpent(b.category), 0);
+  const totalSpent = monthBudgets.reduce((s, b) => s + getBudgetSpent(b), 0);
   const totalPct = totalLimit > 0 ? totalSpent / totalLimit : 0;
 
   const availableCategories = Object.keys(CATEGORIES).filter(
@@ -207,7 +213,7 @@ export default function BudgetsScreen() {
         <View style={[styles.budgetsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           {monthBudgets.map((b, idx) => (
             <React.Fragment key={b.id}>
-              <BudgetProgress category={b.category} limit={b.limit} spent={getBudgetSpent(b.category)} />
+              <BudgetProgress category={b.category} limit={b.limit} spent={getBudgetSpent(b)} />
               {idx < monthBudgets.length - 1 && <View style={[styles.divider, { backgroundColor: theme.border }]} />}
             </React.Fragment>
           ))}

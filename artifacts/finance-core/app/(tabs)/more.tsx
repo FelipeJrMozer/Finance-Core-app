@@ -67,8 +67,14 @@ export default function MoreScreen() {
 
   const currentMonth = getCurrentMonth();
   const monthlyTx = transactions.filter((t) => t.date.startsWith(currentMonth));
-  const getBudgetSpent = (category: string) =>
-    monthlyTx.filter((t) => t.category === category && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const getBudgetSpent = (b: { category: string; categoryId?: string }) =>
+    monthlyTx
+      .filter((t) => {
+        if (t.type !== 'expense') return false;
+        if (b.categoryId && t.categoryId) return t.categoryId === b.categoryId;
+        return (t.category || '').toLowerCase() === (b.category || '').toLowerCase();
+      })
+      .reduce((s, t) => s + t.amount, 0);
 
   const pendingGoals = goals.filter((g) => g.currentAmount < g.targetAmount);
   const currentPreset = ACCENT_PRESETS.find(p => p.id === accentId) ?? ACCENT_PRESETS[0];
@@ -283,7 +289,7 @@ export default function MoreScreen() {
                   key={b.id}
                   category={b.category}
                   limit={b.limit}
-                  spent={getBudgetSpent(b.category)}
+                  spent={getBudgetSpent(b)}
                 />
               ))}
               <Pressable
