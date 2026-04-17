@@ -82,7 +82,7 @@ function RootLayoutNav() {
         <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
         <Stack.Screen name="wallets/index" options={{ title: 'Carteiras' }} />
         <Stack.Screen name="wallets/add" options={{ title: 'Carteira', presentation: 'formSheet', sheetAllowedDetents: [0.85, 1], sheetGrabberVisible: true }} />
-        <Stack.Screen name="transfer" options={{ title: 'Transferir', presentation: 'formSheet', sheetAllowedDetents: [0.9, 1], sheetGrabberVisible: true }} />
+        <Stack.Screen name="transfer" options={{ title: 'Transferir' }} />
       </Stack>
     </>
   );
