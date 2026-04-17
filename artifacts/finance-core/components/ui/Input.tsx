@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, ViewStyle, TextInputProps } from 'react-native';
+import { View, TextInput, Text, StyleSheet, ViewStyle, TextInputProps, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -11,9 +11,11 @@ interface InputProps extends TextInputProps {
   testID?: string;
 }
 
-export function Input({ label, error, icon, containerStyle, testID, ...props }: InputProps) {
+export function Input({ label, error, icon, containerStyle, testID, secureTextEntry, ...props }: InputProps) {
   const { theme, colors } = useTheme();
   const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isSecure = !!secureTextEntry && !showPassword;
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -36,6 +38,7 @@ export function Input({ label, error, icon, containerStyle, testID, ...props }: 
         <TextInput
           testID={testID}
           {...props}
+          secureTextEntry={isSecure}
           onFocus={(e) => { setFocused(true); props.onFocus?.(e); }}
           onBlur={(e) => { setFocused(false); props.onBlur?.(e); }}
           style={[
@@ -48,6 +51,21 @@ export function Input({ label, error, icon, containerStyle, testID, ...props }: 
           ]}
           placeholderTextColor={theme.textTertiary}
         />
+        {secureTextEntry && (
+          <Pressable
+            onPress={() => setShowPassword((v) => !v)}
+            hitSlop={10}
+            testID={testID ? `${testID}-toggle` : undefined}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+          >
+            <Feather
+              name={showPassword ? 'eye' : 'eye-off'}
+              size={18}
+              color={theme.textTertiary}
+            />
+          </Pressable>
+        )}
       </View>
       {error && (
         <Text style={[styles.error, { color: colors.danger, fontFamily: 'Inter_400Regular' }]}>
