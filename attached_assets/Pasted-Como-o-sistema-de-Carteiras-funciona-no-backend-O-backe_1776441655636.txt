@@ -1,0 +1,278 @@
+Como o sistema de Carteiras funciona no backend
+O backend chama carteiras de workspaces. Todos os dados do usuário (contas, transações, categorias, metas, orçamentos) são filtrados pelo walletId quando o header X-Wallet-Id está presente na requisição. Se o header não for enviado, o backend retorna os dados sem filtro de carteira (todos os dados).
+
+Endpoints de Carteiras
+GET    /api/workspaces          → lista todas as carteiras do usuário
+POST   /api/workspaces          → cria nova carteira
+PATCH  /api/workspaces/:id      → edita carteira (nome, cor, ícone, isDefault)
+DELETE /api/workspaces/:id      → deleta carteira (não pode deletar a padrão)
+
+Estrutura de uma Carteira (resposta da API)
+A API retorna { workspaces: Wallet[] } no GET:
+
+interface Wallet {
+  id: string;           // UUID
+  name: string;         // "Carteira Principal", "Teste", etc.
+  description: string | null;
+  color: string;        // hex, ex: "#6366f1"
+  icon: string;
+  isDefault: boolean;   // apenas uma pode ser padrão
+  ownerId: string;
+  role?: string;
+  isShared?: boolean;
+}
+
+Como o header de carteira deve funcionar
+Este é o ponto crítico que provavelmente está falhando.
+
+Em toda requisição à API (GET, POST, PATCH, DELETE), quando há uma carteira ativa selecionada, você DEVE enviar o header:
+
+X-Wallet-Id: {id-da-carteira-ativa}
+
+No web, isso é feito de forma automática e global no queryClient. O mobile precisa replicar esse comportamento.
+
+Implementação no React Native
+1. Chave de armazenamento
+No web usa localStorage. No mobile substituir por AsyncStorage:
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+const WALLET_STORAGE_KEY = "pilar-current-wallet-id";
+
+2. WalletContext — código completo para o mobile
+// context/WalletContext.tsx
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiRequest } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
+export interface Wallet {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  icon: string;
+  isDefault: boolean;
+  ownerId: string;
+  role?: string;
+  isShared?: boolean;
+}
+interface WalletContextType {
+  wallets: Wallet[];
+  currentWallet: Wallet | null;
+  currentWalletId: string | null;
+  switchWallet: (walletId: string) => void;
+  isLoading: boolean;
+  createWallet: (data: { name: string; description?: string; color?: string; icon?: string }) => Promise<Wallet>;
+  updateWallet: (id: string, data: Partial<{ name: string; description: string; color: string; icon: string }>) => Promise<Wallet>;
+  deleteWallet: (id: string) => Promise<void>;
+  setDefaultWallet: (id: string) => Promise<void>;
+}
+const WalletContext = createContext<WalletContextType | null>(null);
+export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [currentWalletId, setCurrentWalletId] = useState<string | null>(null);
+  // Carrega o walletId salvo ao montar
+  useEffect(() => {
+    AsyncStorage.getItem(WALLET_STORAGE_KEY).then(id => {
+      if (id) setCurrentWalletId(id);
+    });
+  }, []);
+  const { data, isLoading, refetch } = useQuery<{ workspaces: Wallet[] }>({
+    queryKey: ["/api/workspaces"],
+    enabled: !!user,
+  });
+  const wallets = data?.workspaces || [];
+  // Se o id salvo não existir mais entre as carteiras, usar a padrão
+  useEffect(() => {
+    if (!wallets.length) return;
+    const defaultWallet = wallets.find(w => w.isDefault) || wallets[0];
+    const exists = currentWalletId && wallets.some(w => w.id === currentWalletId);
+    if (!exists) {
+      AsyncStorage.setItem(WALLET_STORAGE_KEY, defaultWallet.id);
+      setCurrentWalletId(defaultWallet.id);
+    }
+  }, [wallets, currentWalletId]);
+  const currentWallet =
+    wallets.find(w => w.id === currentWalletId) ||
+    wallets.find(w => w.isDefault) ||
+    wallets[0] ||
+    null;
+  const switchWallet = useCallback((walletId: string) => {
+    AsyncStorage.setItem(WALLET_STORAGE_KEY, walletId);
+    setCurrentWalletId(walletId);
+    // Invalida TODOS os queries — eles vão refazer com o novo X-Wallet-Id
+    qc.invalidateQueries();
+  }, [qc]);
+  const createWallet = useCallback(async (formData: any) => {
+    const result = await apiRequest<{ workspace: Wallet }>("POST", "/api/workspaces", formData);
+    await refetch();
+    switchWallet(result.workspace.id);
+    return result.workspace;
+  }, [refetch, switchWallet]);
+  const updateWallet = useCallback(async (id: string, formData: any) => {
+    const result = await apiRequest<{ workspace: Wallet }>("PATCH", `/api/workspaces/${id}`, formData);
+    await refetch();
+    return result.workspace;
+  }, [refetch]);
+  const deleteWallet = useCallback(async (id: string) => {
+    await apiRequest("DELETE", `/api/workspaces/${id}`);
+    if (currentWalletId === id) {
+      const remaining = wallets.filter(w => w.id !== id);
+      if (remaining.length > 0) switchWallet(remaining[0].id);
+    }
+    await refetch();
+    qc.invalidateQueries();
+  }, [currentWalletId, wallets, switchWallet, refetch, qc]);
+  const setDefaultWallet = useCallback(async (id: string) => {
+    await apiRequest("PATCH", `/api/workspaces/${id}`, { isDefault: true });
+    await refetch();
+  }, [refetch]);
+  return (
+    <WalletContext.Provider value={{
+      wallets, currentWallet, currentWalletId, switchWallet,
+      isLoading, createWallet, updateWallet, deleteWallet, setDefaultWallet,
+    }}>
+      {children}
+    </WalletContext.Provider>
+  );
+}
+export function useWallet() {
+  const ctx = useContext(WalletContext);
+  if (!ctx) throw new Error("useWallet must be used inside WalletProvider");
+  return ctx;
+}
+
+3. O segredo — injetar o header em TODA requisição
+Esta é a parte mais crítica. O cliente HTTP do mobile precisa ler o currentWalletId do AsyncStorage e injetar o header em toda requisição automaticamente:
+
+// lib/api.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL; // ex: https://seu-app.replit.app
+const WALLET_STORAGE_KEY = "pilar-current-wallet-id";
+async function getWalletHeaders(): Promise<Record<string, string>> {
+  const walletId = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
+  return walletId ? { "X-Wallet-Id": walletId } : {};
+}
+export async function apiRequest<T = any>(
+  method: string,
+  path: string,
+  body?: any
+): Promise<T> {
+  const walletHeaders = await getWalletHeaders();
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...walletHeaders,               // ← X-Wallet-Id aqui
+    },
+    credentials: "include",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+E o QueryClient padrão também deve injetar o header nas queries GET:
+
+// lib/queryClient.ts
+import { QueryClient } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+const WALLET_STORAGE_KEY = "pilar-current-wallet-id";
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryFn: async ({ queryKey }) => {
+        const walletId = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (walletId) headers["X-Wallet-Id"] = walletId;
+        const res = await fetch(`${BASE_URL}${queryKey[0]}`, {
+          credentials: "include",
+          headers,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      },
+      staleTime: 5 * 60 * 1000,
+      gcTime: 20 * 60 * 1000,
+      retry: 1,
+    },
+  },
+});
+
+4. Envolver o app com WalletProvider
+No layout raiz (ex: app/_layout.tsx), envolver dentro do QueryClientProvider e após autenticação confirmada:
+
+<QueryClientProvider client={queryClient}>
+  <AuthProvider>
+    <WalletProvider>      {/* ← aqui, depois de autenticado */}
+      <Stack />
+    </WalletProvider>
+  </AuthProvider>
+</QueryClientProvider>
+
+Importante: WalletProvider deve estar DENTRO do AuthProvider porque ele usa useAuth() internamente.
+
+Interface do Seletor de Carteiras (UI)
+No header do app (equivalente ao HeaderWalletSelector do web), criar um componente que:
+
+Exibe a carteira atual (nome + bolinha colorida)
+Ao tocar, abre um BottomSheet ou ActionSheet com a lista de carteiras
+Ao selecionar → chama switchWallet(id) e fecha o sheet
+Opções adicionais: "Gerenciar carteiras" e "Nova carteira" (se < 5 carteiras)
+// components/WalletSelector.tsx
+import { useWallet } from "@/context/WalletContext";
+import { useRouter } from "expo-router";
+import { TouchableOpacity, View, Text } from "react-native";
+export function WalletSelector() {
+  const { wallets, currentWallet, switchWallet } = useWallet();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <TouchableOpacity onPress={() => setOpen(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: currentWallet?.color || "#6366f1" }} />
+        <Text style={{ fontSize: 13, fontWeight: "600" }}>{currentWallet?.name || "Carteira"}</Text>
+      </TouchableOpacity>
+      {/* BottomSheet com lista de carteiras */}
+      <BottomSheet open={open} onClose={() => setOpen(false)}>
+        {wallets.map(wallet => (
+          <TouchableOpacity
+            key={wallet.id}
+            onPress={() => { switchWallet(wallet.id); setOpen(false); }}
+            style={{ flexDirection: "row", alignItems: "center", padding: 16, gap: 10 }}
+          >
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: wallet.color || "#6366f1" }} />
+            <Text style={{ flex: 1 }}>{wallet.name}</Text>
+            {wallet.id === currentWallet?.id && <CheckIcon size={14} color="#0096C7" />}
+          </TouchableOpacity>
+        ))}
+        <Separator />
+        <TouchableOpacity onPress={() => { router.push("/wallets"); setOpen(false); }}>
+          <Text>Gerenciar carteiras</Text>
+        </TouchableOpacity>
+        {wallets.length < 5 && (
+          <TouchableOpacity onPress={() => { router.push("/wallets/new"); setOpen(false); }}>
+            <Text style={{ color: "#0096C7" }}>Nova carteira</Text>
+          </TouchableOpacity>
+        )}
+      </BottomSheet>
+    </>
+  );
+}
+
+Resumo dos pontos críticos
+Ponto	Web	Mobile
+Armazenamento do walletId	localStorage	AsyncStorage
+Injeção do header	getWalletHeaders() no queryClient global	getWalletHeaders() async no queryClient + apiRequest
+Trocar de carteira	switchWallet() → qc.invalidateQueries()	Idem
+Header obrigatório	X-Wallet-Id: {id}	X-Wallet-Id: {id}
+Quando não enviar o header	Dados sem filtro de carteira (tudo)	Dados sem filtro de carteira (tudo)
+Limite de carteiras	5 por usuário	5 por usuário
+O problema mais comum é esquecer de injetar o X-Wallet-Id no queryClient padrão — as queries GET feitas automaticamente pelo React Query não passam pelo apiRequest, então o header precisa estar configurado no queryFn do QueryClient global.
