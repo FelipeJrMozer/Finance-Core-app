@@ -141,8 +141,8 @@ export default function TransferScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
       <ScrollView
-        style={{ flex: 1, backgroundColor: theme.background, width: '100%' }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 32, gap: 14, alignItems: 'stretch', width: '100%', maxWidth: 720, alignSelf: 'center' }}
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: insets.bottom + 32, gap: 14, alignItems: 'stretch', maxWidth: 480, width: '100%', alignSelf: 'center' }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
