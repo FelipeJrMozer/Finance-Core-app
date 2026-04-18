@@ -1,0 +1,114 @@
+# Fase 6 — Integrações reais e colaboração
+Esta fase encerra a auditoria. Itens marcados [BACKEND] vão no repo pilarfinanceiro;
+itens [MOBILE] vão no monorepo Finance-Core-app (artifacts/finance-core).
+## 1. [BACKEND] Open Finance — sair do mock
+**Arquivos**: `server/services/exchangeIntegrations.ts` (linha ~404 tem mock declarado), `server/routes/integrations.routes.ts` (rotas /api/integrations/openfinance/*).
+**Decisão estratégica**:
+- Open Finance Brasil exige homologação do BCB e certificado ICP-Brasil. Não há atalho. Implementar via agregador é a única opção viável: **Pluggy** (https://pluggy.ai), **Belvo** ou **Klavi**. Pluggy é o mais comum em apps BR, com SDK Node oficial.
+**Implementação (com Pluggy)**:
+- Adicionar `pluggy-sdk` ao backend.
+- Variáveis de ambiente novas: `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET` (pedir ao usuário antes de instalar).
+- Endpoints:
+  - `POST /api/integrations/openfinance/connect-token` → cria connect token (curto prazo) usado pelo Pluggy Connect Widget.
+  - `POST /api/integrations/openfinance/items` body `{ itemId }` → persistir o `itemId` retornado pelo widget na tabela nova `open_finance_items (id, userId, itemId, institution, status, lastSync, createdAt)`.
+  - `POST /api/integrations/openfinance/sync` → para cada `itemId` do usuário, chama `pluggyClient.fetchAccounts(itemId)` e `fetchTransactions(accountId)`. Mapeia para tabelas `accounts` e `transactions` com `source='openfinance'`.
+  - `DELETE /api/integrations/openfinance/items/:id` → desconecta no Pluggy E remove local.
+  - Job a cada 6h (`server/jobs/openFinanceSync.ts`) sincroniza incrementalmente todos os itens ativos.
+- **Deduplicação**: usar `external_id` único na transação (`pluggyTransactionId`). Se já existe, skip.
+- **Categorização**: Pluggy retorna categoria; mapear para o catálogo do usuário com fallback "Outros".
+- Remover totalmente o mock anterior.
+## 2. [BACKEND] B3 — sincronização real de carteira
+**Arquivos**: rotas/serviços B3 atualmente em `server/services/exchangeIntegrations.ts` ou similar.
+**Implementação**:
+- Não existe API pública oficial da B3 para investidor pessoa física. Caminhos viáveis:
+  a) **CEI/Investidor B3 via Pluggy/Belvo** (ambos suportam) — preferir esta rota.
+  b) **Brapi**/Status Invest para preços em tempo real (já usado no projeto).
+- Endpoint `POST /api/integrations/b3/sync` segue o mesmo padrão do Open Finance, persistindo holdings em `investments` com `source='b3'`.
+- Tabela nova `b3_sync_logs (id, userId, syncedAt, accountsCount, holdingsCount, status, errorMessage)` para auditoria.
+- Notificação no app ao final ("Sincronização B3 concluída — 12 ativos atualizados").
+## 3. [BACKEND] Modo família real (multi-usuário)
+**Já existe parcialmente** (`server/routes/family.routes.ts` tem 29 rotas). Garantir que:
+- Convite por email funciona (envia link mágico com token de 7 dias).
+- Permissões: `owner`, `admin`, `member`, `viewer`.
+- Endpoints faltantes:
+  - `POST /api/family/transactions/split` body `{ transactionId, splits: [{ memberId, share }] }` — divide despesa entre membros.
+  - `GET /api/family/balance` — retorna quem deve quanto a quem (algoritmo de simplificação de dívidas).
+  - `POST /api/family/settle` body `{ fromMemberId, toMemberId, amount }` — registra acerto.
+- Workspace switcher no header do mobile (item separado abaixo).
+## 4. [MOBILE] Modo família / Workspaces
+**Arquivos**: `artifacts/finance-core/context/WalletContext.tsx`, `app/wallets/index.tsx`, `components/WalletHeaderButton.tsx`.
+**Implementação**:
+- Tela `app/(more)/family.tsx` (criar):
+  - Lista de membros do workspace ativo.
+  - Botão "Convidar" → modal com email; chama `POST /api/family/invites`.
+  - Tap em membro → permissões (apenas owner/admin pode mudar).
+  - Seção "Saldo do grupo": chama `GET /api/family/balance` e mostra quem deve a quem.
+  - Botão "Acertar contas" → fluxo de quitação.
+- Em `transaction/add.tsx`: se workspace é tipo `family`, mostrar checkbox "Dividir entre membros" → abre modal de split (igual, custom, %).
+- Workspace switcher (já existe `WalletHeaderButton`): adicionar badge de membros e indicador de role.
+## 5. [MOBILE + BACKEND] Deep links completos
+**Backend**:
+- Em todo push notification (`server/services/notifications.ts`), incluir `data.deeplink` semântico:
+  - `financecore://transaction/<id>`
+  - `financecore://bill/<id>`
+  - `financecore://card/<cardId>/invoice/<invoiceId>`
+  - `financecore://goal/<id>`
+  - `financecore://alert/<id>`
+**Mobile**:
+- Em `app.json` adicionar:
+  ```json
+  "scheme": "financecore",
+  "ios": { "associatedDomains": ["applinks:pilarfinanceiro.replit.app"] },
+  "android": {
+    "intentFilters": [
+      {
+        "action": "android.intent.action.VIEW",
+        "autoVerify": true,
+        "data": [{ "scheme": "https", "host": "pilarfinanceiro.replit.app", "pathPrefix": "/app" }],
+        "category": ["android.intent.category.BROWSABLE","android.intent.category.DEFAULT"]
+      }
+    ]
+  }
+
+Handler central em _layout.tsx que escuta Linking.addEventListener('url', ...):
+Parseia o URL e roteia via expo-router:
+financecore://transaction/abc → router.push('/transaction/abc')
+financecore://bill/abc → router.push('/(more)/bills?openId=abc')
+financecore://card/c1/invoice/i1 → router.push('/card/c1/invoice/i1')
+Universal links HTTPS no backend: criar rota GET /app/:resource/:id que serve uma página HTML mínima com meta-refresh para o scheme financecore://... (fallback para web app caso o app não esteja instalado).
+6. [MOBILE] Compartilhamento e exportação
+Botão "Exportar transações" em (tabs)/transactions.tsx → CSV via expo-sharing (já está no padrão do projeto).
+Adicionar export PDF: chamar endpoint backend existente /api/backup/export-pdf (já no backup.routes.ts), salvar via expo-file-system e abrir share sheet.
+Backup completo: tela (more)/settings.tsx opção "Backup local" — chama /api/backup/json, salva em Documents.
+7. [BACKEND] Webhooks Stripe robustos
+Arquivo: server/routes/stripe.routes.ts
+
+Garantir verificação de assinatura stripe.webhooks.constructEvent com STRIPE_WEBHOOK_SECRET.
+Idempotência: tabela stripe_webhook_events (id, eventId, processedAt) — se eventId já processado, retornar 200 sem reprocessar.
+Tratar eventos: checkout.session.completed, customer.subscription.updated, customer.subscription.deleted, invoice.payment_failed, invoice.payment_succeeded.
+Em payment_failed: criar notification + downgrade automático após 7 dias se não regularizar.
+Logar todos os eventos com requestId para troubleshooting.
+8. [BACKEND] Rate limiting e observabilidade
+Adicionar express-rate-limit em rotas públicas (/api/auth/*: 5 req/min por IP; /api/ai/chat: 20 req/min por user).
+Middleware requestId (UUID por request) propagado em todos os logs.
+Endpoint GET /api/health com checks: db, stripe (opcional), pluggy (opcional), versão do app, uptime.
+Estruturar logs em JSON quando NODE_ENV=production.
+9. [MOBILE] Onboarding melhorado
+Novo: app/(auth)/onboarding.tsx (quando user.firstLogin === true).
+
+4 telas swipe: bem-vindo, conectar Open Finance (skip), criar primeira meta (skip), habilitar biometria (skip).
+Marca firstLogin = false via PATCH /api/auth/user.
+Não bloqueante; pula tudo leva ao dashboard.
+Validação ao terminar
+Conectar uma instituição via Pluggy sandbox → contas e transações aparecem em /api/accounts e /api/transactions com source='openfinance'.
+Sincronizar B3 → holdings aparecem em /api/investments com source='b3'.
+Convidar membro de família, aceitar convite em outro device, criar despesa dividida → GET /api/family/balance retorna saldos corretos.
+Tap em push notification leva à tela específica (não só abre o app).
+Webhook Stripe testado com stripe trigger checkout.session.completed → idempotente (rodar 2x não duplica).
+GET /api/health retorna 200 com status de cada dependência.
+Onboarding aparece para conta nova; não aparece em conta existente.
+Restrições
+Antes de instalar pluggy-sdk ou tocar em STRIPE_WEBHOOK_SECRET, confirmar com o usuário (são integrações com custo/setup externo).
+Nunca persistir credenciais de banco do usuário — só os tokens do agregador.
+LGPD: criar endpoint DELETE /api/user/me que apaga TUDO do usuário em cascata (invocado de (more)/settings.tsx "Excluir conta").
+Não quebrar contratos públicos da API.

@@ -113,6 +113,20 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
 - **Account Features** (`app/account/`):
   - `account/add.tsx` — add/edit; `account/[id].tsx` — detail with stats
 - **Notifications** (`app/(more)/notifications.tsx`): Lists API notifications with read/dismiss; badge count in Mais tab
+- **Phase 3 — Server-side search & installments (Apr 2026)**:
+  - `searchTransactionsRemote(q, signal)` na FinanceContext usa `GET /api/transactions/search?q=` com `AbortController` para cancelar buscas obsoletas
+  - `transactions.tsx`: input de busca dispara debounce de 400ms; quando ativo (≥2 chars) os resultados remotos são mesclados com o cache local e os filtros de mês/tipo/conta são desativados (texto explicativo). Spinner inline no input enquanto busca.
+  - `getInstallments(transactionId)` na FinanceContext usa `GET /api/transactions/:id/installments` (200; mapeia `installmentNumber/amount/date/isPaid`)
+  - `transaction/[id].tsx` exibe lista de parcelas reais quando `installments > 1`. `useEffect` posicionado antes do early-return para evitar violação de hooks.
+  - `transformTransaction` agora mapeia `isSubscription`, `isArchived`, `installmentId`, `installmentTotalAmount` (campos antes ignorados)
+- **Backend pendente (não implementado no mobile, endpoints retornam HTML SPA fallback ou 401 inconsistente)**:
+  - ❌ `GET/POST /api/bills` — retorna 401 mesmo com token válido (`vary: X-Wallet-Id`); tela `(more)/bills.tsx` mantém o código atual mas exibirá empty state em produção até backend ser corrigido
+  - ❌ `GET /api/cards/:id/invoices` — não existe; faturas continuam sendo computadas localmente a partir de `transactions` filtradas pelo ciclo do cartão
+  - ❌ `GET /api/alerts` — não existe; `(more)/custom-alerts.tsx` permanece local-only via AsyncStorage
+  - ❌ `GET /api/mobile/dashboard-summary` — não existe; dashboard continua agregando localmente a partir de `transactions/cards/accounts`
+  - ❌ `POST /api/devices/register` — não existe; push tokens não são enviados ao backend, notificações são apenas locais
+  - ❌ `GET /api/preferences` — não existe; `ThemeContext` já tolera silenciosamente
+  - ❌ `GET /api/upcoming-bills`, `GET /api/recurring` — não existem; widget "Próximos Vencimentos" mostra apenas faturas de cartão
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 

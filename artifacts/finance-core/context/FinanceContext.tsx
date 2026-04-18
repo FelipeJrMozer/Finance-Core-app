@@ -25,9 +25,12 @@ export interface Transaction {
   installments?: number;
   currentInstallment?: number;
   totalInstallments?: number;
+  installmentId?: string;
   recurring?: boolean;
   isFixed?: boolean;
   isPaid?: boolean;
+  isSubscription?: boolean;
+  isArchived?: boolean;
   tags?: string[];
   notes?: string;
   attachmentUrl?: string;
@@ -35,6 +38,18 @@ export interface Transaction {
   transferGroupId?: string;
   recurrenceType?: string | null;
   creditCardId?: string;
+  installmentTotalAmount?: number;
+}
+
+export interface InstallmentEntry {
+  id: string;
+  installmentNumber: number;
+  totalInstallments: number;
+  amount: number;
+  date: string;
+  isPaid?: boolean;
+  description?: string;
+  transactionId?: string;
 }
 
 export interface Account {
@@ -246,9 +261,15 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
     currentInstallment: raw.installmentNumber ? Number(raw.installmentNumber) : undefined,
     totalInstallments: raw.totalInstallments ? Number(raw.totalInstallments) : undefined,
     installments: raw.totalInstallments && Number(raw.totalInstallments) > 1 ? Number(raw.totalInstallments) : undefined,
+    installmentId: (raw.installmentId as string) || (raw.parentInstallmentId as string) || undefined,
+    installmentTotalAmount: raw.installmentTotalAmount !== undefined && raw.installmentTotalAmount !== null
+      ? parseAmount(raw.installmentTotalAmount)
+      : undefined,
     recurring: (raw.isRecurring as boolean) || false,
     isFixed: raw.isFixed as boolean,
     isPaid: raw.isPaid as boolean,
+    isSubscription: (raw.isSubscription as boolean) || false,
+    isArchived: (raw.isArchived as boolean) || false,
     tags: (raw.tags as string[]) || [],
     notes: (raw.notes as string) || undefined,
     attachmentUrl: (raw.attachmentUrl as string) || undefined,
@@ -491,6 +512,8 @@ interface FinanceContextType {
   dismissNotification: (id: string) => void;
 
   refresh: () => Promise<void>;
+  searchTransactionsRemote: (query: string, signal?: AbortSignal) => Promise<Transaction[]>;
+  getInstallments: (transactionId: string) => Promise<InstallmentEntry[]>;
 
   totalBalance: number;
   cashBalance: number;
@@ -1228,6 +1251,46 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
+  // ── Remote search & installments ───────────────────────────────────────────
+
+  const searchTransactionsRemote = useCallback(async (query: string, signal?: AbortSignal): Promise<Transaction[]> => {
+    const q = query.trim();
+    if (!q) return [];
+    try {
+      const res = await apiFetch(`/api/transactions/search?q=${encodeURIComponent(q)}`, { signal });
+      if (!res.ok) return [];
+      const text = await res.text();
+      if (!text || text === 'null') return [];
+      const raw = JSON.parse(text);
+      const arr = toArray<Record<string, unknown>>(raw);
+      return arr.map((r) => transformTransaction(r, catMapRef.current));
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
+      logger.warn('[searchTransactionsRemote]', e);
+      return [];
+    }
+  }, []);
+
+  const getInstallments = useCallback(async (transactionId: string): Promise<InstallmentEntry[]> => {
+    try {
+      const raw = await apiGet<unknown>(`/api/transactions/${transactionId}/installments`);
+      const arr = toArray<Record<string, unknown>>(raw);
+      return arr.map((i) => ({
+        id: (i.id as string) || '',
+        installmentNumber: Number(i.installmentNumber ?? i.number ?? 0),
+        totalInstallments: Number(i.totalInstallments ?? i.total ?? 0),
+        amount: parseAmount(i.amount),
+        date: parseDateSafe((i.date ?? i.dueDate ?? '') as string),
+        isPaid: (i.isPaid as boolean) ?? false,
+        description: (i.description as string) || undefined,
+        transactionId: (i.transactionId as string) || undefined,
+      }));
+    } catch (e) {
+      logger.warn('[getInstallments]', e);
+      return [];
+    }
+  }, []);
+
   // ── Refresh ────────────────────────────────────────────────────────────────
 
   const refresh = useCallback(() => loadAll(), [loadAll]);
@@ -1244,7 +1307,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addGoal, updateGoal, deleteGoal, addContribution,
       addBudget, updateBudget, deleteBudget,
       addCategory, updateSettings, markNotificationRead, dismissNotification,
-      refresh,
+      refresh, searchTransactionsRemote, getInstallments,
       totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
     }}>
       {children}

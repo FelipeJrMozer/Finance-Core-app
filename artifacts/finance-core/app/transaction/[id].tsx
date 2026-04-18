@@ -1,12 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
-import { useFinance } from '@/context/FinanceContext';
+import { useFinance, InstallmentEntry } from '@/context/FinanceContext';
 import { Button } from '@/components/ui/Button';
 import { CategoryBadge, getCategoryInfo } from '@/components/CategoryBadge';
 import { formatBRL, formatDate } from '@/utils/formatters';
@@ -14,10 +14,30 @@ import { formatBRL, formatDate } from '@/utils/formatters';
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme, colors, maskValue } = useTheme();
-  const { transactions, deleteTransaction, advanceInstallment, accounts, creditCards } = useFinance();
+  const { transactions, deleteTransaction, advanceInstallment, accounts, creditCards, getInstallments } = useFinance();
   const insets = useSafeAreaInsets();
+  const [installments, setInstallments] = useState<InstallmentEntry[] | null>(null);
+  const [loadingInstallments, setLoadingInstallments] = useState(false);
 
   const transaction = transactions.find((t) => t.id === id);
+  const isInstallment = (transaction?.installments || 1) > 1;
+  const txId = transaction?.id;
+
+  useEffect(() => {
+    if (!isInstallment || !txId) {
+      setInstallments(null);
+      setLoadingInstallments(false);
+      return;
+    }
+    let active = true;
+    setInstallments(null); // clear stale list when switching transactions
+    setLoadingInstallments(true);
+    getInstallments(txId)
+      .then((res) => { if (active) setInstallments(res); })
+      .finally(() => { if (active) setLoadingInstallments(false); });
+    return () => { active = false; };
+  }, [isInstallment, txId, getInstallments]);
+
   if (!transaction) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background }}>
@@ -31,7 +51,6 @@ export default function TransactionDetailScreen() {
   const toAccount = accounts.find((a) => a.id === transaction.toAccountId);
   const isIncome = transaction.type === 'income';
   const isTransfer = transaction.type === 'transfer';
-  const isInstallment = (transaction.installments || 1) > 1;
 
   // Check if this expense belongs to a credit card
   const linkedCard = !isTransfer && transaction.type === 'expense'
@@ -178,6 +197,46 @@ export default function TransactionDetailScreen() {
           </React.Fragment>
         ))}
       </View>
+
+      {/* Installments */}
+      {isInstallment && (
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Feather name="layers" size={16} color={theme.textTertiary} />
+              <Text style={{ color: theme.text, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
+                Parcelas ({transaction.installments}x)
+              </Text>
+            </View>
+            {loadingInstallments && <ActivityIndicator size="small" color={colors.primary} />}
+          </View>
+          {!loadingInstallments && installments && installments.length === 0 && (
+            <Text style={{ color: theme.textTertiary, fontFamily: 'Inter_400Regular', fontSize: 13, paddingVertical: 6 }}>
+              Sem detalhes adicionais de parcelas.
+            </Text>
+          )}
+          {installments && installments.length > 0 && installments.map((inst, idx) => (
+            <React.Fragment key={inst.id || idx}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Feather
+                    name={inst.isPaid ? 'check-circle' : 'circle'}
+                    size={14}
+                    color={inst.isPaid ? colors.success : theme.textTertiary}
+                  />
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                    {inst.installmentNumber}/{inst.totalInstallments} • {formatDate(inst.date)}
+                  </Text>
+                </View>
+                <Text style={[styles.detailValue, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+                  {maskValue(formatBRL(inst.amount))}
+                </Text>
+              </View>
+              {idx < installments.length - 1 && <View style={[styles.divider, { backgroundColor: theme.border }]} />}
+            </React.Fragment>
+          ))}
+        </View>
+      )}
 
       {/* Actions */}
       <View style={styles.actions}>

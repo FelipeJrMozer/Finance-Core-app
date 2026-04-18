@@ -1,0 +1,190 @@
+# Fase 5 — Calcular o que hoje está chumbado, mockado ou simplificado
+Repositório: pilarfinanceiro (backend Express + Drizzle).
+Foco: substituir simplificações, hardcoded values e dados sintéticos por cálculos corretos consumindo dados reais.
+## 1. Snapshots sintéticos com Math.sin — REMOVER
+**Arquivo**: `server/services/investmentAnalytics.ts`
+**Problema**: quando o usuário não tem histórico de preços suficiente, o serviço gera snapshots usando `Math.sin()` para "simular volatilidade". Isso polui métricas de risco.
+**Correção**:
+- Remover toda geração sintética.
+- Se não houver dados suficientes (< 30 pontos), retornar `null` para Sharpe/Sortino/Beta/Drawdown e expor flag `insufficientData: true` no payload.
+- Cliente (web e mobile) deve mostrar empty state "Histórico insuficiente — colete X dias de cotação para ver métricas de risco."
+- Garantir que o job de atualização de preços (`server/jobs` — 3x ao dia, dias úteis) está persistindo snapshots na tabela correta. Verificar e logar warning se o job falhar.
+## 2. Sharpe Ratio com CDI real (não chumbado)
+**Arquivo**: `server/services/investmentAnalytics.ts` (função que calcula Sharpe)
+**Correção**:
+- Risk-free deve vir do CDI/SELIC reais via `server/services/marketBenchmarks.ts` (que já existe e tem job diário às 18h).
+- Anualizar retornos e desvio-padrão corretamente:
+
+Sharpe = (μ_anual - rf_anual) / σ_anual
+μ_anual = (1 + μ_diário) ^ 252 - 1
+σ_anual = σ_diário * sqrt(252)
+rf_anual = CDI atual / 100
+
+- Validar que existe pelo menos 60 dias de retornos diários antes de calcular; senão `null`.
+## 3. Sortino Ratio (NOVO)
+**Mesmo arquivo**.
+**Implementação**:
+```ts
+function sortino(dailyReturns: number[], rfDailyTarget = 0): number | null {
+if (dailyReturns.length < 60) return null;
+const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+const downside = dailyReturns.filter(r => r < rfDailyTarget);
+if (downside.length === 0) return null;
+const downsideDev = Math.sqrt(
+  downside.reduce((sum, r) => sum + Math.pow(r - rfDailyTarget, 2), 0) / dailyReturns.length
+);
+if (downsideDev === 0) return null;
+const annMean = Math.pow(1 + mean, 252) - 1;
+const annDownside = downsideDev * Math.sqrt(252);
+const rfAnn = getRiskFreeAnnual(); // do marketBenchmarks
+return (annMean - rfAnn) / annDownside;
+}
+
+Expor no endpoint de portfolio analysis (já existe — adicionar campo sortino).
+4. Beta vs IBOV (NOVO)
+Mesmo arquivo.
+
+Implementação:
+
+Buscar série de retornos diários do IBOV no mesmo período do ativo (do marketBenchmarks ou /api/market/quotes).
+Beta = Cov(retornoAtivo, retornoIBOV) / Var(retornoIBOV).
+Calcular para cada ativo individual e para o portfólio agregado (média ponderada por valor de mercado).
+Mínimo 60 dias alinhados.
+Expor beta por ativo e portfolioBeta no endpoint de análise.
+5. TWR (Time-Weighted Return) — NOVO
+Arquivo: criar server/services/portfolioPerformance.ts.
+
+Implementação:
+
+Particionar histórico em sub-períodos delimitados por aportes/resgates.
+Para cada sub-período i: HPR_i = (Valor_final - Cashflow_i) / Valor_inicial.
+TWR = Π(1 + HPR_i) - 1.
+Anualizar: (1 + TWR) ^ (365 / dias) - 1.
+Endpoint: GET /api/portfolio/twr?from=&to= retornando { twr, twrAnnualized, periods: [...] }.
+6. MWR (Money-Weighted Return / IRR) — NOVO
+Mesmo arquivo.
+
+Implementação:
+
+Lista de cashflows com sinal: aporte negativo, resgate/valor final positivo.
+Resolver IRR via Newton-Raphson (limite 100 iterações, tolerância 1e-7):
+function irr(cashflows: { date: Date; amount: number }[], guess = 0.1): number | null {
+  const t0 = cashflows[0].date.getTime();
+  const years = (d: Date) => (d.getTime() - t0) / (365 * 86400000);
+  const npv = (r: number) => cashflows.reduce((s, cf) => s + cf.amount / Math.pow(1 + r, years(cf.date)), 0);
+  const dnpv = (r: number) => cashflows.reduce((s, cf) => s - years(cf.date) * cf.amount / Math.pow(1 + r, years(cf.date) + 1), 0);
+  let r = guess;
+  for (let i = 0; i < 100; i++) {
+    const f = npv(r);
+    if (Math.abs(f) < 1e-7) return r;
+    const df = dnpv(r);
+    if (df === 0) return null;
+    r = r - f / df;
+    if (r < -0.999) return null;
+  }
+  return null;
+}
+
+Endpoint: GET /api/portfolio/mwr?from=&to= retornando { mwr, cashflows }.
+7. SELIC/CDI/IPCA dinâmicos (consumir o que já existe)
+Auditar: server/services/marketBenchmarks.ts e server/jobs/marketDataJobs.ts.
+
+Correções:
+
+Confirmar que o job diário às 18h está atualizando uma tabela market_benchmarks (criar se faltar) com colunas key, value, asOf, source.
+Fontes oficiais (em ordem de fallback):
+SELIC: https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados/ultimos/1?formato=json
+CDI (taxa anual): https://api.bcb.gov.br/dados/serie/bcdata.sgs.4389/dados/ultimos/1?formato=json
+IPCA acumulado 12m: https://api.bcb.gov.br/dados/serie/bcdata.sgs.13522/dados/ultimos/1?formato=json
+IBOV: usar API de mercado já configurada (Brapi/BR-API).
+Endpoint público: GET /api/market/benchmarks retornando { cdi, selic, ipca, ibov, asOf, source } — isto já é o que o mobile (Fase 1, item 5) consome.
+Cache em memória de 1h. Em caso de falha total, retornar último valor persistido + flag stale: true.
+Substituir TODOS os usos hardcoded de CDI/SELIC/IPCA no backend por await getBenchmarks(). Buscar com:
+grep -rE "0\.12|0\.045|cdi.*=.*12|ipca.*=.*4" server/services/
+
+8. Unificar os dois calculadores fiscais
+Problema: existem dois serviços divergentes — server/services/investmentTaxCalculator.ts e server/services/taxCalculation.ts. Resultado: web e mobile podem ver impostos diferentes.
+
+Correção:
+
+Decidir uma fonte única (investmentTaxCalculator.ts é mais completo — manter).
+Migrar funções únicas de taxCalculation.ts para o primeiro.
+Marcar taxCalculation.ts como @deprecated no topo e fazer todos os imports apontarem para investmentTaxCalculator.ts.
+Bugs específicos a corrigir no calculador unificado:
+FII: a isenção de R$ 20k/mês NÃO se aplica ao ganho de capital de FII (só a venda de ações comuns ≤ R$20k/mês isenta). FII tem 20% sobre ganho independentemente do volume. Conferir e corrigir.
+Day trade: alíquota 20% (não 15%).
+Dividendos de ações brasileiras: isentos de IR pessoa física. Não tributar.
+JCP (Juros sobre Capital Próprio): 15% retido na fonte.
+Cripto: ganho mensal > R$ 35k tributado (alíquotas 15-22,5% conforme faixa). ≤ R$ 35k é isento.
+Renda fixa (CDB/LCI/LCA/Tesouro): tabela regressiva 22,5% / 20% / 17,5% / 15% conforme prazo. LCI/LCA isentos.
+9. Limite MEI correto no backend
+Arquivos: server/routes/pj.routes.ts (linha ~268) e qualquer outro lugar com 130000 para MEI.
+
+Correção:
+
+Centralizar em server/constants/pj.ts:
+export const MEI_LIMITE_ANUAL = 81000;
+export const MEI_LIMITE_PROPORCIONAL_MES = 6750;
+// Valores DAS 2025 por categoria:
+export const MEI_DAS_VALORES = {
+  comercio_industria: 76.90,
+  servicos: 80.90,
+  comercio_servicos: 81.90,
+  caminhoneiro: 188.69,
+} as const;
+
+Substituir todas as ocorrências de 130000 em contexto MEI.
+Quando o limite oficial for elevado (PLP em tramitação), atualizar SÓ a constante.
+10. Forecast de gastos com sazonalidade (backend)
+Arquivo: server/services/expenseForecast.ts (criar se não existir; senão melhorar o existente).
+
+Correção:
+
+Ao gerar forecast por categoria, multiplicar pelo fator de sazonalidade do mês:
+const SEASONALITY: Record<string, number[]> = {
+  // mês 0=Jan ... 11=Dez. 1.0 = neutro.
+  transporte: [1.4, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], // IPVA jan
+  educacao:   [1.6, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], // material esc.
+  presentes:  [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.2, 2.0], // Natal
+  viagem:     [1.5, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5, 1.0, 1.0, 1.0, 1.0, 1.5], // férias
+  alimentacao:[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.3], // ceia
+};
+
+Para receitas, adicionar boost no mês 11 (13º) e mês 1 (segunda parcela do 13º opcional).
+Expor flag seasonalAdjusted: true no response.
+Endpoint existente /api/reports/expense-forecast mantém contrato; adiciona campos opcionais.
+11. Health Score: alinhamento com mobile
+Arquivo: server/services/financialHealthDashboard/index.ts
+
+Correções:
+
+Garantir que o endpoint /api/health-score/current (criar se não existir) retorne mesmo formato esperado pelo mobile:
+{ overallScore: number, category: string, components: { name: string, score: number, max: number }[], history: { month: string, score: number }[] }
+
+História só com dados reais (snapshot mensal salvo em tabela financial_health_scores). Se < 1 mês de uso, history: [] — NUNCA gerar fake.
+Job mensal (dia 1, 03:00) que persiste snapshot do score de cada usuário ativo.
+12. Dividendos reais por ativo (NOVO)
+Arquivo: server/services/dividends.ts (criar) + rota GET /api/investments/dividends?from=&to=.
+
+Correção:
+
+Consumir API de dividendos (Brapi tem /api/quote/{ticker}?dividends=true ou similar).
+Persistir em tabela dividend_payments (ticker, paymentDate, recordDate, amountPerShare, type: 'dividend'|'jcp'|'rendimento').
+Job semanal de atualização (segundas 06:00).
+Endpoint retorna dividendos somente dos tickers do usuário.
+Mobile (Fase 1, item 4) consome este endpoint — REMOVE Math.random() de vez.
+Validação ao terminar
+npm run typecheck (ou equivalente do projeto) passa.
+Restart workflow → /api/market/benchmarks retorna valores reais (não 12 / 0.045 chumbados).
+/api/portfolio/twr e /api/portfolio/mwr retornam números coerentes para um usuário com >= 90 dias de histórico.
+grep -rn "Math.sin\|Math.random" server/services/ — só pode haver Math.random em local não-financeiro (geração de id, mock de tests, etc.). Documentar exceções.
+grep -rn "130000" server/ — não pode aparecer em contexto MEI.
+/api/investments/dividends?from=2025-01-01&to=2025-12-31 retorna lista real ou vazio (nunca aleatório).
+/api/health-score/current retorna history: [] para usuário novo, sem fakes.
+Calculador fiscal único — taxCalculation.ts marcado @deprecated; nenhum import vivo aponta para ele (só re-export para compat).
+Restrições
+Não rodar db:push sem antes confirmar que as colunas novas (snapshot history, dividend_payments, market_benchmarks) coexistem com dados existentes.
+Toda chamada externa (BCB, Brapi) com timeout de 10s e fallback para último valor persistido.
+Cache de 1h em memória para benchmarks; cache de 24h para dividendos por ticker.
+Não quebrar contratos existentes da API — só ADICIONE campos opcionais.
+Logar warnings via logger existente; nada de console.log cru.

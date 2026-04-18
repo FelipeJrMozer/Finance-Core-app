@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, SectionList, RefreshControl, Pressable,
   TextInput, Platform, ActivityIndicator, Alert, Share
@@ -44,7 +44,7 @@ function formatDateHeader(dateStr: string) {
 
 export default function TransactionsScreen() {
   const { theme, colors } = useTheme();
-  const { transactions, accounts, isLoading, refresh } = useFinance();
+  const { transactions, accounts, isLoading, refresh, searchTransactionsRemote } = useFinance();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -53,21 +53,67 @@ export default function TransactionsScreen() {
   const [showAccounts, setShowAccounts] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(getNow());
 
+  // Server-side search with debounce
+  const [remoteResults, setRemoteResults] = useState<{ q: string; data: Transaction[] } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const q = search.trim();
+    // Always abort any in-flight request and clear stale results immediately.
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+    if (q.length < 2) {
+      setRemoteResults(null);
+      setSearching(false);
+      return;
+    }
+    // Drop any previous remote results that don't match the new query.
+    setRemoteResults((prev) => (prev && prev.q === q ? prev : null));
+    const handle = setTimeout(() => {
+      const ctrl = new AbortController();
+      searchAbortRef.current = ctrl;
+      setSearching(true);
+      searchTransactionsRemote(q, ctrl.signal)
+        .then((res) => {
+          if (ctrl.signal.aborted) return;
+          setRemoteResults({ q, data: res });
+        })
+        .catch(() => { /* aborted */ })
+        .finally(() => { if (!ctrl.signal.aborted) setSearching(false); });
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [search, searchTransactionsRemote]);
+
   const currentMonthStr = getNow();
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
+  const isSearching = search.trim().length >= 2;
 
   const filtered = useMemo(() => {
+    // When user is searching, show server results merged with local (deduped),
+    // ignoring month/account/type filters so global matches are always visible.
+    if (isSearching) {
+      const q = search.trim();
+      const qLower = q.toLowerCase();
+      const localMatches = transactions.filter((t) => t.description.toLowerCase().includes(qLower));
+      const merged = new Map<string, Transaction>();
+      for (const t of localMatches) merged.set(t.id, t);
+      // Only merge remote results that match the CURRENT query, never stale ones.
+      if (remoteResults && remoteResults.q === q) {
+        for (const t of remoteResults.data) if (!merged.has(t.id)) merged.set(t.id, t);
+      }
+      return Array.from(merged.values()).sort((a, b) => (b.transactionDate ?? b.date).localeCompare(a.transactionDate ?? a.date));
+    }
     return transactions.filter((t) => {
       const effectiveDate = t.transactionDate ?? t.date;
       if (!effectiveDate.startsWith(selectedMonth)) return false;
       if (filter !== 'all' && t.type !== filter) return false;
       if (accountFilter !== 'all' && t.accountId !== accountFilter) return false;
-      if (search.trim()) {
-        return t.description.toLowerCase().includes(search.toLowerCase());
-      }
       return true;
     }).sort((a, b) => (b.transactionDate ?? b.date).localeCompare(a.transactionDate ?? a.date));
-  }, [transactions, filter, accountFilter, search, selectedMonth]);
+  }, [transactions, filter, accountFilter, search, selectedMonth, isSearching, remoteResults]);
 
   const sections = useMemo(() => {
     const byDate: Record<string, Transaction[]> = {};
@@ -129,17 +175,19 @@ export default function TransactionsScreen() {
   const renderHeader = () => (
     <View style={{ gap: 10, paddingBottom: 8 }}>
       {/* Month Navigation */}
-      <View style={[styles.monthNav, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={[styles.monthNav, { backgroundColor: theme.surface, borderColor: theme.border, opacity: isSearching ? 0.45 : 1 }]} pointerEvents={isSearching ? 'none' : 'auto'}>
         <Pressable
           onPress={() => { setSelectedMonth(addMonths(selectedMonth, -1)); Haptics.selectionAsync(); }}
           style={styles.monthBtn}
           hitSlop={8}
+          disabled={isSearching}
         >
           <Feather name="chevron-left" size={20} color={theme.textSecondary} />
         </Pressable>
         <Pressable
           onPress={() => { setSelectedMonth(currentMonthStr); Haptics.selectionAsync(); }}
           style={styles.monthLabelBtn}
+          disabled={isSearching}
         >
           <Text style={[styles.monthLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
             {getMonthLabel(selectedMonth)}
@@ -161,6 +209,7 @@ export default function TransactionsScreen() {
           }}
           style={styles.monthBtn}
           hitSlop={8}
+          disabled={isSearching || !(selectedMonth < currentMonthStr)}
         >
           <Feather
             name="chevron-right"
@@ -177,19 +226,25 @@ export default function TransactionsScreen() {
           testID="search-input"
           value={search}
           onChangeText={setSearch}
-          placeholder="Buscar transação..."
+          placeholder="Buscar em todos os meses..."
           placeholderTextColor={theme.textTertiary}
           style={[styles.searchInput, { color: theme.text, fontFamily: 'Inter_400Regular' }]}
         />
-        {search.length > 0 && (
+        {searching && <ActivityIndicator size="small" color={theme.textTertiary} />}
+        {search.length > 0 && !searching && (
           <Pressable onPress={() => setSearch('')}>
             <Feather name="x" size={16} color={theme.textTertiary} />
           </Pressable>
         )}
       </View>
+      {isSearching && (
+        <Text style={{ color: theme.textTertiary, fontSize: 12, marginTop: -4, fontFamily: 'Inter_400Regular' }}>
+          Buscando em todas as transações (filtros desativados)
+        </Text>
+      )}
 
       {/* Type Filters */}
-      <View style={styles.filterRow}>
+      <View style={[styles.filterRow, { opacity: isSearching ? 0.45 : 1 }]} pointerEvents={isSearching ? 'none' : 'auto'}>
         {([
           { value: 'all', label: 'Todas' },
           { value: 'income', label: 'Receitas' },
@@ -200,6 +255,7 @@ export default function TransactionsScreen() {
             key={f.value}
             testID={`filter-${f.value}`}
             onPress={() => { setFilter(f.value); Haptics.selectionAsync(); }}
+            disabled={isSearching}
             style={[
               styles.filterChip,
               { backgroundColor: filter === f.value ? colors.primary : theme.surfaceElevated, borderColor: filter === f.value ? colors.primary : theme.border }
@@ -218,7 +274,8 @@ export default function TransactionsScreen() {
       {/* Account Filter */}
       <Pressable
         onPress={() => { setShowAccounts(!showAccounts); Haptics.selectionAsync(); }}
-        style={[styles.accountFilterBtn, { backgroundColor: theme.surfaceElevated, borderColor: activeAccount ? activeAccount.color : theme.border }]}
+        disabled={isSearching}
+        style={[styles.accountFilterBtn, { backgroundColor: theme.surfaceElevated, borderColor: activeAccount ? activeAccount.color : theme.border, opacity: isSearching ? 0.45 : 1 }]}
       >
         {activeAccount && <View style={[styles.accountDot, { backgroundColor: activeAccount.color }]} />}
         <Feather name="credit-card" size={13} color={activeAccount ? activeAccount.color : theme.textTertiary} />
