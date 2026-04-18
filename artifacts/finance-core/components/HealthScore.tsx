@@ -11,20 +11,20 @@ export function HealthScore({ score, size = 'md' }: HealthScoreProps) {
   const { theme, colors } = useTheme();
   const animatedWidth = useRef(new Animated.Value(0)).current;
 
-  const maxScore = 1000;
+  const maxScore = 100;
   const pct = Math.min(score / maxScore, 1);
 
   const label =
-    score < 300 ? 'Crítico' :
-    score < 500 ? 'Baixo' :
-    score < 700 ? 'Regular' :
-    score < 850 ? 'Bom' :
+    score < 30 ? 'Crítico' :
+    score < 50 ? 'Baixo' :
+    score < 70 ? 'Regular' :
+    score < 85 ? 'Bom' :
     'Excelente';
 
   const barColor =
-    score < 300 ? colors.danger :
-    score < 500 ? colors.warning :
-    score < 700 ? colors.accentWarm :
+    score < 30 ? colors.danger :
+    score < 50 ? colors.warning :
+    score < 70 ? colors.accentWarm :
     colors.primary;
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function HealthScore({ score, size = 'md' }: HealthScoreProps) {
       <View style={styles.header}>
         <View>
           <Text style={[styles.scoreValue, { color: barColor, fontFamily: 'Inter_700Bold' }]}>{score}</Text>
-          <Text style={[styles.scoreLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>/ 1000 pontos</Text>
+          <Text style={[styles.scoreLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>/ 100 pontos</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: `${barColor}20` }]}>
           <Text style={[styles.badgeText, { color: barColor, fontFamily: 'Inter_600SemiBold' }]}>{label}</Text>
@@ -83,7 +83,7 @@ export function HealthScore({ score, size = 'md' }: HealthScoreProps) {
         />
       </View>
       <View style={styles.markers}>
-        {[300, 500, 700, 850].map((mark) => (
+        {[30, 50, 70, 85].map((mark) => (
           <View key={mark} style={[styles.marker, { left: `${(mark / maxScore) * 100}%` as any }]} />
         ))}
       </View>
