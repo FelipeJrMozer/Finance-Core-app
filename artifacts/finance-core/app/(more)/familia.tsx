@@ -12,6 +12,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
+import { fetchFamilyBalance, type FamilyBalance } from '@/services/family';
 
 type Tab = 'members' | 'expenses' | 'wallet' | 'goals';
 
@@ -46,6 +47,7 @@ export default function FamiliaScreen() {
   const [expenses, setExpenses] = useState<SharedExpense[]>([]);
   const [familyWalletBalance, setFamilyWalletBalance] = useState<number>(0);
   const [loaded, setLoaded] = useState(false);
+  const [remoteBalance, setRemoteBalance] = useState<FamilyBalance | null>(null);
 
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
@@ -92,9 +94,35 @@ export default function FamiliaScreen() {
     })).catch(() => {});
   }, [members, expenses, familyWalletBalance, loaded]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchFamilyBalance()
+      .then((b) => {
+        if (cancelled) return;
+        if (b.memberBalances.length > 0 || b.settlements.length > 0) {
+          setRemoteBalance(b);
+        } else {
+          setRemoteBalance(null);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const memberById = (id: string) => members.find((m) => m.id === id);
 
   const balances = useMemo(() => {
+    // Se o backend retornou balanços agregados de despesas reais, prioriza.
+    if (remoteBalance && remoteBalance.memberBalances.length > 0) {
+      const map: Record<string, number> = {};
+      members.forEach((m) => { map[m.id] = 0; });
+      remoteBalance.memberBalances.forEach((mb) => {
+        // Match por id ou por nome (membros locais podem não ter o mesmo id do servidor).
+        const local = members.find((m) => m.id === mb.memberId || m.name === mb.memberName);
+        if (local) map[local.id] = (map[local.id] || 0) + mb.balance;
+      });
+      return map;
+    }
     const map: Record<string, number> = {};
     members.forEach((m) => { map[m.id] = 0; });
     expenses.forEach((e) => {
@@ -104,7 +132,7 @@ export default function FamiliaScreen() {
       split.forEach((mid) => { map[mid] = (map[mid] || 0) - share; });
     });
     return map;
-  }, [expenses, members]);
+  }, [expenses, members, remoteBalance]);
 
   const totalShared = expenses.reduce((s, e) => s + e.amount, 0);
   const familyGoals = goals.slice(0, 3);

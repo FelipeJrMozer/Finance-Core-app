@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "finance-core",
+    "scheme": "financecore",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
+      "associatedDomains": ["applinks:pilar-financeiro.replit.app", "applinks:financecore.app"],
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -28,6 +29,23 @@
           "action": "android.intent.action.SEND",
           "category": ["android.intent.category.DEFAULT"],
           "data": [{ "mimeType": "text/plain" }]
+        },
+        {
+          "action": "android.intent.action.VIEW",
+          "autoVerify": true,
+          "category": ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"],
+          "data": [
+            { "scheme": "https", "host": "pilar-financeiro.replit.app" },
+            { "scheme": "https", "host": "financecore.app" }
+          ]
+        },
+        {
+          "action": "android.intent.action.VIEW",
+          "category": ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"],
+          "data": [
+            { "scheme": "financecore" },
+            { "scheme": "finance-core" }
+          ]
         }
       ]
     },

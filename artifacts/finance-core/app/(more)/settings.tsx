@@ -26,6 +26,9 @@ import {
   setBiometricEnabled,
   authenticateBiometric,
 } from '@/services/biometric';
+import { fetchBackupJson, fetchBackupPdf } from '@/services/backup';
+import { deleteAccount } from '@/services/account';
+import { clearTokens } from '@/services/api';
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -262,26 +265,153 @@ export default function SettingsScreen() {
     }
   };
 
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
   const handleExportJSON = async () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      app: 'Pilar Financeiro',
-      version: '1.0.0',
-      user: user ? { name: user.name, email: user.email, plan: user.plan } : null,
-      counts: { transactions: transactions.length, accounts: accounts.length, investments: investments.length },
-      transactions,
-      accounts,
-      investments,
-    };
+    if (backupBusy) return;
+    setBackupBusy(true);
     try {
-      await Share.share({
-        message: JSON.stringify(payload, null, 2),
-        title: 'Pilar Financeiro — Backup JSON',
-      });
+      let payload: any;
+      if (apiUrl) {
+        try {
+          payload = await fetchBackupJson();
+        } catch (e: any) {
+          // Fallback para snapshot local quando o servidor falha
+          payload = {
+            exportedAt: new Date().toISOString(),
+            app: 'Pilar Financeiro',
+            version: '1.0.0',
+            source: 'local-fallback',
+            user: user ? { name: user.name, email: user.email, plan: user.plan } : null,
+            counts: { transactions: transactions.length, accounts: accounts.length, investments: investments.length },
+            transactions,
+            accounts,
+            investments,
+          };
+        }
+      } else {
+        payload = {
+          exportedAt: new Date().toISOString(),
+          app: 'Pilar Financeiro',
+          version: '1.0.0',
+          source: 'local',
+          user: user ? { name: user.name, email: user.email, plan: user.plan } : null,
+          counts: { transactions: transactions.length, accounts: accounts.length, investments: investments.length },
+          transactions,
+          accounts,
+          investments,
+        };
+      }
+
+      const json = JSON.stringify(payload, null, 2);
+
+      if (Platform.OS === 'web') {
+        await Share.share({ message: json, title: 'Pilar Financeiro — Backup JSON' });
+      } else {
+        try {
+          const FileSystem: any = await import('expo-file-system');
+          const Sharing: any = await import('expo-sharing');
+          const baseDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+          const uri = `${baseDir}pilar-backup-${Date.now()}.json`;
+          await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Salvar backup' });
+          } else {
+            await Share.share({ message: json, title: 'Pilar Financeiro — Backup JSON' });
+          }
+        } catch {
+          await Share.share({ message: json, title: 'Pilar Financeiro — Backup JSON' });
+        }
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Erro', 'Não foi possível exportar o backup.');
+    } finally {
+      setBackupBusy(false);
     }
+  };
+
+  const handleExportPDF = async () => {
+    if (pdfBusy) return;
+    if (!apiUrl) {
+      Alert.alert('Indisponível', 'A exportação em PDF requer conexão com o servidor.');
+      return;
+    }
+    setPdfBusy(true);
+    try {
+      const result = await fetchBackupPdf();
+      if (!result.ok) {
+        Alert.alert('Exportação em PDF', result.message);
+        return;
+      }
+      if (result.uri) {
+        try {
+          const Sharing: any = await import('expo-sharing');
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(result.uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Salvar PDF' });
+          } else {
+            Alert.alert('Pronto', `PDF salvo em: ${result.uri}`);
+          }
+        } catch {
+          Alert.alert('Pronto', `PDF salvo em: ${result.uri}`);
+        }
+      } else if (result.blob && Platform.OS === 'web') {
+        const url = URL.createObjectURL(result.blob);
+        try { Linking.openURL(url); } catch {}
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Excluir conta',
+      'Esta ação remove permanentemente sua conta e TODOS os dados associados (transações, contas, investimentos, metas, cartões). Não é possível desfazer.\n\nDeseja continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir conta',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Confirmar exclusão',
+              'Pra confirmar, toque em "Excluir definitivamente". Esta é sua última chance de cancelar.',
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Excluir definitivamente',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (deleteBusy) return;
+                    setDeleteBusy(true);
+                    try {
+                      await deleteAccount();
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      // Limpa tokens e dados locais; volta ao login.
+                      try { await clearTokens(); } catch {}
+                      try {
+                        const keys = ['fc_transactions', 'fc_accounts', 'fc_credit_cards', 'fc_investments', 'fc_budgets', 'fc_goals', 'fc_darfs', 'pf_familia_state_v1', 'pf_user'];
+                        await Promise.all(keys.map((k) => AsyncStorage.removeItem(k)));
+                      } catch {}
+                      Alert.alert('Conta excluída', 'Sua conta e seus dados foram removidos.');
+                      try { router.replace('/(auth)/login'); } catch {}
+                    } catch (e: any) {
+                      Alert.alert('Erro', e?.message || 'Não foi possível excluir a conta. Tente novamente em instantes.');
+                    } finally {
+                      setDeleteBusy(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleClearData = () => {
@@ -645,24 +775,38 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="package"
             label="Exportar Backup (JSON)"
-            subtitle="Salvar transações, contas e investimentos"
+            subtitle={backupBusy ? 'Gerando backup…' : 'Snapshot completo da sua conta'}
             onPress={handleExportJSON}
+            disabled={backupBusy}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
-            icon="upload-cloud"
-            label="Backup na Nuvem"
-            subtitle={apiUrl ? 'Sincronizado com o servidor' : 'Requer conexão com API'}
-            disabled={!apiUrl}
-            onPress={() => Alert.alert('Backup', 'Backup em nuvem disponível quando conectado à API.')}
+            icon="file-text"
+            label="Exportar PDF"
+            subtitle={pdfBusy ? 'Gerando PDF…' : (apiUrl ? 'Relatório consolidado' : 'Requer conexão com servidor')}
+            onPress={handleExportPDF}
+            disabled={pdfBusy || !apiUrl}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="trash-2"
-            label="Limpar Todos os Dados"
-            subtitle="Remove transações, contas e configurações"
+            label="Limpar Dados Locais"
+            subtitle="Remove o cache do app neste dispositivo"
             danger
             onPress={handleClearData}
+          />
+        </View>
+
+        {/* Privacidade / LGPD */}
+        <SectionTitle title="Privacidade" />
+        <View style={[styles.group, { borderColor: theme.border }]}>
+          <SettingsRow
+            icon="user-x"
+            label={deleteBusy ? 'Excluindo conta…' : 'Excluir minha conta'}
+            subtitle="Remove permanentemente sua conta e todos os dados (LGPD)"
+            danger
+            onPress={handleDeleteAccount}
+            disabled={deleteBusy || !apiUrl}
           />
         </View>
 

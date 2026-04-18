@@ -23,6 +23,7 @@ import { WalletProvider } from "@/context/WalletContext";
 import { FinanceProvider } from "@/context/FinanceContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useTransactionIntent } from "@/hooks/useTransactionIntent";
+import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { QuickTransactionModal } from "@/components/QuickTransactionModal";
 
 SplashScreen.preventAutoHideAsync();
@@ -31,6 +32,11 @@ const queryClient = new QueryClient();
 
 function NotificationGate() {
   useNotifications();
+  return null;
+}
+
+function DeepLinksGate() {
+  useDeepLinks();
   return null;
 }
 
@@ -46,7 +52,7 @@ function TransactionIntentGate() {
 
 function RootLayoutNav() {
   const { theme } = useTheme();
-  const { isAuthenticated, isLoading, requireBiometric } = useAuth();
+  const { isAuthenticated, isLoading, requireBiometric, user } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -54,8 +60,10 @@ function RootLayoutNav() {
       router.replace("/(auth)/login");
     } else if (requireBiometric) {
       router.replace("/(auth)/unlock");
+    } else if (user && user.firstLogin === true) {
+      router.replace("/(auth)/onboarding");
     }
-  }, [isAuthenticated, isLoading, requireBiometric]);
+  }, [isAuthenticated, isLoading, requireBiometric, user]);
 
   return (
     <>
@@ -119,6 +127,7 @@ export default function RootLayout() {
                   <GestureHandlerRootView style={{ flex: 1 }}>
                     <KeyboardProvider>
                       <NotificationGate />
+                      <DeepLinksGate />
                       <RootLayoutNav />
                     </KeyboardProvider>
                   </GestureHandlerRootView>

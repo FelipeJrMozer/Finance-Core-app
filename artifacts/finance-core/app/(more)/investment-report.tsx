@@ -11,6 +11,7 @@ import { useFinance } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
 import { apiGet } from '@/services/api';
 import { useBenchmarks } from '@/services/benchmarks';
+import { fetchPortfolioReturns, type PortfolioReturns } from '@/services/portfolio';
 
 const { width } = Dimensions.get('window');
 const CHART_W = width - 64;
@@ -113,6 +114,18 @@ export default function InvestmentReportScreen() {
   }, []);
 
   useEffect(() => { fetchDividends(); }, [fetchDividends]);
+
+  // ── Portfolio TWR / MWR ──
+  const [returns, setReturns] = useState<PortfolioReturns | null>(null);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setReturnsLoading(true);
+    fetchPortfolioReturns()
+      .then((r) => { if (!cancelled) setReturns(r); })
+      .finally(() => { if (!cancelled) setReturnsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const months = lastSixMonths();
   const dividendByMonth: DividendByMonth[] = months.map((m) => {
@@ -255,6 +268,61 @@ export default function InvestmentReportScreen() {
         )}
 
         {tab === 'performance' && (
+          <>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+              Retorno da Carteira (TWR & MWR)
+            </Text>
+            {returnsLoading ? (
+              <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Calculando…</Text>
+            ) : !returns || returns.insufficientData ? (
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                  {returns?.message || 'Dados insuficientes para calcular TWR/MWR.'}
+                </Text>
+                {returns && returns.requiredPoints > 0 && (
+                  <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                    {returns.availablePoints}/{returns.requiredPoints} pontos diários disponíveis. Continue registrando movimentações.
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <>
+                <View style={styles.perfRow}>
+                  <Text style={[styles.perfLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', width: 70 }]}>TWR</Text>
+                  <View style={[styles.perfBarBg, { backgroundColor: theme.surfaceElevated, flex: 1 }]}>
+                    <View style={[styles.perfBarFill, {
+                      width: `${Math.min(100, Math.abs((returns.twr ?? 0) * 100) * 4)}%`,
+                      backgroundColor: (returns.twr ?? 0) >= 0 ? colors.success : colors.danger,
+                    }]} />
+                  </View>
+                  <Text style={[styles.perfPct, { color: (returns.twr ?? 0) >= 0 ? colors.success : colors.danger, fontFamily: 'Inter_700Bold', width: 70, textAlign: 'right' }]}>
+                    {returns.twr != null ? `${(returns.twr * 100).toFixed(2)}%` : '—'}
+                  </Text>
+                </View>
+                <View style={styles.perfRow}>
+                  <Text style={[styles.perfLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', width: 70 }]}>MWR</Text>
+                  <View style={[styles.perfBarBg, { backgroundColor: theme.surfaceElevated, flex: 1 }]}>
+                    <View style={[styles.perfBarFill, {
+                      width: `${Math.min(100, Math.abs((returns.mwr ?? 0) * 100) * 4)}%`,
+                      backgroundColor: (returns.mwr ?? 0) >= 0 ? colors.success : colors.danger,
+                    }]} />
+                  </View>
+                  <Text style={[styles.perfPct, { color: (returns.mwr ?? 0) >= 0 ? colors.success : colors.danger, fontFamily: 'Inter_700Bold', width: 70, textAlign: 'right' }]}>
+                    {returns.mwr != null ? `${(returns.mwr * 100).toFixed(2)}%` : '—'}
+                  </Text>
+                </View>
+                {returns.twrAnnualized != null && (
+                  <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                    TWR anualizado: {(returns.twrAnnualized * 100).toFixed(2)}%
+                  </Text>
+                )}
+                <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                  TWR isola o desempenho da carteira; MWR considera o impacto das suas entradas e saídas.
+                </Text>
+              </>
+            )}
+          </View>
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Comparativo de Rentabilidade</Text>
             {benchSource === 'none' && (
@@ -286,6 +354,7 @@ export default function InvestmentReportScreen() {
               * CDI e IBOV usam referências anuais
             </Text>
           </View>
+          </>
         )}
 
         {tab === 'historico' && (

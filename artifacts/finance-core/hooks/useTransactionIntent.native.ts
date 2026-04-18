@@ -13,7 +13,7 @@ let pendingIntent: TransactionIntent | null = null;
 
 function parseIntent(url: string): TransactionIntent | null {
   try {
-    if (!url.includes('finance-core://transaction')) return null;
+    if (!url.includes('finance-core://transaction') && !url.includes('financecore://transaction')) return null;
     const parsed = Linking.parse(url);
     const params = parsed.queryParams ?? {};
     const text = decodeURIComponent((params.text as string) ?? '');

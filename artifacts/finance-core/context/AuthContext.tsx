@@ -18,6 +18,7 @@ export interface User {
   email: string;
   avatar?: string;
   plan?: string;
+  firstLogin?: boolean;
 }
 
 interface AuthContextType {
