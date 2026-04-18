@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
 import { Colors, ACCENT_PRESETS, AccentId, DEFAULT_ACCENT_ID } from '@/constants/colors';
+import { safeGet, safeSet } from '@/utils/storage';
+import { getAccessToken } from '@/services/api';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -35,18 +36,17 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
-async function getToken(): Promise<string | null> {
-  try { return await AsyncStorage.getItem('pf_access_token'); } catch { return null; }
-}
-
 async function fetchRemotePrefs(): Promise<{
   accentId?: string; themeMode?: string; valuesVisible?: boolean;
 } | null> {
   if (!API_URL) return null;
   try {
-    const token = await getToken();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const token = getAccessToken();
+    if (!token) return null;
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
     const res = await fetch(`${API_URL}/api/preferences`, { headers, signal: AbortSignal.timeout(4000) });
     if (res.ok) return await res.json();
   } catch { /* offline */ }
@@ -56,9 +56,13 @@ async function fetchRemotePrefs(): Promise<{
 async function pushRemotePrefs(data: { accentId?: string; themeMode?: string; valuesVisible?: boolean }) {
   if (!API_URL) return;
   try {
-    const token = await getToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const token = getAccessToken();
+    if (!token) return;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
     await fetch(`${API_URL}/api/preferences`, {
       method: 'PATCH',
       headers,
@@ -82,12 +86,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const init = async () => {
       const [tm, ac, vv, nd, nb, nw] = await Promise.all([
-        AsyncStorage.getItem('themeMode'),
-        AsyncStorage.getItem('accentColor'),
-        AsyncStorage.getItem('valuesVisible'),
-        AsyncStorage.getItem('notifyDARF'),
-        AsyncStorage.getItem('notifyBudget'),
-        AsyncStorage.getItem('notifyWeekly'),
+        safeGet<string>('themeMode'),
+        safeGet<string>('accentColor'),
+        safeGet<string>('valuesVisible'),
+        safeGet<string>('notifyDARF'),
+        safeGet<string>('notifyBudget'),
+        safeGet<string>('notifyWeekly'),
       ]);
 
       if (tm) setThemeModeState(tm as ThemeMode);
@@ -107,15 +111,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
           if (remote.accentId && remote.accentId !== localAccent) {
             const id = remote.accentId as AccentId;
             setAccentId(id);
-            await AsyncStorage.setItem('accentColor', id);
+            await safeSet('accentColor', id);
           }
           if (remote.themeMode && remote.themeMode !== tm) {
             setThemeModeState(remote.themeMode as ThemeMode);
-            await AsyncStorage.setItem('themeMode', remote.themeMode);
+            await safeSet('themeMode', remote.themeMode);
           }
           if (typeof remote.valuesVisible === 'boolean' && vv === null) {
             setValuesVisible(remote.valuesVisible);
-            await AsyncStorage.setItem('valuesVisible', String(remote.valuesVisible));
+            await safeSet('valuesVisible', String(remote.valuesVisible));
           }
         }
       }
@@ -131,7 +135,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         if (remote.accentId) {
           setAccentId((prev) => {
             if (prev !== remote.accentId) {
-              AsyncStorage.setItem('accentColor', remote.accentId!);
+              safeSet('accentColor', remote.accentId!);
               return remote.accentId as AccentId;
             }
             return prev;
@@ -140,7 +144,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         if (remote.themeMode) {
           setThemeModeState((prev) => {
             if (prev !== remote.themeMode) {
-              AsyncStorage.setItem('themeMode', remote.themeMode!);
+              safeSet('themeMode', remote.themeMode!);
               return remote.themeMode as ThemeMode;
             }
             return prev;
@@ -149,7 +153,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         if (typeof remote.valuesVisible === 'boolean') {
           setValuesVisible((prev) => {
             if (prev !== remote.valuesVisible) {
-              AsyncStorage.setItem('valuesVisible', String(remote.valuesVisible));
+              safeSet('valuesVisible', String(remote.valuesVisible));
               return remote.valuesVisible!;
             }
             return prev;
@@ -165,20 +169,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setThemeMode = useCallback(async (mode: ThemeMode) => {
     setThemeModeState(mode);
-    await AsyncStorage.setItem('themeMode', mode);
+    await safeSet('themeMode', mode);
     pushRemotePrefs({ themeMode: mode });
   }, []);
 
   const setAccentColor = useCallback(async (id: AccentId) => {
     setAccentId(id);
-    await AsyncStorage.setItem('accentColor', id);
+    await safeSet('accentColor', id);
     pushRemotePrefs({ accentId: id });
   }, []);
 
   const toggleValuesVisible = useCallback(() => {
     setValuesVisible((prev) => {
       const next = !prev;
-      AsyncStorage.setItem('valuesVisible', String(next));
+      safeSet('valuesVisible', String(next));
       pushRemotePrefs({ valuesVisible: next });
       return next;
     });
@@ -200,7 +204,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (key === 'notifyDARF') setNotifyDARF(value);
     if (key === 'notifyBudget') setNotifyBudget(value);
     if (key === 'notifyWeekly') setNotifyWeekly(value);
-    await AsyncStorage.setItem(key, String(value));
+    await safeSet(key, String(value));
   }, []);
 
   const isDark = themeMode === 'system' ? systemScheme === 'dark' : themeMode === 'dark';

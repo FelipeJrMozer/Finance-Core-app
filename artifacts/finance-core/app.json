@@ -29,7 +29,8 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "./plugins/withNotificationListener"
+      "./plugins/withNotificationListener",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

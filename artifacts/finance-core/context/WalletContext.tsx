@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiFetch, getApiBaseUrl, setCurrentWalletId, getAccessToken } from '@/services/api';
+import { apiFetch, setCurrentWalletId } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { safeGetRaw, safeSet, safeRemove } from '@/utils/storage';
+import { logger } from '@/utils/logger';
 
 export interface Wallet {
   id: string;
@@ -81,7 +82,8 @@ const USER_CHOSE_KEY = 'pf_user_chose_wallet';
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isUnlocked } = useAuth();
+  const isAuthenticated = isUnlocked;
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,21 +96,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     setWalletError(null);
 
-    const tok = getAccessToken();
-    const tokenInfo = tok ? `${tok.slice(0, 10)}…${tok.slice(-6)} (${tok.length}c)` : 'NULL';
-    console.log('[WalletContext] fetching wallets, token:', tokenInfo);
+    logger.debug('[WalletContext] fetching wallets');
 
     try {
       const res = await apiFetch('/api/workspaces');
-      console.log('[WalletContext] /api/workspaces status:', res.status);
-
       const ct = res.headers.get('content-type') || '';
 
       if (res.ok) {
         const text = await res.text();
         const trimmed = text.trim();
         if (trimmed.startsWith('<') || trimmed.startsWith('<!DOCTYPE')) {
-          console.log('[WalletContext] /api/workspaces returned HTML - endpoint missing');
+          logger.debug('[WalletContext] /api/workspaces returned HTML — endpoint missing');
           setWallets([]);
           setWalletError('not_supported');
           setWalletDebug(`200 HTML (${ct})`);
@@ -119,55 +117,46 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         let parsed: unknown;
         try { parsed = JSON.parse(text); } catch { parsed = []; }
         const raw = extractWallets(parsed);
-        setWalletDebug(`OK ${raw.length} | tok ${tokenInfo}`);
-        console.log('[WalletContext] wallet count:', raw.length, '| names:', raw.map((w) => (w as Record<string, unknown>).name));
+        setWalletDebug(`OK ${raw.length}`);
+        logger.debug('[WalletContext] wallet count:', raw.length);
         const list = assignColors(raw);
         setWallets(list);
 
         if (list.length > 0) {
-          const savedId = await AsyncStorage.getItem(SELECTED_WALLET_KEY);
-          const userChose = await AsyncStorage.getItem(USER_CHOSE_KEY);
+          const savedId = await safeGetRaw(SELECTED_WALLET_KEY);
+          const userChose = await safeGetRaw(USER_CHOSE_KEY);
 
           const apiDefault = findDefaultWallet(list);
-          console.log('[WalletContext] api default:', apiDefault?.name, '| savedId:', savedId, '| userChose:', userChose);
 
           if (apiDefault && !userChose) {
-            console.log('[WalletContext] selecting API default:', apiDefault.name);
             setSelectedWallet(apiDefault);
-            await AsyncStorage.setItem(SELECTED_WALLET_KEY, apiDefault.id);
+            await safeSet(SELECTED_WALLET_KEY, apiDefault.id);
           } else if (savedId) {
             const saved = list.find((w) => w.id === savedId);
             if (saved) {
-              console.log('[WalletContext] selecting saved:', saved.name);
               setSelectedWallet(saved);
             } else {
               const fallback = apiDefault || list[0];
-              console.log('[WalletContext] savedId not found, fallback:', fallback.name);
               setSelectedWallet(fallback);
-              await AsyncStorage.setItem(SELECTED_WALLET_KEY, fallback.id);
-              await AsyncStorage.removeItem(USER_CHOSE_KEY);
+              await safeSet(SELECTED_WALLET_KEY, fallback.id);
+              await safeRemove(USER_CHOSE_KEY);
             }
           } else {
             const fallback = apiDefault || list[0];
-            console.log('[WalletContext] no saved, using:', fallback.name);
             setSelectedWallet(fallback);
-            await AsyncStorage.setItem(SELECTED_WALLET_KEY, fallback.id);
+            await safeSet(SELECTED_WALLET_KEY, fallback.id);
           }
         }
       } else if (res.status === 401) {
-        const body = await res.text().catch(() => '');
-        console.warn('[WalletContext] 401 body:', body.slice(0, 200), '| ct:', ct, '| token:', tokenInfo);
         setWalletError('session_expired');
-        setWalletDebug(`401 | tok ${tokenInfo} | ${body.slice(0, 80)}`);
+        setWalletDebug('401');
       } else {
-        const body = await res.text().catch(() => '');
-        console.warn('[WalletContext] error', res.status, body.slice(0, 100));
         setWalletError(`HTTP ${res.status}`);
-        setWalletDebug(`${res.status} | tok ${tokenInfo} | ${body.slice(0, 80)}`);
+        setWalletDebug(`${res.status}`);
       }
     } catch (e) {
       const msg = String(e);
-      console.warn('[WalletContext] fetch error:', msg);
+      logger.warn('[WalletContext] fetch error');
       if (msg.includes('fetch') || msg.includes('network') || msg.includes('Network')) {
         setWalletError('network');
       } else {
@@ -192,15 +181,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setCurrentWalletId(selectedWallet?.id || null);
-    console.log('[WalletContext] x-wallet-id header set to:', selectedWallet?.id || 'null');
+    logger.debug('[WalletContext] x-wallet-id set to:', selectedWallet?.id || 'null');
   }, [selectedWallet]);
 
   const selectWallet = useCallback(async (wallet: Wallet) => {
     setSelectedWallet(wallet);
     setCurrentWalletId(wallet.id);
-    await AsyncStorage.setItem(SELECTED_WALLET_KEY, wallet.id);
-    await AsyncStorage.setItem(USER_CHOSE_KEY, 'true');
-    console.log('[WalletContext] user manually selected:', wallet.name);
+    await safeSet(SELECTED_WALLET_KEY, wallet.id);
+    await safeSet(USER_CHOSE_KEY, 'true');
   }, []);
 
   const createWallet = useCallback(async (data: { name: string; description?: string; color?: string; icon?: string }) => {
@@ -244,7 +232,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (remaining.length > 0) {
         const next = findDefaultWallet(remaining) || remaining[0];
         setSelectedWallet(next);
-        await AsyncStorage.setItem(SELECTED_WALLET_KEY, next.id);
+        await safeSet(SELECTED_WALLET_KEY, next.id);
       } else {
         setSelectedWallet(null);
       }

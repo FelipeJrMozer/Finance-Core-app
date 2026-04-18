@@ -1,0 +1,168 @@
+# Fase 4 — Diferenciais que só fazem sentido em mobile
+Monorepo Finance-Core-app, app em `artifacts/finance-core`. Use o que já está no workspace; só adicione libs explicitamente listadas. Não toque em fórmulas (Fase 1) nem em segurança (Fase 2).
+## 1. QR Scanner — Pix (BR Code) e NFe
+**Lib a adicionar**: `expo-camera` (versão compatível com Expo SDK 54: `~17.0.x`).
+**Novo arquivo**: `artifacts/finance-core/app/scan.tsx`
+- Tela full-screen com câmera traseira e área de mira centralizada.
+- Permissão explícita; se negada, instrução clara para abrir as configurações.
+- Detecta QR e tenta classificar:
+  - **Pix BR Code** (EMV padrão BCB): começa com `00020126` ou `00020101`. Decodificar TLV (tag-length-value):
+    - tag 26 → payload Pix (chave, valor sugerido)
+    - tag 54 → valor (string com 2 decimais)
+    - tag 59 → nome do beneficiário
+    - tag 60 → cidade
+    - tag 62 → infos adicionais (txid)
+  - **Chave NFe** (44 dígitos numéricos com ou sem prefixo `NFe`): extrair com regex `[0-9]{44}`.
+  - Caso contrário: mostrar valor cru e botão "Copiar".
+- Após detectar Pix: roteia para `transaction/add` com query params pré-preenchidos: `description`, `amount`, `notes` (incluir nome+cidade do beneficiário). Tipo = expense, conta = última usada.
+- Após detectar NFe: roteia para `transaction/add` com `notes` contendo a chave; deixar valor/descrição em branco para o usuário preencher (não temos endpoint de consulta SEFAZ).
+**Helper**: `artifacts/finance-core/utils/pixDecoder.ts` com função `decodePixCode(code: string): { merchantName?, city?, amount?, txid?, key? } | null`.
+**Acesso**: novo botão "Escanear" no `QuickTransactionModal` (já existe), ao lado de "Adicionar". Também atalho no Dashboard.
+## 2. Lançamento rápido (Quick Add otimizado)
+**Arquivo**: `artifacts/finance-core/components/QuickTransactionModal.tsx` (já existe; aprimorar).
+**Melhorias**:
+- Layout simplificado:
+  - Toggle grande no topo: **Despesa | Receita | Transferência**.
+  - Input de valor com teclado numérico em destaque (font-size grande, BRL mask).
+  - Linha de chips para categoria (top 6 mais usadas calculadas localmente; tap em "+" abre seletor completo).
+  - Linha de chips para conta (default = última usada, salva em `safeSet('quickAdd:lastAccountId', id)`).
+  - Campo descrição opcional (placeholder "Ex: Padaria").
+  - Toggle "Já paguei" (default ON; OFF cria como bill com vencimento hoje).
+- Submissão: 1 tap; feedback háptico + close + toast "Lançado".
+- Atalho: shake do device abre o modal (use `Accelerometer` de `expo-sensors` se já presente; se não, ignore esse atalho).
+**Atalhos do sistema**:
+- iOS: adicionar shortcuts via `app.json` (Quick Actions): "Nova despesa", "Nova receita", "Escanear Pix".
+- Android: shortcuts via `expo-router` deep link `(modal)/quick?type=expense`.
+Configurar em `app.json`:
+```json
+{
+  "expo": {
+    "ios": {
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "shortcuts": [
+      { "type": "quick-expense", "title": "Nova despesa", "subtitle": "Lançar gasto rápido" },
+      { "type": "quick-income", "title": "Nova receita" },
+      { "type": "scan-pix", "title": "Escanear Pix/QR" }
+    ]
+  }
+}
+
+3. Detector de SMS bancário (Android only)
+Lib: NÃO adicionar libs novas. Use leitura via Intent quando o usuário compartilhar uma notificação (workaround sem permissão READ_SMS que é restrita pela Play Store).
+
+Estratégia segura para Play Store:
+
+Em vez de ler SMS automaticamente (proibido sem aprovação especial do Google), implemente "compartilhar para o app":
+Configure intentFilters em app.json Android para receber text/plain:
+"android": {
+  "intentFilters": [
+    {
+      "action": "android.intent.action.SEND",
+      "category": ["android.intent.category.DEFAULT"],
+      "data": [{ "mimeType": "text/plain" }]
+    }
+  ]
+}
+
+Tela app/share-import.tsx que captura o texto compartilhado (via Linking.getInitialURL() + listener) e tenta extrair valor/descrição.
+Helper: artifacts/finance-core/utils/smsParser.ts com regex para principais bancos brasileiros:
+
+type ParsedSms = { bank?: string; amount?: number; type?: 'expense'|'income'; description?: string; cardLast4?: string };
+const PATTERNS: Array<{ bank: string; regex: RegExp; type: 'expense'|'income'; map: (m: RegExpMatchArray) => Partial<ParsedSms> }> = [
+  // Nubank
+  { bank: 'Nubank', type: 'expense',
+    regex: /Compra aprovada.*?R\$\s?([\d.,]+).*?em\s+([^\.]+?)(?:\.|\s+em)/i,
+    map: m => ({ amount: parseBRL(m[1]), description: m[2].trim() }) },
+  // Itaú
+  { bank: 'Itaú', type: 'expense',
+    regex: /compra.*?R\$\s?([\d.,]+).*?cart[aã]o\s+final\s+(\d{4})/i,
+    map: m => ({ amount: parseBRL(m[1]), cardLast4: m[2] }) },
+  // Pix recebido
+  { bank: 'Pix', type: 'income',
+    regex: /pix.*?recebido.*?R\$\s?([\d.,]+).*?de\s+([^\.]+)/i,
+    map: m => ({ amount: parseBRL(m[1]), description: `Pix de ${m[2].trim()}` }) },
+  // Pix enviado
+  { bank: 'Pix', type: 'expense',
+    regex: /pix.*?(enviado|realizado).*?R\$\s?([\d.,]+).*?para\s+([^\.]+)/i,
+    map: m => ({ amount: parseBRL(m[2]), description: `Pix para ${m[3].trim()}` }) },
+];
+export function parseBRL(s: string): number {
+  return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+}
+export function parseBankSms(text: string): ParsedSms | null {
+  for (const p of PATTERNS) {
+    const m = text.match(p.regex);
+    if (m) return { bank: p.bank, type: p.type, ...p.map(m) };
+  }
+  return null;
+}
+
+Quando o usuário compartilha o SMS pelo "Compartilhar com" do Android, app abre, mostra resumo "Identificamos: R$ 23,90 em Padaria — confirmar?" e pré-preenche transaction/add.
+Adicione tela (more)/sms-import-help.tsx com instruções: "Para lançar via SMS, abra a notificação do seu banco, segure e toque em 'Compartilhar' → escolha Finance Core."
+4. Sazonalidade no forecast
+Arquivo: artifacts/finance-core/app/(more)/reports.tsx ou tela equivalente que consome /api/reports/expense-forecast.
+
+Adicione UI de "Eventos sazonais" abaixo do gráfico de previsão. Eventos hardcoded (não há endpoint ainda):
+const SEASONAL_EVENTS = [
+  { month: 1, label: 'IPVA + IPTU', impactType: 'expense' as const },
+  { month: 1, label: 'Material escolar', impactType: 'expense' as const },
+  { month: 11, label: 'Black Friday', impactType: 'expense' as const },
+  { month: 12, label: '13º salário', impactType: 'income' as const },
+  { month: 12, label: 'Natal + ceia', impactType: 'expense' as const },
+];
+
+Para cada mês visível no chart, mostre um chip se houver evento — cor verde para income, vermelho para expense.
+NÃO altere o cálculo do forecast (isso fica para a Fase 5 no backend).
+5. Consumir endpoint agregado /api/mobile/dashboard-summary (já existe no backend)
+Arquivo: artifacts/finance-core/services/dashboard.ts (criar).
+
+import { apiGet, apiPost } from './api';
+export type DashboardSummary = {
+  generatedAt: string;
+  cashBalance: number;
+  netWorth: number;
+  totalCardDebt: number;
+  totalInvestments: number;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+  prevMonthIncome: number;
+  prevMonthExpenses: number;
+  healthScore: number;
+  healthCategory: string | null;
+  upcomingBills: Array<{ id: string; name: string; amount: number; dueAt: string; daysUntil: number; category: string }>;
+  upcomingInvoices: Array<{ id: string; cardId: string; totalAmount: number; paidAmount: number; dueDate: string; daysUntil: number }>;
+  recentTransactions: Array<{ id: string; description: string; amount: number; type: string; date: string; categoryName: string | null }>;
+  weeklyChart: Array<{ day: string; income: number; expense: number }>;
+  unreadAlerts: number;
+};
+export async function fetchDashboardSummary(fresh = false): Promise<DashboardSummary> {
+  return apiGet(`/api/mobile/dashboard-summary${fresh ? '?fresh=1' : ''}`);
+}
+export async function invalidateDashboardCache(): Promise<void> {
+  try { await apiPost('/api/mobile/dashboard-summary/invalidate', {}); } catch {}
+}
+
+Em (tabs)/index.tsx:
+
+Use React Query: useQuery({ queryKey: ['dashboard-summary'], queryFn: () => fetchDashboardSummary(), staleTime: 60_000, refetchOnWindowFocus: true }).
+Substitua os múltiplos useEffect que hidratam o dashboard por essa única query.
+Após qualquer mutação (criar transação, pagar bill, pagar fatura), chame invalidateDashboardCache() E queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }).
+Mantenha o fluxo antigo (useFinance) como fallback se a query der erro (ex: backend offline).
+6. Pequenos ajustes UX que destrancam mobile
+Pull-to-refresh em todas as listas principais (Transactions, Bills, Cards, Investments).
+Skeleton loaders nas telas pesadas em vez de spinner (artifacts/finance-core/components/skeletons/).
+Detectar online/offline com expo-network: banner discreto no topo "Sem conexão — exibindo dados em cache".
+Feedback háptico em ações críticas (já tem expo-haptics): success em criar, warning em deletar, error em falha.
+Validação ao terminar
+pnpm --filter @workspace/finance-core typecheck passa.
+Testar em device físico Android: abrir scan, mirar QR Pix gerado em outro celular, confirmar pré-preenchimento.
+Compartilhar texto de SMS do Nubank/Itaú pelo "Compartilhar com" → app abre com dados extraídos.
+Dashboard carrega em uma única request (verificar Network tab).
+Quick Add modal: lançar 3 transações em < 30 segundos sem sair da tela.
+Modo avião: banner de offline aparece; dashboard mostra dados em cache.
+Restrições
+Não pedir permissão READ_SMS (proibido pela Play Store sem aprovação especial).
+Não fazer scraping de bancos.
+Não alterar fórmulas.
+Não criar dependência em endpoints inexistentes (SMS detector continua só no compartilhamento manual; ML do forecast usa o já existente /api/reports/expense-forecast se houver, senão tela mostra empty state).

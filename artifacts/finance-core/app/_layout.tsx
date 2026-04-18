@@ -46,15 +46,16 @@ function TransactionIntentGate() {
 
 function RootLayoutNav() {
   const { theme } = useTheme();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, requireBiometric } = useAuth();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) {
-        router.replace("/(auth)/login");
-      }
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      router.replace("/(auth)/login");
+    } else if (requireBiometric) {
+      router.replace("/(auth)/unlock");
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, requireBiometric]);
 
   return (
     <>

@@ -20,6 +20,12 @@ import {
   getNotificationPermissionStatus,
   requestNotificationPermissions,
 } from '@/services/NotificationService';
+import {
+  isBiometricAvailable,
+  isBiometricEnabled,
+  setBiometricEnabled,
+  authenticateBiometric,
+} from '@/services/biometric';
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -148,11 +154,28 @@ export default function SettingsScreen() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.name || '');
   const [notifPermission, setNotifPermission] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || '';
 
   useEffect(() => {
     getNotificationPermissionStatus().then(setNotifPermission);
+    isBiometricAvailable().then(setBioAvailable);
+    isBiometricEnabled().then(setBioEnabled);
   }, []);
+
+  const handleBiometricToggle = async (next: boolean) => {
+    Haptics.selectionAsync();
+    if (next) {
+      const ok = await authenticateBiometric('Confirme para ativar a biometria');
+      if (!ok) {
+        Alert.alert('Não autenticado', 'A biometria não foi confirmada.');
+        return;
+      }
+    }
+    await setBiometricEnabled(next);
+    setBioEnabled(next);
+  };
 
   // Restore locally cached avatar URI on mount (in case the auth user object
   // does not yet have it after a fresh login).
@@ -488,11 +511,22 @@ export default function SettingsScreen() {
             onChange={() => toggleValuesVisible()}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
-          <SettingsRow
+          <ToggleRow
             icon="lock"
             label="Autenticação Biométrica"
-            subtitle="Face ID ou impressão digital — Em breve"
-            disabled
+            subtitle={
+              bioAvailable
+                ? 'Bloqueia o app ao abrir e após inatividade'
+                : 'Indisponível neste dispositivo'
+            }
+            value={bioEnabled}
+            onChange={(v) => {
+              if (!bioAvailable) {
+                Alert.alert('Indisponível', 'Seu dispositivo não tem biometria configurada.');
+                return;
+              }
+              handleBiometricToggle(v);
+            }}
           />
         </View>
 

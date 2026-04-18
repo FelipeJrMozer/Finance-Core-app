@@ -3,6 +3,8 @@ import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { parseAmount, parseDate as parseDateSafe } from '@/utils/parse';
+import { logger } from '@/utils/logger';
+import { notifyError } from '@/utils/notify';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -519,7 +521,8 @@ function toArray<T>(data: unknown): T[] {
 }
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isUnlocked, isAuthenticated: _isAuth } = useAuth();
+  const isAuthenticated = isUnlocked;
   const { selectedWalletId, isReady: walletReady } = useWallet();
 
   const wq = useCallback((path: string) => {
@@ -558,9 +561,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     openingBalancesRef.current = next;
   }, []);
 
+  const loadSeqRef = useRef(0);
+  const loadWalletRef = useRef<string | null>(null);
+
   const loadAll = useCallback(async () => {
+    const mySeq = ++loadSeqRef.current;
+    const myWalletId = selectedWalletId;
+    loadWalletRef.current = myWalletId;
     setIsLoading(true);
-    console.log('[FinanceContext] loadAll START | walletId:', selectedWalletId);
     try {
       const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
         apiGet<unknown>(wq('/api/categories')),
@@ -575,31 +583,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         apiGet<unknown>('/api/settings'),
       ]);
 
-      const status = (r: PromiseSettledResult<unknown>) => r.status;
-      console.log('[FinanceContext] cats=%s accs=%s txs=%s invs=%s buds=%s gls=%s cards=%s',
-        status(cats), status(accs), status(txs), status(invs), status(buds), status(gls), status(cards));
-
-      if (accs.status === 'rejected') console.warn('[FinanceContext] accounts err:', String(accs.reason).slice(0, 200));
-      if (txs.status === 'rejected') console.warn('[FinanceContext] txs err:', String(txs.reason).slice(0, 200));
+      // Descarta resultado se outro loadAll começou (ex.: troca rápida de carteira).
+      if (mySeq !== loadSeqRef.current || myWalletId !== loadWalletRef.current) {
+        return;
+      }
 
       const catList = toArray<ApiCategory>(cats.status === 'fulfilled' ? cats.value : []);
-      console.log('[FinanceContext] categories:', catList.length);
       const catMap: Record<string, ApiCategory> = {};
       catList.forEach((c) => { catMap[c.id] = c; });
       catMapRef.current = catMap;
       setCategories(catList);
 
       const accsData = toArray<Record<string, unknown>>(accs.status === 'fulfilled' ? accs.value : []);
-      console.log('[FinanceContext] accounts:', accsData.length);
       const mappedAccounts = accsData.map(transformAccount);
       setAccounts(mappedAccounts);
 
       const txsData = toArray<Record<string, unknown>>(txs.status === 'fulfilled' ? txs.value : []);
-      console.log('[FinanceContext] transactions:', txsData.length);
-      if (txsData[0]) {
-        console.log('[FinanceContext] sample tx fields:', Object.keys(txsData[0]).sort().join(','));
-        console.log('[FinanceContext] sample tx 0:', JSON.stringify(txsData[0]));
-      }
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
       transactionsRef.current = mappedTx;
@@ -607,16 +606,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       recalibrateOpeningBalances(mappedAccounts, mappedTx);
 
       const cardsData = toArray<Record<string, unknown>>(cards.status === 'fulfilled' ? cards.value : []);
-      if (cardsData[0]) {
-        console.log('[FinanceContext] sample card fields:', Object.keys(cardsData[0]).sort().join(','));
-        console.log('[FinanceContext] sample card 0:', JSON.stringify(cardsData[0]));
-      }
-      console.log('[FinanceContext] cards:', cardsData.length);
       const mappedCards = cardsData.map((r) => transformCard(r, mappedTx));
       setCreditCards(mappedCards);
 
       const invsData = toArray<Record<string, unknown>>(invs.status === 'fulfilled' ? invs.value : []);
-      console.log('[FinanceContext] investments:', invsData.length);
       setInvestments(invsData.map(transformInvestment));
 
       const budsData = toArray<Record<string, unknown>>(buds.status === 'fulfilled' ? buds.value : []);
@@ -636,15 +629,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         if (sv.id || sv.currency) setSettings(transformSettings(sv));
       }
     } catch (e) {
-      console.warn('[FinanceContext] loadAll FATAL error:', e);
+      logger.warn('[FinanceContext] loadAll error', e);
     } finally {
-      setIsLoading(false);
+      if (mySeq === loadSeqRef.current) setIsLoading(false);
     }
   }, [wq, selectedWalletId, recalibrateOpeningBalances]);
 
+  const loadAllRef = useRef(loadAll);
+  useEffect(() => { loadAllRef.current = loadAll; }, [loadAll]);
+  const reload = useCallback(() => { loadAllRef.current(); }, []);
+
   useEffect(() => {
     if (isAuthenticated && walletReady) {
-      console.log('[FinanceContext] trigger loadAll | walletReady:', walletReady, '| walletId:', selectedWalletId);
       loadAll();
     } else if (!isAuthenticated) {
       setTransactions([]);
@@ -804,7 +800,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         isFixed: t.isFixed,
         isRecurring: t.recurring,
       });
-    } catch (e) { console.warn('[updateTransaction]', e); }
+    } catch (e) {
+      logger.warn('[updateTransaction]', e);
+      notifyError('Não foi possível atualizar a transação.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteTransaction = useCallback(async (id: string) => {
@@ -821,7 +821,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         recalibrateOpeningBalances(freshAccounts, transactionsRef.current);
         setAccounts(freshAccounts);
       }
-    } catch {}
+    } catch (e) {
+      logger.warn('[deleteTransaction]', e);
+      notifyError('Não foi possível excluir a transação. Atualize e tente novamente.');
+      loadAllRef.current();
+    }
   }, [recalibrateOpeningBalances, wq]);
 
   const addTransfer = useCallback(async (
@@ -893,12 +897,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         archived: a.archived,
         creditLimit: a.creditLimit,
       });
-    } catch {}
+    } catch (e) {
+      logger.warn('[updateAccount]', e);
+      notifyError('Não foi possível atualizar a conta.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteAccount = useCallback(async (id: string) => {
     setAccounts((prev) => prev.filter((item) => item.id !== id));
-    try { await apiDelete(`/api/accounts/${id}`); } catch {}
+    try {
+      await apiDelete(`/api/accounts/${id}`);
+    } catch (e) {
+      logger.warn('[deleteAccount]', e);
+      notifyError('Não foi possível excluir a conta.');
+      loadAllRef.current();
+    }
   }, []);
 
   // ── Credit Cards ───────────────────────────────────────────────────────────
@@ -935,12 +949,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         color: c.color,
         archived: c.archived,
       });
-    } catch {}
+    } catch (e) {
+      logger.warn('[updateCreditCard]', e);
+      notifyError('Não foi possível atualizar o cartão.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteCreditCard = useCallback(async (id: string) => {
     setCreditCards((prev) => prev.filter((item) => item.id !== id));
-    try { await apiDelete(`/api/cards/${id}`); } catch {}
+    try {
+      await apiDelete(`/api/cards/${id}`);
+    } catch (e) {
+      logger.warn('[deleteCreditCard]', e);
+      notifyError('Não foi possível excluir o cartão.');
+      loadAllRef.current();
+    }
   }, []);
 
   const addCardExpense = useCallback((cardId: string, t: Omit<Transaction, 'id'>) => {
@@ -1022,12 +1046,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         purchasePrice: i.avgPrice,
         institution: i.institution,
       });
-    } catch {}
+    } catch (e) {
+      logger.warn('[updateInvestment]', e);
+      notifyError('Não foi possível atualizar o investimento.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteInvestment = useCallback(async (id: string) => {
     setInvestments((prev) => prev.filter((item) => item.id !== id));
-    try { await apiDelete(`/api/investments/${id}`); } catch {}
+    try {
+      await apiDelete(`/api/investments/${id}`);
+    } catch (e) {
+      logger.warn('[deleteInvestment]', e);
+      notifyError('Não foi possível excluir o investimento.');
+      loadAllRef.current();
+    }
   }, []);
 
   // ── Goals ──────────────────────────────────────────────────────────────────
@@ -1061,12 +1095,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         deadline: g.deadline,
         icon: g.icon,
       });
-    } catch {}
+    } catch (e) {
+      logger.warn('[updateGoal]', e);
+      notifyError('Não foi possível atualizar a meta.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteGoal = useCallback(async (id: string) => {
     setGoals((prev) => prev.filter((item) => item.id !== id));
-    try { await apiDelete(`/api/goals/${id}`); } catch {}
+    try {
+      await apiDelete(`/api/goals/${id}`);
+    } catch (e) {
+      logger.warn('[deleteGoal]', e);
+      notifyError('Não foi possível excluir a meta.');
+      loadAllRef.current();
+    }
   }, []);
 
   const addContribution = useCallback(async (goalId: string, amount: number) => {
@@ -1090,8 +1134,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       } else {
         await apiPatch(`/api/goals/${goalId}`, { currentAmount: newAmount });
       }
-    } catch {
-      try { await apiPatch(`/api/goals/${goalId}`, { currentAmount: newAmount }); } catch {}
+    } catch (e) {
+      try {
+        await apiPatch(`/api/goals/${goalId}`, { currentAmount: newAmount });
+      } catch (err) {
+        logger.warn('[addContribution] fallback failed', err);
+        notifyError('Não foi possível registrar a contribuição.');
+        loadAllRef.current();
+      }
     }
   }, [goals]);
 
@@ -1120,12 +1170,22 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setBudgets((prev) => prev.map((item) => item.id === id ? { ...item, ...b } : item));
     try {
       await apiPatch(`/api/budgets/${id}`, { amount: b.limit });
-    } catch {}
+    } catch (e) {
+      logger.warn('[updateBudget]', e);
+      notifyError('Não foi possível atualizar o orçamento.');
+      loadAllRef.current();
+    }
   }, []);
 
   const deleteBudget = useCallback(async (id: string) => {
     setBudgets((prev) => prev.filter((item) => item.id !== id));
-    try { await apiDelete(`/api/budgets/${id}`); } catch {}
+    try {
+      await apiDelete(`/api/budgets/${id}`);
+    } catch (e) {
+      logger.warn('[deleteBudget]', e);
+      notifyError('Não foi possível excluir o orçamento.');
+      loadAllRef.current();
+    }
   }, []);
 
   // ── Categories ─────────────────────────────────────────────────────────────
@@ -1141,7 +1201,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       });
       setCategories((prev) => [...prev, raw]);
       catMapRef.current[raw.id] = raw;
-    } catch (e) { console.warn('[addCategory]', e); }
+    } catch (e) {
+      logger.warn('[addCategory]', e);
+      notifyError('Não foi possível criar a categoria.');
+    }
   }, []);
 
   // ── Settings ───────────────────────────────────────────────────────────────
