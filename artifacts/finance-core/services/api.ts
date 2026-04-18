@@ -192,14 +192,16 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   if (res.status === 401 && _refreshToken) {
     const newToken = await refreshAccessToken();
     if (!newToken) {
+      // O refresh em si falhou → sessão realmente inválida → logout.
       onAuthFailureCb?.();
-      return res; // caller verá 401 → propagará erro
+      return res;
     }
+    // Refresh ok → tenta de novo. Se ainda 401, é problema específico do endpoint
+    // (não-existente, sem permissão, etc.), NÃO da sessão. Apenas propaga o erro
+    // — não desloga o usuário, senão um único endpoint quebrado mata a sessão.
     res = await fetchWithTimeout(url, { ...options, headers: buildHeaders(newToken) });
     if (res.status === 401) {
-      // refresh aceito mas servidor ainda recusa → logout
-      await clearTokens();
-      onAuthFailureCb?.();
+      logger.warn('[api] 401 persistente após refresh em', method, path, '— não deslogando');
     }
   }
 
