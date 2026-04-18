@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import type { TransactionIntent } from '@/hooks/useTransactionIntent';
+import { safeGet, safeSet } from '@/utils/storage';
 
 interface Props {
   intent: TransactionIntent | null;
@@ -84,8 +85,13 @@ export function QuickTransactionModal({ intent, onDismiss }: Props) {
     const descText = intent.rawText.slice(0, 60).replace(/\s+/g, ' ').trim();
     setDescription(descText);
 
-    // Default to first account
-    if (accounts.length > 0) setSelectedAccountId(accounts[0].id);
+    // Default to last used account, fallback to first
+    (async () => {
+      const lastId = await safeGet<string>('quickAdd:lastAccountId');
+      const fallback = accounts[0]?.id || '';
+      const useId = lastId && accounts.some((a) => a.id === lastId) ? lastId : fallback;
+      setSelectedAccountId(useId);
+    })();
     if (creditCards.length > 0) setSelectedCardId(creditCards[0].id);
   }, [intent]);
 
@@ -121,6 +127,10 @@ export function QuickTransactionModal({ intent, onDismiss }: Props) {
         creditCardId: targetType === 'card' ? targetId : undefined,
         notes: `Capturado automaticamente via ${sourceInfo.label}: ${intent.rawText.slice(0, 100)}`,
       });
+      // Remember last account used for next quick-add (and Pix/SMS imports)
+      if (targetType === 'account' && targetId) {
+        await safeSet('quickAdd:lastAccountId', targetId);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onDismiss();
     } catch {

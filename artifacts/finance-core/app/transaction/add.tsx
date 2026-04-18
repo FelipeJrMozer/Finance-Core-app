@@ -32,10 +32,24 @@ export default function AddTransactionScreen() {
   const { theme, colors } = useTheme();
   const { addTransaction, updateTransaction, addTransfer, transactions, accounts, creditCards, categories } = useFinance();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    type?: string;
+    description?: string;
+    amount?: string;
+    notes?: string;
+    accountId?: string;
+  }>();
+  const { id } = params;
 
   const isEdit = !!id;
   const existing = isEdit ? transactions.find((t) => t.id === id) : undefined;
+
+  // Prefill from deep-link / scan / share-import
+  const prefillType: 'expense' | 'income' | 'transfer' | undefined =
+    params.type === 'income' || params.type === 'transfer' || params.type === 'expense'
+      ? params.type
+      : undefined;
 
   const activeAccounts = accounts.filter((a) => !a.archived);
   const activeCards = creditCards;
@@ -47,18 +61,23 @@ export default function AddTransactionScreen() {
   }, [existing, activeCards]);
 
   const [type, setType] = useState<'income' | 'expense' | 'transfer'>(
-    existing?.type === 'transfer' ? 'transfer' : existing?.type === 'income' ? 'income' : 'expense'
+    prefillType ?? (existing?.type === 'transfer' ? 'transfer' : existing?.type === 'income' ? 'income' : 'expense')
   );
 
   // Source mode: account or card (only relevant for expense/income)
   const [sourceMode, setSourceMode] = useState<'account' | 'card'>(existingCard ? 'card' : 'account');
   const [selectedCardId, setSelectedCardId] = useState<string>(existingCard?.id || '');
 
-  const [description, setDescription] = useState(existing?.description || '');
-  const [amount, setAmount] = useState(existing ? existing.amount.toFixed(2) : '');
+  const [description, setDescription] = useState(existing?.description || params.description || '');
+  const [amount, setAmount] = useState(existing ? existing.amount.toFixed(2) : (params.amount || ''));
   const [selectedCategoryId, setSelectedCategoryId] = useState(existing?.categoryId || '');
   const [accountId, setAccountId] = useState(
-    existingCard ? '' : (existing?.accountId || activeAccounts[0]?.id || '')
+    existingCard
+      ? ''
+      : (existing?.accountId
+        || (params.accountId && activeAccounts.some((a) => a.id === params.accountId) ? params.accountId : '')
+        || activeAccounts[0]?.id
+        || '')
   );
   const [toAccountId, setToAccountId] = useState(existing?.toAccountId || '');
   const [date, setDate] = useState(existing?.date || new Date().toISOString().split('T')[0]);
@@ -66,7 +85,7 @@ export default function AddTransactionScreen() {
   const [recurring, setRecurring] = useState(existing?.recurring || false);
   const [isFixed, setIsFixed] = useState(existing?.isFixed || false);
   const [isPaid, setIsPaid] = useState(existing ? (existing.isPaid ?? true) : true);
-  const [notes, setNotes] = useState(existing?.notes || '');
+  const [notes, setNotes] = useState(existing?.notes || params.notes || '');
   const [loading, setLoading] = useState(false);
 
   const apiCatsFiltered = useMemo(() => {

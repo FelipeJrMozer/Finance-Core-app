@@ -113,6 +113,16 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
 - **Account Features** (`app/account/`):
   - `account/add.tsx` — add/edit; `account/[id].tsx` — detail with stats
 - **Notifications** (`app/(more)/notifications.tsx`): Lists API notifications with read/dismiss; badge count in Mais tab
+- **Phase 4 — Pix QR scanner, SMS share import, sazonalidade & offline (Abr 2026)**:
+  - **QR Scanner** (`app/scan.tsx` + `utils/pixDecoder.ts`): usa `expo-camera` para ler QR; `decodePixCode` parseia EMV BR Code TLV (tag 26 chave Pix, 54 valor, 59 nome, 60 cidade, 62.05 txid) e **valida CRC16/CCITT-FALSE da tag 63** + exige consumo total do payload + ao menos 1 dado útil; rejeita códigos malformados/tampered devolvendo `null`. `extractNFeKey` capta chave NFe de 44 dígitos. Após leitura válida, redireciona para `/transaction/add` com prefill (type/description/amount/notes/accountId).
+  - **SMS Share Import** (`app/share-import.tsx` + `utils/smsParser.ts`): registra `android.intent.action.SEND` (text/plain) no `app.json` para o app aparecer no menu Compartilhar do Android; `parseBankSms` extrai valor/tipo/banco/cartão para Pix (qualquer banco), Nubank, Itaú, padrões genéricos de cartão/débito/crédito. `parseBRL` é locale-aware (BR `1.234,56` e US `1234.56`). Como não há módulo nativo dedicado, a tela ingere o texto por 3 vias: deep-link `?text=`, leitura automática do clipboard ao montar (heurística "R$"), e `TextInput` para colar manualmente. Tela de ajuda em `app/(more)/sms-import-help.tsx`. **Pendente**: módulo nativo (custom expo plugin ou `expo-share-intent` em dev build) para receber `Intent.EXTRA_TEXT` diretamente — hoje o usuário copia e o app detecta no clipboard.
+  - **Shortcuts (Android)**: `app.json` declara `shortcuts` quick-expense, quick-income, scan-pix.
+  - **iOS Camera**: `NSCameraUsageDescription` + `usesNonExemptEncryption=false` + plugin `expo-camera`.
+  - **Banner offline** (`components/OfflineBanner.tsx`): polling 8s via `expo-network`; aparece somente quando `isConnected/isInternetReachable === false`. Montado no topo do dashboard.
+  - **QuickAdd → última conta usada**: `QuickTransactionModal` lê/escreve `quickAdd:lastAccountId` em AsyncStorage; `scan` e `share-import` reusam a mesma chave para preencher o `accountId` na criação.
+  - **Sazonalidade no Reports** (aba Visão Geral): chips com top-4 categorias por variação % do mês corrente vs média dos últimos 6 meses (verde se ↓, vermelho se ↑, neutro se ±5%); filtro mínimo R$30 para evitar ruído.
+  - **services/dashboard.ts**: cliente para `GET /api/mobile/dashboard-summary` + `POST .../invalidate`. Endpoint ainda pendente no backend; chamada falha silenciosamente e o dashboard segue agregando localmente.
+  - **transaction/add.tsx**: aceita `type/description/amount/notes/accountId` via query params (consumido por scan e share-import).
 - **Phase 3 — Server-side search & installments (Apr 2026)**:
   - `searchTransactionsRemote(q, signal)` na FinanceContext usa `GET /api/transactions/search?q=` com `AbortController` para cancelar buscas obsoletas
   - `transactions.tsx`: input de busca dispara debounce de 400ms; quando ativo (≥2 chars) os resultados remotos são mesclados com o cache local e os filtros de mês/tipo/conta são desativados (texto explicativo). Spinner inline no input enquanto busca.

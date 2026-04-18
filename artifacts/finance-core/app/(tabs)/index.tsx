@@ -18,6 +18,7 @@ import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
 import { TransactionSkeleton, CardSkeleton } from '@/components/ui/SkeletonLoader';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
 
 // ── Weekly sparkline ──────────────────────────────────────
@@ -234,9 +235,9 @@ function QuickActions() {
   const { colors } = useTheme();
   const actions = [
     { icon: 'plus-circle' as const, label: 'Transação', color: colors.primary, route: '/transaction/add' },
+    { icon: 'maximize' as const, label: 'Escanear', color: '#22C55E', route: '/scan' },
     { icon: 'repeat' as const, label: 'Transferir', color: '#26C6DA', route: '/transfer' },
     { icon: 'trending-up' as const, label: 'Investir', color: colors.info, route: '/investment/add' },
-    { icon: 'users' as const, label: 'Família', color: '#7C3AED', route: '/(more)/familia' },
     { icon: 'cpu' as const, label: 'IA', color: colors.accent, route: '/chat' },
   ];
 
@@ -328,6 +329,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <OfflineBanner />
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}

@@ -14,9 +14,28 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "Permita acesso à câmera para escanear QR Codes Pix e chaves NFe."
+      }
     },
-    "android": {},
+    "android": {
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "category": ["android.intent.category.DEFAULT"],
+          "data": [{ "mimeType": "text/plain" }]
+        }
+      ]
+    },
+    "shortcuts": [
+      { "type": "quick-expense", "title": "Nova despesa", "subtitle": "Lançar gasto rápido" },
+      { "type": "quick-income", "title": "Nova receita" },
+      { "type": "scan-pix", "title": "Escanear Pix/QR" }
+    ],
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -30,7 +49,13 @@
       "expo-font",
       "expo-web-browser",
       "./plugins/withNotificationListener",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permita acesso à câmera para escanear QR Codes Pix e chaves NFe."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -83,6 +83,8 @@ function RootLayoutNav() {
         <Stack.Screen name="wallets/index" options={{ title: 'Carteiras' }} />
         <Stack.Screen name="wallets/add" options={{ title: 'Carteira' }} />
         <Stack.Screen name="transfer" options={{ title: 'Transferir' }} />
+        <Stack.Screen name="scan" options={{ title: 'Escanear', headerShown: false }} />
+        <Stack.Screen name="share-import" options={{ title: 'Importar SMS' }} />
       </Stack>
     </>
   );
