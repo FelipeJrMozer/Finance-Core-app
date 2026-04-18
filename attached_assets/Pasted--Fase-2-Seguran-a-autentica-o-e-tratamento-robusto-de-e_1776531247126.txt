@@ -1,0 +1,271 @@
+# Fase 2 — Segurança, autenticação e tratamento robusto de erros
+Estou no monorepo Finance-Core-app, app mobile em `artifacts/finance-core`.
+Esta fase corrige problemas de segurança e estabilidade na autenticação. Não mexa em UI/layout além do estritamente necessário (tela de bloqueio biométrica).
+## 1. Migrar tokens para armazenamento seguro (Keychain/Keystore)
+**Problema**: `accessToken` e `refreshToken` estão em `AsyncStorage` (texto plano). Em app financeiro isso é inadequado — em device com root/jailbreak, qualquer app lê.
+**Correção**:
+- Adicione `expo-secure-store` ao `artifacts/finance-core/package.json` (use a versão compatível com Expo SDK 54: `~15.0.x`). Rode `pnpm install` apenas no filtro `--filter @workspace/finance-core`.
+- Crie `artifacts/finance-core/services/secureStorage.ts`:
+  ```ts
+  import * as SecureStore from 'expo-secure-store';
+  import { Platform } from 'react-native';
+  import AsyncStorage from '@react-native-async-storage/async-storage';
+  // SecureStore não funciona em web; AsyncStorage como fallback (web não é alvo de prod, mas evita crash).
+  const isWeb = Platform.OS === 'web';
+  export async function setSecure(key: string, value: string): Promise<void> {
+    try {
+      if (isWeb) return AsyncStorage.setItem(key, value);
+      await SecureStore.setItemAsync(key, value, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+    } catch (err) {
+      console.warn('[secureStorage] setSecure failed', { key });
+    }
+  }
+  export async function getSecure(key: string): Promise<string | null> {
+    try {
+      if (isWeb) return AsyncStorage.getItem(key);
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      return null;
+    }
+  }
+  export async function deleteSecure(key: string): Promise<void> {
+    try {
+      if (isWeb) return AsyncStorage.removeItem(key);
+      await SecureStore.deleteItemAsync(key);
+    } catch {}
+  }
+
+Em services/api.ts e context/AuthContext.tsx, substitua TODA leitura/escrita de accessToken e refreshToken no AsyncStorage pelas helpers acima.
+Migração one-shot: na primeira execução após o update, leia tokens do AsyncStorage; se existirem, copie para SecureStore e apague do AsyncStorage. Crie um helper migrateTokensIfNeeded() chamado uma única vez no boot do AuthContext.
+Outros dados não-sensíveis (preferências, último wallet, cache) continuam em AsyncStorage.
+2. Corrigir race condition no refresh token
+Arquivo: artifacts/finance-core/services/api.ts (linhas ~98-116)
+
+Problema: _isRefreshing e _refreshQueue podem permitir refresh duplo se duas requisições caírem em 401 simultaneamente antes do flag virar.
+
+Correção:
+
+Substitua a lógica por uma Promise única compartilhada:
+let refreshPromise: Promise<string | null> | null = null;
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = await getSecure('refreshToken');
+      if (!refreshToken) return null;
+      const res = await fetch(`${API_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) {
+        // refresh falhou definitivamente → logout
+        await clearTokens();
+        return null;
+      }
+      const data = await res.json();
+      const newAccess = data.accessToken;
+      if (!newAccess) {
+        await clearTokens();
+        return null;
+      }
+      await setSecure('accessToken', newAccess);
+      // só atualizar refreshToken se vier um novo (rotação)
+      if (data.refreshToken) await setSecure('refreshToken', data.refreshToken);
+      return newAccess;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+Em qualquer fetch que retorne 401: chame await refreshAccessToken() UMA vez. Se vier null, propague erro de auth (não tente refresh de novo). Se vier token, refaça a request original UMA vez. Se ainda falhar com 401, dispare logout (não loop).
+3. Remover fallback inseguro do refreshToken
+Arquivo: artifacts/finance-core/context/AuthContext.tsx (~linha 61)
+
+Problema: data.refreshToken ?? data.token — se backend mandar só token, app salva access token como refresh, e refresh quebra depois.
+
+Correção:
+
+Salvar só data.refreshToken se ele existir. Se não vier, salvar string vazia/null e logar warning silencioso (não para o usuário).
+Validar que data.accessToken veio. Se não, abortar login com erro "Resposta inválida do servidor".
+4. Cercar TODO acesso a AsyncStorage com try/catch
+Arquivos: services/api.ts, context/AuthContext.tsx, context/FinanceContext.tsx, context/WalletContext.tsx, context/ThemeContext.tsx e quaisquer outros que usem AsyncStorage diretamente.
+
+Correção:
+
+Crie artifacts/finance-core/utils/storage.ts:
+import AsyncStorage from '@react-native-async-storage/async-storage';
+export async function safeGet<T = unknown>(key: string, fallback: T | null = null): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (raw == null) return fallback;
+    try { return JSON.parse(raw) as T; } catch { return raw as unknown as T; }
+  } catch {
+    return fallback;
+  }
+}
+export async function safeSet(key: string, value: unknown): Promise<boolean> {
+  try {
+    const v = typeof value === 'string' ? value : JSON.stringify(value);
+    await AsyncStorage.setItem(key, v);
+    return true;
+  } catch {
+    return false;
+  }
+}
+export async function safeRemove(key: string): Promise<void> {
+  try { await AsyncStorage.removeItem(key); } catch {}
+}
+
+Substitua TODOS os AsyncStorage.getItem/setItem/removeItem por safeGet/safeSet/safeRemove.
+5. Remover logs sensíveis em produção
+Arquivos: context/AuthContext.tsx (~linhas 43, 62), services/api.ts e qualquer outro console.log que toque tokens, URLs autenticadas, body de login/register.
+
+Correção:
+
+Crie artifacts/finance-core/utils/logger.ts:
+const isDev = __DEV__;
+export const logger = {
+  debug: (...args: unknown[]) => { if (isDev) console.log(...args); },
+  info: (...args: unknown[]) => { if (isDev) console.info(...args); },
+  warn: (...args: unknown[]) => { console.warn(...args); },
+  error: (...args: unknown[]) => { console.error(...args); },
+};
+
+Substitua console.log por logger.debug em todo o app.
+ESPECIFICAMENTE: nunca logar body de /api/auth/*, nunca logar valor de tokens, nunca logar URL com query strings que contenham tokens.
+No apiFetch, se logar URL para debug, use logger.debug(method, path) (só método e path, nunca headers).
+6. Substituir catch vazios por feedback ao usuário
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (linhas ~1003, 1037, 1042, 1096, 1127 e outras ocorrências similares).
+
+Problema: catch silencioso. Usuário tenta deletar/atualizar e não sabe se deu certo.
+
+Correção:
+
+Use o sistema de toast/snackbar já presente no app (expo-haptics + componente toast). Se não existir, use Alert.alert do React Native como fallback temporário.
+Criar helper artifacts/finance-core/utils/notify.ts:
+import { Alert } from 'react-native';
+import * as Haptics from 'expo-haptics';
+export function notifySuccess(msg: string) {
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  // TODO: trocar por componente Toast quando disponível
+  Alert.alert('OK', msg);
+}
+export function notifyError(msg: string) {
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+  Alert.alert('Erro', msg);
+}
+
+Em cada catch que hoje está vazio em mutações (delete, update, contribute, addBill, etc.), chame notifyError('Não foi possível concluir a operação. Tente novamente.') e propague o estado para a UI poder reverter otimisticamente.
+Em mutações de sucesso, NÃO chame notify se a UI já dá feedback visual (item some da lista, etc.) — só onde não há.
+7. Tratar erros de servidor que retornam HTML
+Arquivo: artifacts/finance-core/services/api.ts (~linha 125)
+
+Problema: ao receber 500 com HTML (Cloudflare/nginx), joga o HTML inteiro no Error.message.
+
+Correção:
+
+Antes de fazer await res.text() para mensagem de erro, verifique res.headers.get('content-type'):
+Se contém application/json: parse e use data.message ?? data.error ?? 'Erro desconhecido'.
+Caso contrário: use mensagem genérica baseada no status:
+const defaults: Record<number, string> = {
+  400: 'Requisição inválida.',
+  401: 'Sessão expirada. Faça login novamente.',
+  403: 'Acesso negado.',
+  404: 'Recurso não encontrado.',
+  408: 'Tempo limite. Tente novamente.',
+  429: 'Muitas tentativas. Aguarde um momento.',
+  500: 'Erro no servidor. Tente novamente em instantes.',
+  502: 'Servidor indisponível.',
+  503: 'Servidor em manutenção.',
+};
+throw new Error(defaults[res.status] ?? `Erro ${res.status}`);
+
+Adicione timeout de 15s em todas as requests usando AbortController:
+const ctrl = new AbortController();
+const timer = setTimeout(() => ctrl.abort(), 15000);
+try {
+  const res = await fetch(url, { ...opts, signal: ctrl.signal });
+  // ...
+} catch (err: any) {
+  if (err.name === 'AbortError') throw new Error('Tempo limite de conexão. Verifique sua internet.');
+  throw err;
+} finally {
+  clearTimeout(timer);
+}
+
+8. Cancelar requests obsoletos ao trocar de wallet
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (~linha 541-600 — loadAll)
+
+Problema: trocar wallet rápido dispara loadAll em paralelo; o último request pode não ser o mais recente, sobrescrevendo dados certos com dados velhos.
+
+Correção:
+
+Use um ref de AbortController por loadAll:
+const loadCtrlRef = useRef<AbortController | null>(null);
+async function loadAll() {
+  loadCtrlRef.current?.abort();
+  const ctrl = new AbortController();
+  loadCtrlRef.current = ctrl;
+  const myWalletId = selectedWalletId;
+  // ... faz os fetches passando ctrl.signal
+  // antes de setState, validar:
+  if (ctrl.signal.aborted || myWalletId !== selectedWalletId) return;
+  // setState aqui
+}
+
+Garante que só o load mais recente atualiza o estado.
+9. Adicionar autenticação biométrica (opt-in)
+Novo arquivo: artifacts/finance-core/services/biometric.ts e nova tela app/(auth)/unlock.tsx.
+
+Setup:
+
+Adicione expo-local-authentication (versão compatível com SDK 54).
+Em services/biometric.ts:
+import * as LocalAuth from 'expo-local-authentication';
+import { safeGet, safeSet } from '../utils/storage';
+const KEY_ENABLED = 'biometric:enabled';
+export async function isBiometricAvailable(): Promise<boolean> {
+  const hasHw = await LocalAuth.hasHardwareAsync();
+  if (!hasHw) return false;
+  const enrolled = await LocalAuth.isEnrolledAsync();
+  return enrolled;
+}
+export async function isBiometricEnabled(): Promise<boolean> {
+  return (await safeGet<string>(KEY_ENABLED)) === 'true';
+}
+export async function setBiometricEnabled(v: boolean): Promise<void> {
+  await safeSet(KEY_ENABLED, String(v));
+}
+export async function authenticate(reason = 'Desbloqueie para acessar suas finanças'): Promise<boolean> {
+  const res = await LocalAuth.authenticateAsync({
+    promptMessage: reason,
+    cancelLabel: 'Cancelar',
+    disableDeviceFallback: false,
+    fallbackLabel: 'Usar PIN',
+  });
+  return res.success;
+}
+
+Em context/AuthContext.tsx: ao bootar com sessão válida E biometria habilitada, marcar requireBiometric = true. Roteie para /(auth)/unlock antes de mostrar o app.
+Tela unlock.tsx: dispara authenticate() automaticamente ao montar; em sucesso, marca requireBiometric = false e redireciona para /. Em falha, oferece "Tentar novamente" e "Sair".
+Adicione um toggle em app/(more)/settings.tsx (ou a tela equivalente): "Bloqueio biométrico" — só aparece se isBiometricAvailable() for true. Toggle chama authenticate() antes de habilitar (sanity check).
+Comportamento: bloqueio sempre que o app voltar do background após X minutos (use AppState + timestamp em ref). Default: 2 min. Não persistir esse timestamp.
+Validação ao terminar
+pnpm --filter @workspace/finance-core typecheck deve passar.
+Login → fechar app → reabrir: tokens devem ser lidos do SecureStore (não AsyncStorage). Faça await SecureStore.getItemAsync('accessToken') num botão de debug pra validar (e remova o botão antes de commitar).
+Simule 401: tokens limpam, app redireciona para login, sem loop.
+Mata a internet no meio de uma request: deve mostrar mensagem amigável de timeout, não HTML cru.
+Habilite biometria nas configurações; mate o app; reabra → deve pedir biometria antes do dashboard.
+Sem biometria habilitada: comportamento atual mantido.
+Procure por console.log no código — só pode existir dentro de logger.debug ou já ter sido substituído.
+Restrições
+Não mexa em fórmulas/cálculos (são da Fase 1).
+Não mexa em endpoints novos do backend (Fase 3+).
+Migração de tokens AsyncStorage → SecureStore deve ser silenciosa (usuários logados não devem ser deslogados na primeira execução do update).

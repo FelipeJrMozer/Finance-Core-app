@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Platform
+  View, Text, StyleSheet, ScrollView, Pressable, Dimensions
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -8,20 +8,64 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
-import { formatBRL, formatPercent } from '@/utils/formatters';
+import { formatBRL } from '@/utils/formatters';
+import { apiGet } from '@/services/api';
+import { useBenchmarks } from '@/services/benchmarks';
 
 const { width } = Dimensions.get('window');
 const CHART_W = width - 64;
-const CDI_ANNUAL = 12.0;
-const IBOV_ANNUAL = 8.5;
 
 type TabId = 'dividendos' | 'performance' | 'historico';
+
+interface DividendApiItem {
+  id?: string;
+  investmentId?: string;
+  ticker?: string;
+  amount: number | string;
+  paidAt?: string;
+  date?: string;
+  month?: string; // "YYYY-MM"
+}
+
+interface DividendByMonth { ym: string; amount: number; label: string }
+interface DividendByTicker { ticker: string; name?: string; amount: number }
+
+function lastSixMonths(): { ym: string; label: string }[] {
+  const out: { ym: string; label: string }[] = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    out.push({ ym, label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
+  }
+  return out;
+}
+
+function ymOf(item: DividendApiItem): string | null {
+  if (item.month && /^\d{4}-\d{2}/.test(item.month)) return item.month.slice(0, 7);
+  const raw = item.paidAt || item.date;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (!Number.isFinite(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function EmptyState({ title, message, theme }: { title: string; message: string; theme: any }) {
+  return (
+    <View style={[styles.empty, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+      <Feather name="inbox" size={28} color={theme.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{title}</Text>
+      <Text style={[styles.emptyMsg, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{message}</Text>
+    </View>
+  );
+}
 
 export default function InvestmentReportScreen() {
   const { theme, colors } = useTheme();
   const { investments } = useFinance();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<TabId>('dividendos');
+  const { data: bench, isStale: benchStale, source: benchSource } = useBenchmarks();
 
   const tabs: { id: TabId; label: string; icon: string }[] = [
     { id: 'dividendos', label: 'Dividendos', icon: 'dollar-sign' },
@@ -33,31 +77,86 @@ export default function InvestmentReportScreen() {
   const totalCurrent = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const totalReturn = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
-  // Simulate dividends (in a real app, fetch from /api/dividends)
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 5 + i);
-    return d.toLocaleDateString('pt-BR', { month: 'short' });
+  // ── Real dividends from backend ──
+  const [dividendsLoading, setDividendsLoading] = useState(false);
+  const [dividendsError, setDividendsError] = useState(false);
+  const [dividendsItems, setDividendsItems] = useState<DividendApiItem[]>([]);
+
+  const fetchDividends = useCallback(async () => {
+    setDividendsLoading(true);
+    setDividendsError(false);
+    try {
+      // Last 6 months window
+      const end = new Date();
+      const start = new Date(end.getFullYear(), end.getMonth() - 5, 1);
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      // TODO: confirmar endpoint final no backend; usando query padrão.
+      const res = await apiGet<unknown>(
+        `/api/investments/dividends?from=${fmt(start)}&to=${fmt(end)}`
+      );
+      // Validar estritamente o payload — backend pode retornar formatos diferentes.
+      let list: DividendApiItem[] = [];
+      if (Array.isArray(res)) {
+        list = res as DividendApiItem[];
+      } else if (res && typeof res === 'object' && Array.isArray((res as any).items)) {
+        list = (res as any).items as DividendApiItem[];
+      }
+      // Filtrar entradas inválidas (sem amount).
+      list = list.filter((it) => it && (typeof it.amount === 'number' || typeof it.amount === 'string'));
+      setDividendsItems(list);
+    } catch {
+      setDividendsError(true);
+      setDividendsItems([]);
+    } finally {
+      setDividendsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchDividends(); }, [fetchDividends]);
+
+  const months = lastSixMonths();
+  const dividendByMonth: DividendByMonth[] = months.map((m) => {
+    const total = dividendsItems
+      .filter((it) => ymOf(it) === m.ym)
+      .reduce((s, it) => s + (Number(it.amount) || 0), 0);
+    return { ym: m.ym, label: m.label, amount: total };
   });
 
-  const dividendData = months.map((m, i) => ({
-    value: Math.round(totalCurrent * 0.005 * (0.7 + Math.random() * 0.6)),
-    label: m,
+  const totalDividends = dividendByMonth.reduce((s, d) => s + d.amount, 0);
+  const hasDividends = totalDividends > 0;
+
+  const dividendByTicker: DividendByTicker[] = (() => {
+    if (!hasDividends) return [];
+    const map = new Map<string, DividendByTicker>();
+    for (const it of dividendsItems) {
+      const inv = investments.find((i) => i.id === it.investmentId || i.ticker === it.ticker);
+      const ticker = inv?.ticker || it.ticker || '?';
+      const name = inv?.name;
+      const amount = Number(it.amount) || 0;
+      const cur = map.get(ticker);
+      if (cur) {
+        cur.amount += amount;
+      } else {
+        map.set(ticker, { ticker, name, amount });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  })();
+
+  const dividendBars = dividendByMonth.map((d) => ({
+    value: Math.round(d.amount),
+    label: d.label,
     frontColor: colors.primary,
   }));
 
-  const totalDividends = dividendData.reduce((s, d) => s + d.value, 0);
+  const cdiAnnual = bench?.cdi ?? null;
+  const ibovAnnual = bench?.ibov ?? null;
 
   const performanceData = [
-    { label: 'Carteira', value: totalReturn, color: totalReturn >= 0 ? colors.success : colors.danger },
-    { label: 'CDI', value: CDI_ANNUAL, color: '#F59E0B' },
-    { label: 'IBOV', value: IBOV_ANNUAL, color: '#9C27B0' },
+    { label: 'Carteira', value: totalReturn, color: totalReturn >= 0 ? colors.success : colors.danger, available: true as const },
+    { label: 'CDI', value: cdiAnnual ?? 0, color: '#F59E0B', available: cdiAnnual !== null },
+    { label: 'IBOV', value: ibovAnnual ?? 0, color: '#9C27B0', available: ibovAnnual !== null },
   ];
-
-  const historyData = Array.from({ length: 6 }, (_, i) => {
-    const base = totalInvested * (1 + (totalReturn / 100) * (i / 5));
-    return { value: Math.round(base), label: months[i] };
-  });
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -99,44 +198,75 @@ export default function InvestmentReportScreen() {
 
         {tab === 'dividendos' && (
           <>
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Total recebido no semestre</Text>
-              <Text style={[styles.bigValue, { color: colors.success, fontFamily: 'Inter_800ExtraBold' }]}>{formatBRL(totalDividends)}</Text>
-              <BarChart
-                data={dividendData}
-                width={CHART_W}
-                height={150}
-                barWidth={30}
-                spacing={10}
-                frontColor={colors.primary}
-                xAxisColor={theme.border}
-                yAxisColor={theme.border}
-                yAxisTextStyle={{ color: theme.textTertiary, fontSize: 10 }}
-                xAxisLabelTextStyle={{ color: theme.textTertiary, fontSize: 9 }}
-                noOfSections={4}
-                isAnimated
+            {dividendsLoading && (
+              <Text style={{ color: theme.textTertiary, textAlign: 'center', fontFamily: 'Inter_400Regular' }}>
+                Carregando dividendos…
+              </Text>
+            )}
+            {!dividendsLoading && !hasDividends && (
+              <EmptyState
+                theme={theme}
+                title={dividendsError ? 'Não foi possível carregar' : 'Sem dividendos registrados no período'}
+                message={dividendsError
+                  ? 'Tente novamente mais tarde ou registre os dividendos manualmente.'
+                  : 'Quando você receber dividendos, eles aparecerão aqui automaticamente.'
+                }
               />
-            </View>
-            {investments.filter((i) => ['stocks', 'fii', 'reit', 'etf'].includes(i.type)).map((inv) => (
-              <View key={inv.id} style={[styles.divRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View>
-                  <Text style={[styles.ticker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{inv.ticker}</Text>
-                  <Text style={[styles.invName, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{inv.name}</Text>
+            )}
+            {!dividendsLoading && hasDividends && (
+              <>
+                <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Total recebido no semestre</Text>
+                  <Text style={[styles.bigValue, { color: colors.success, fontFamily: 'Inter_800ExtraBold' }]}>{formatBRL(totalDividends)}</Text>
+                  <BarChart
+                    data={dividendBars}
+                    width={CHART_W}
+                    height={150}
+                    barWidth={30}
+                    spacing={10}
+                    frontColor={colors.primary}
+                    xAxisColor={theme.border}
+                    yAxisColor={theme.border}
+                    yAxisTextStyle={{ color: theme.textTertiary, fontSize: 10 }}
+                    xAxisLabelTextStyle={{ color: theme.textTertiary, fontSize: 9 }}
+                    noOfSections={4}
+                    isAnimated
+                  />
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.divAmount, { color: colors.success, fontFamily: 'Inter_600SemiBold' }]}>
-                    {formatBRL(inv.quantity * 0.8)}
-                  </Text>
-                  <Text style={[styles.divLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>estimado</Text>
-                </View>
-              </View>
-            ))}
+                {dividendByTicker.map((row) => (
+                  <View key={row.ticker} style={[styles.divRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <View>
+                      <Text style={[styles.ticker, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{row.ticker}</Text>
+                      {row.name && (
+                        <Text style={[styles.invName, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>{row.name}</Text>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.divAmount, { color: colors.success, fontFamily: 'Inter_600SemiBold' }]}>
+                        {formatBRL(row.amount)}
+                      </Text>
+                      <Text style={[styles.divLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>recebido</Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
           </>
         )}
 
         {tab === 'performance' && (
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Comparativo de Rentabilidade</Text>
+            {benchSource === 'none' && (
+              <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                Não foi possível carregar índices atuais (CDI/IBOV).
+              </Text>
+            )}
+            {benchStale && (
+              <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                Não foi possível carregar índices atuais. Usando últimos valores conhecidos.
+              </Text>
+            )}
             {performanceData.map((p) => (
               <View key={p.label} style={styles.perfRow}>
                 <Text style={[styles.perfLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', width: 70 }]}>{p.label}</Text>
@@ -144,10 +274,11 @@ export default function InvestmentReportScreen() {
                   <View style={[styles.perfBarFill, {
                     width: `${Math.min(100, Math.abs(p.value) * 4)}%`,
                     backgroundColor: p.color,
+                    opacity: p.available ? 1 : 0.3,
                   }]} />
                 </View>
-                <Text style={[styles.perfPct, { color: p.color, fontFamily: 'Inter_700Bold', width: 52, textAlign: 'right' }]}>
-                  {p.value >= 0 ? '+' : ''}{p.value.toFixed(1)}%
+                <Text style={[styles.perfPct, { color: p.color, fontFamily: 'Inter_700Bold', width: 60, textAlign: 'right' }]}>
+                  {p.available ? `${p.value >= 0 ? '+' : ''}${p.value.toFixed(1)}%` : '—'}
                 </Text>
               </View>
             ))}
@@ -158,29 +289,11 @@ export default function InvestmentReportScreen() {
         )}
 
         {tab === 'historico' && (
-          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Evolução Patrimonial</Text>
-            <LineChart
-              data={historyData}
-              width={CHART_W}
-              height={160}
-              color={colors.primary}
-              thickness={2}
-              curved
-              areaChart
-              startFillColor={`${colors.primary}40`}
-              endFillColor={`${colors.primary}00`}
-              xAxisColor={theme.border}
-              yAxisColor={theme.border}
-              yAxisTextStyle={{ color: theme.textTertiary, fontSize: 9 }}
-              xAxisLabelTextStyle={{ color: theme.textTertiary, fontSize: 9 }}
-              noOfSections={4}
-              isAnimated
-            />
-            <Text style={[styles.perfNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-              *Estimativa baseada no retorno acumulado atual
-            </Text>
-          </View>
+          <EmptyState
+            theme={theme}
+            title="Histórico patrimonial indisponível"
+            message="A evolução patrimonial será exibida quando o backend disponibilizar dados históricos diários da carteira."
+          />
         )}
       </ScrollView>
     </View>
@@ -210,4 +323,7 @@ const styles = StyleSheet.create({
   perfBarFill: { height: 10, borderRadius: 5 },
   perfPct: { fontSize: 13 },
   perfNote: { fontSize: 11, marginTop: 4 },
+  empty: { alignItems: 'center', gap: 10, padding: 24, borderRadius: 16, borderWidth: 1 },
+  emptyTitle: { fontSize: 15, textAlign: 'center' },
+  emptyMsg: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
 });

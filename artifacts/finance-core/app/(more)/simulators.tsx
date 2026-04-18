@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { formatBRL } from '@/utils/formatters';
+import { useBenchmarks } from '@/services/benchmarks';
 
 const SIMULATORS = [
   { id: 'compound',   icon: 'trending-up',  label: 'Juros Compostos',           color: '#10B981' },
@@ -279,15 +280,21 @@ function VehicleSim() {
 }
 
 function InflationSim() {
+  const { theme } = useTheme();
+  const { data: bench, isStale, source } = useBenchmarks();
   const [initial, setInitial] = useState('10000');
   const [years, setYears] = useState('5');
-  const [ipca, setIpca] = useState('4.5');
-  const [cdi, setCdi] = useState('12');
+  const [ipca, setIpca] = useState<string | null>(null);
+  const [cdi, setCdi] = useState<string | null>(null);
+
+  // Default IPCA/CDI values come from real API; user can override.
+  const ipcaInput = ipca ?? (bench ? String(bench.ipca) : '');
+  const cdiInput = cdi ?? (bench ? String(bench.cdi) : '');
 
   const p = parseFloat(initial) || 0;
   const y = parseFloat(years) || 1;
-  const ipcaRate = (parseFloat(ipca) || 0) / 100;
-  const cdiRate = (parseFloat(cdi) || 0) / 100;
+  const ipcaRate = (parseFloat(ipcaInput) || 0) / 100;
+  const cdiRate = (parseFloat(cdiInput) || 0) / 100;
 
   const ipcaValue = p * Math.pow(1 + ipcaRate, y);
   const cdiValue = p * Math.pow(1 + cdiRate, y);
@@ -297,8 +304,18 @@ function InflationSim() {
     <>
       <NumInput label="Valor inicial" value={initial} onChangeText={setInitial} />
       <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
-      <NumInput label="IPCA médio (%)" value={ipca} onChangeText={setIpca} prefix="" suffix="% a.a." />
-      <NumInput label="CDI (%)" value={cdi} onChangeText={setCdi} prefix="" suffix="% a.a." />
+      <NumInput label="IPCA médio (%)" value={ipcaInput} onChangeText={setIpca} prefix="" suffix="% a.a." />
+      <NumInput label="CDI (%)" value={cdiInput} onChangeText={setCdi} prefix="" suffix="% a.a." />
+      {source === 'none' && (
+        <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+          Não foi possível carregar índices atuais — informe os valores manualmente.
+        </Text>
+      )}
+      {isStale && (
+        <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+          Não foi possível carregar índices atuais. Usando últimos valores conhecidos.
+        </Text>
+      )}
       <View style={{ marginTop: 4 }}>
         <ResultRow label="Valor corrigido (IPCA)" value={formatBRL(ipcaValue)} />
         <ResultRow label="Valor com CDI" value={formatBRL(cdiValue)} highlight />
@@ -426,31 +443,82 @@ function PensionSim() {
 }
 
 function CardCostSim() {
-  const [purchase, setPurchase] = useState('1000');
-  const [installments, setInstallments] = useState('12');
-  const [rotatRate, setRotatRate] = useState('15');
+  // Simulação de saldo no rotativo do cartão. Juros incidem mensalmente
+  // sobre o saldo remanescente (juros compostos) — NÃO é PRICE de parcela fixa.
+  const [debt, setDebt] = useState('1000');
+  const [annualRate, setAnnualRate] = useState('400'); // CDI rotativo médio ~ 400% a.a. no Brasil
+  const [mode, setMode] = useState<'min' | 'fixed'>('min');
+  const [minPct, setMinPct] = useState('15');
+  const [fixedPay, setFixedPay] = useState('150');
 
-  const p = parseFloat(purchase) || 0;
-  const n = parseInt(installments) || 1;
-  const r = (parseFloat(rotatRate) || 0) / 100;
-  const total = n > 1
-    ? (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) * n
-    : p;
-  const installmentValue = total / n;
-  const annualRate = Math.pow(1 + r, 12) - 1;
-  const cet = annualRate * 100;
-  const extra = total - p;
+  const initialBalance = parseFloat(debt) || 0;
+  const annual = (parseFloat(annualRate) || 0) / 100;
+  const monthlyRate = annual > 0 ? Math.pow(1 + annual, 1 / 12) - 1 : 0; // capitalização efetiva
+  const minPctNum = (parseFloat(minPct) || 0) / 100;
+  const fixedPayNum = parseFloat(fixedPay) || 0;
+
+  const MAX_MONTHS = 120;
+  let saldo = initialBalance;
+  let totalPago = 0;
+  let meses = 0;
+  let nuncaQuita = false;
+
+  while (saldo > 0.01 && meses < MAX_MONTHS) {
+    const pagamento = mode === 'min'
+      ? Math.max(saldo * minPctNum, 1) // mínimo nunca pode ser zero, ou nunca quita
+      : fixedPayNum;
+    if (pagamento <= 0) { nuncaQuita = true; break; }
+    if (pagamento >= saldo) {
+      // último pagamento quita o saldo
+      totalPago += saldo;
+      saldo = 0;
+      meses += 1;
+      break;
+    }
+    // o pagamento é cobrado primeiro, juros compostos sobre o saldo remanescente
+    saldo = (saldo - pagamento) * (1 + monthlyRate);
+    totalPago += pagamento;
+    meses += 1;
+    // se o pagamento não cobre os juros, a dívida cresce indefinidamente
+    if (mode === 'fixed' && fixedPayNum < initialBalance * monthlyRate) {
+      nuncaQuita = true;
+      break;
+    }
+  }
+
+  const totalJuros = totalPago - initialBalance;
+  const quitouNoLimite = meses >= MAX_MONTHS && saldo > 0.01;
 
   return (
     <>
-      <NumInput label="Valor da compra" value={purchase} onChangeText={setPurchase} />
-      <NumInput label="Número de parcelas" value={installments} onChangeText={setInstallments} prefix="" suffix="x" />
-      <NumInput label="Taxa do rotativo (% a.m.)" value={rotatRate} onChangeText={setRotatRate} prefix="" suffix="%" />
+      <NumInput label="Saldo da fatura no rotativo" value={debt} onChangeText={setDebt} />
+      <NumInput label="Juros do rotativo (% a.a.)" value={annualRate} onChangeText={setAnnualRate} prefix="" suffix="% a.a." />
+      <SelectToggle
+        options={[
+          { id: 'min', label: 'Pago só o mínimo' },
+          { id: 'fixed', label: 'Valor fixo mensal' },
+        ]}
+        value={mode}
+        onChange={(v) => setMode(v as 'min' | 'fixed')}
+      />
+      {mode === 'min'
+        ? <NumInput label="% mínimo da fatura" value={minPct} onChangeText={setMinPct} prefix="" suffix="%" />
+        : <NumInput label="Pagamento mensal" value={fixedPay} onChangeText={setFixedPay} />
+      }
       <View style={{ marginTop: 4 }}>
-        <ResultRow label="Parcela" value={`${n}x de ${formatBRL(installmentValue)}`} highlight />
-        <ResultRow label="Total pago" value={formatBRL(total)} />
-        <ResultRow label="Custo extra vs. à vista" value={formatBRL(extra)} />
-        <ResultRow label="CET estimado" value={`${cet.toFixed(1)}% a.a.`} />
+        {nuncaQuita || quitouNoLimite ? (
+          <>
+            <ResultRow label="Status" value="⚠️ Pagamento insuficiente — dívida não quita em 10 anos" highlight />
+            <ResultRow label="Total pago em 10 anos" value={formatBRL(totalPago)} />
+            <ResultRow label="Saldo restante" value={formatBRL(Math.max(0, saldo))} />
+          </>
+        ) : (
+          <>
+            <ResultRow label="Meses até quitar" value={`${meses} meses (${(meses / 12).toFixed(1)} anos)`} highlight />
+            <ResultRow label="Total pago" value={formatBRL(totalPago)} />
+            <ResultRow label="Total de juros" value={formatBRL(totalJuros)} />
+          </>
+        )}
       </View>
     </>
   );

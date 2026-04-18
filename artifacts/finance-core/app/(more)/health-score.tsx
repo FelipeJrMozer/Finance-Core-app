@@ -8,11 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Svg, Circle, Path, G, Text as SvgText } from 'react-native-svg';
 import { LineChart } from 'react-native-gifted-charts';
 import { useTheme } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
+import { apiGet } from '@/services/api';
 
 const PILLARS = [
   { key: 'gastos', label: 'Controle de gastos', icon: 'trending-down' as const, color: '#10B981' },
@@ -101,8 +99,10 @@ function ScoreGauge({ score }: { score: number }) {
   );
 }
 
-function PillarBar({ label, icon, value, color }: { label: string; icon: keyof typeof Feather.glyphMap; value: number; color: string }) {
+function PillarBar({ label, icon, value, color }: { label: string; icon: keyof typeof Feather.glyphMap; value: number | null; color: string }) {
   const { theme } = useTheme();
+  const hasData = value !== null;
+  const displayValue = hasData ? Math.max(0, Math.min(100, value!)) : 0;
   return (
     <View style={pb.row}>
       <View style={[pb.iconBox, { backgroundColor: `${color}15` }]}>
@@ -111,10 +111,12 @@ function PillarBar({ label, icon, value, color }: { label: string; icon: keyof t
       <View style={pb.content}>
         <View style={pb.top}>
           <Text style={[pb.label, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>{label}</Text>
-          <Text style={[pb.pct, { color, fontFamily: 'Inter_700Bold' }]}>{value}%</Text>
+          <Text style={[pb.pct, { color: hasData ? color : theme.textTertiary, fontFamily: hasData ? 'Inter_700Bold' : 'Inter_500Medium' }]}>
+            {hasData ? `${displayValue}%` : 'sem dados'}
+          </Text>
         </View>
         <View style={[pb.barBg, { backgroundColor: theme.surfaceElevated }]}>
-          <View style={[pb.barFill, { width: `${value}%`, backgroundColor: color }]} />
+          <View style={[pb.barFill, { width: `${displayValue}%`, backgroundColor: hasData ? color : theme.border }]} />
         </View>
       </View>
     </View>
@@ -133,7 +135,6 @@ const pb = StyleSheet.create({
 
 export default function HealthScoreScreen() {
   const { theme, colors } = useTheme();
-  const { token } = useAuth();
   const { transactions, accounts, creditCards, investments, budgets } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -146,27 +147,36 @@ export default function HealthScoreScreen() {
   const monthIncome = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const monthExpense = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
-  // Compute pillars locally when API returns nothing useful
-  const computedPillars = React.useMemo(() => {
-    const ratio = monthIncome > 0 ? monthExpense / monthIncome : 1;
-    const gastosScore = Math.max(0, Math.min(100, Math.round((1 - ratio) * 100)));
+  // Compute pillars locally when API returns nothing useful.
+  // `null` represents "sem dados suficientes" — não conta na média.
+  const computedPillars = React.useMemo<Record<string, number | null>>(() => {
+    // Sem renda registrada no mês: não dá para calcular taxa de poupança.
+    const gastosScore = monthIncome > 0
+      ? Math.max(0, Math.min(100, Math.round((1 - monthExpense / monthIncome) * 100)))
+      : null;
 
     const liquidBalance = accounts
       .filter((a: any) => a.type !== 'credit' && !a.archived)
       .reduce((s, a) => s + a.balance, 0);
-    const targetReserva = monthExpense * 6;
-    const reservaScore = Math.min(100, Math.round((liquidBalance / Math.max(targetReserva, 1)) * 100));
+    // Sem despesas e sem reserva: indeterminado.
+    const reservaScore = monthExpense > 0
+      ? Math.max(0, Math.min(100, Math.round((liquidBalance / (monthExpense * 6)) * 100)))
+      : (liquidBalance > 0 ? 100 : null);
 
-    const totalCreditUsed = creditCards.reduce((s, c) => s + (c.used || 0), 0);
     const totalCreditLimit = creditCards.reduce((s, c) => s + c.limit, 0);
-    const creditRatio = totalCreditLimit > 0 ? totalCreditUsed / totalCreditLimit : 0;
-    const creditoScore = Math.max(0, Math.min(100, Math.round((1 - creditRatio) * 100)));
+    const totalCreditUsed = creditCards.reduce((s, c) => s + (c.used || 0), 0);
+    const creditoScore = totalCreditLimit > 0
+      ? Math.max(0, Math.min(100, Math.round((1 - totalCreditUsed / totalCreditLimit) * 100)))
+      : null;
 
     const totalInvest = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
-    const investScore = totalInvest > 0 ? Math.min(100, Math.round((totalInvest / Math.max(liquidBalance + totalInvest, 1)) * 200)) : 0;
+    const denom = liquidBalance + totalInvest;
+    const investScore = denom > 0
+      ? Math.max(0, Math.min(100, Math.round((totalInvest / denom) * 200)))
+      : null;
 
     const budgetsDone = budgets.length;
-    const planScore = Math.min(100, budgetsDone * 20 + (monthIncome > 0 ? 20 : 0));
+    const planScore = Math.max(0, Math.min(100, budgetsDone * 20 + (monthIncome > 0 ? 20 : 0)));
 
     return {
       gastos: gastosScore,
@@ -177,48 +187,44 @@ export default function HealthScoreScreen() {
     };
   }, [accounts, creditCards, investments, budgets, monthIncome, monthExpense]);
 
-  const overallScore = Math.round(
-    Object.values(computedPillars).reduce((s, v) => s + v, 0) / 5
-  );
+  const overallScore = (() => {
+    const valid = Object.values(computedPillars).filter((v): v is number => v !== null);
+    if (valid.length === 0) return 0;
+    return Math.max(0, Math.min(100, Math.round(valid.reduce((s, v) => s + v, 0) / valid.length)));
+  })();
 
   const fetchHealth = useCallback(async () => {
-    if (!API_URL || !token) return;
     try {
-      const res = await fetch(`${API_URL}/api/analytics/financial-score`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Map API response { totalScore, components: [{ id, score, maxScore, tip }] }
-        // into the shape the screen consumes: { score, pillars, recommendations }.
-        const pillarsMap: Record<string, number> = {};
-        for (const comp of (data.components || [])) {
-          const pct = comp.maxScore > 0 ? Math.round((comp.score / comp.maxScore) * 100) : 0;
-          if (comp.id === 'savings_rate')      pillarsMap.gastos = pct;
-          if (comp.id === 'emergency_fund')    pillarsMap.reserva = pct;
-          if (comp.id === 'debt_ratio')        pillarsMap.credito = pct;
-          if (comp.id === 'income_stability')  pillarsMap.investimentos = pct;
-          if (comp.id === 'expense_control')   pillarsMap.planejamento = pct;
-        }
-        setHealthData({
-          score: data.totalScore ?? 0,
-          pillars: pillarsMap,
-          recommendations: (data.components || []).map((c: any) => c.tip).filter(Boolean),
-        });
+      const data: any = await apiGet('/api/analytics/financial-score');
+      if (!data || typeof data !== 'object') return;
+      const pillarsMap: Record<string, number> = {};
+      for (const comp of (Array.isArray(data.components) ? data.components : [])) {
+        const pct = comp.maxScore > 0
+          ? Math.max(0, Math.min(100, Math.round((comp.score / comp.maxScore) * 100)))
+          : 0;
+        if (comp.id === 'savings_rate')      pillarsMap.gastos = pct;
+        if (comp.id === 'emergency_fund')    pillarsMap.reserva = pct;
+        if (comp.id === 'debt_ratio')        pillarsMap.credito = pct;
+        if (comp.id === 'income_stability')  pillarsMap.investimentos = pct;
+        if (comp.id === 'expense_control')   pillarsMap.planejamento = pct;
       }
+      setHealthData({
+        score: Math.max(0, Math.min(100, Number(data.totalScore) || 0)),
+        pillars: pillarsMap,
+        recommendations: (Array.isArray(data.components) ? data.components : [])
+          .map((c: any) => c.tip).filter(Boolean),
+      });
     } catch {}
-  }, [token]);
+  }, []);
 
   const fetchHistory = useCallback(async () => {
-    if (!API_URL || !token) return;
     try {
-      const res = await fetch(`${API_URL}/api/analytics/score-history`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      });
-      if (res.ok) return await res.json();
-    } catch {}
-    return [];
-  }, [token]);
+      const data = await apiGet<unknown>('/api/analytics/score-history');
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }, []);
 
   const [history, setHistory] = useState<any[]>([]);
 
@@ -237,26 +243,19 @@ export default function HealthScoreScreen() {
     setRefreshing(false);
   };
 
-  const score = healthData?.score ?? overallScore;
-  const pillars = healthData?.pillars ?? computedPillars;
-  const recommendations = healthData?.recommendations ?? [
-    monthExpense > monthIncome && '💡 Suas despesas superam as receitas este mês. Revise os gastos variáveis.',
-    computedPillars.reserva < 50 && '🛡️ Aumente sua reserva de emergência para pelo menos 3 meses de despesas.',
-    computedPillars.credito < 70 && '💳 Reduza o uso do crédito para abaixo de 30% do limite disponível.',
-    computedPillars.investimentos < 30 && '📈 Comece a investir — separe pelo menos 10% da renda mensal.',
+  const score = Math.max(0, Math.min(100, healthData?.score ?? overallScore));
+  const pillars: Record<string, number | null> = healthData?.pillars ?? computedPillars;
+  const recommendations: string[] = healthData?.recommendations ?? [
+    monthIncome > 0 && monthExpense > monthIncome && '💡 Suas despesas superam as receitas este mês. Revise os gastos variáveis.',
+    (computedPillars.reserva ?? 100) < 50 && '🛡️ Aumente sua reserva de emergência para pelo menos 3 meses de despesas.',
+    (computedPillars.credito ?? 100) < 70 && '💳 Reduza o uso do crédito para abaixo de 30% do limite disponível.',
+    (computedPillars.investimentos ?? 100) < 30 && '📈 Comece a investir — separe pelo menos 10% da renda mensal.',
     budgets.length === 0 && '📊 Defina orçamentos por categoria para um planejamento mais eficaz.',
-  ].filter(Boolean);
+  ].filter(Boolean) as string[];
 
   const chartData = history.length > 0
-    ? history.slice(-6).map((h: any) => ({ value: h.score ?? 0, label: h.month ?? '' }))
-    : [
-        { value: Math.max(0, score - 20), label: '–5m' },
-        { value: Math.max(0, score - 15), label: '–4m' },
-        { value: Math.max(0, score - 10), label: '–3m' },
-        { value: Math.max(0, score - 5), label: '–2m' },
-        { value: Math.max(0, score - 2), label: '–1m' },
-        { value: score, label: 'Agora' },
-      ];
+    ? history.slice(-6).map((h: any) => ({ value: Math.max(0, Math.min(100, Number(h.score) || 0)), label: h.month ?? '' }))
+    : [];
 
   return (
     <ScrollView
@@ -280,11 +279,11 @@ export default function HealthScoreScreen() {
       </View>
 
       {/* Histórico */}
-      {chartData.length > 0 && (
-        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-            Histórico (6 meses)
-          </Text>
+      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+          Histórico (6 meses)
+        </Text>
+        {chartData.length > 0 ? (
           <LineChart
             data={chartData}
             width={260}
@@ -306,8 +305,12 @@ export default function HealthScoreScreen() {
             rulesColor={theme.border}
             hideRules={false}
           />
-        </View>
-      )}
+        ) : (
+          <Text style={[styles.scoreNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+            Histórico ainda não disponível. Ele será exibido aqui após algumas semanas de uso.
+          </Text>
+        )}
+      </View>
 
       {/* Pilares */}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -319,7 +322,7 @@ export default function HealthScoreScreen() {
             key={p.key}
             label={p.label}
             icon={p.icon}
-            value={pillars[p.key] ?? 0}
+            value={pillars[p.key] ?? null}
             color={p.color}
           />
         ))}

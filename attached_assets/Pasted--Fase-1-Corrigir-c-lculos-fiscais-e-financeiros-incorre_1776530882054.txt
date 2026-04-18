@@ -1,0 +1,140 @@
+# Fase 1 — Corrigir cálculos fiscais e financeiros incorretos
+Estou no repositório monorepo Finance-Core-app. O app mobile fica em `artifacts/finance-core`.
+Algumas fórmulas estão erradas e estão mostrando números incorretos para o usuário (com risco fiscal). Preciso que você corrija TODOS os itens abaixo e nada mais. Não faça refatorações cosméticas, não mexa em layout.
+## 1. DAS do MEI está calculado como percentual — está ERRADO
+**Arquivos**: `artifacts/finance-core/app/(more)/pj/das.tsx` e `artifacts/finance-core/app/(more)/pj/dasn-simei.tsx`
+**Problema**: existe `MEI_RATE = 0.06` aplicando 6% sobre o faturamento.
+**Correção**:
+- DAS do MEI é VALOR FIXO mensal, não percentual sobre receita.
+- Crie uma constante `MEI_DAS_2025` com objeto contendo os valores oficiais por categoria de atividade:
+  - Comércio/Indústria: R$ 76,90
+  - Serviços: R$ 80,90
+  - Comércio + Serviços: R$ 81,90
+  - MEI Caminhoneiro: R$ 188,69
+- O usuário deve poder selecionar a categoria. Default = "Comércio/Indústria".
+- Remova qualquer multiplicação `faturamento * 0.06`. O DAS é o valor fixo, independente do faturamento.
+- Mantenha apenas a verificação de "ultrapassou limite anual" como alerta separado.
+## 2. Limite MEI inconsistente entre mobile e backend
+**Arquivo**: `artifacts/finance-core/app/(more)/pj/dasn-simei.tsx` (linha ~11) e qualquer outro lugar onde apareça.
+**Correção**:
+- Centralize em `artifacts/finance-core/constants/pj.ts` (criar se não existir):
+  ```ts
+  export const MEI_LIMITE_ANUAL = 81000; // valor oficial vigente
+  export const MEI_LIMITE_PROPORCIONAL_MES = 6750; // 81000/12
+
+Importe essa constante em todos os pontos do app que falam de limite MEI.
+Para cálculo de limite proporcional (quando aberto no meio do ano): MEI_LIMITE_PROPORCIONAL_MES * mesesRestantesNoAno.
+3. Custo do cartão (rotativo) usando fórmula PRICE — ERRADO
+Arquivo: artifacts/finance-core/app/(more)/simulators.tsx (CardCostSim, linhas ~430-445)
+Problema: usa fórmula PRICE de parcela fixa para simular crédito rotativo. Rotativo é juros compostos diários.
+Correção:
+
+Substitua por fórmula correta de juros compostos com pagamento mínimo:
+// Saldo evolui mês a mês: saldo = (saldo - pagamentoMinimo) * (1 + jurosMensal)
+// jurosMensal = (1 + jurosAnual) ** (1/12) - 1  (capitalização efetiva)
+
+Permita o usuário escolher entre dois cenários:
+a) "Pago só o mínimo" (% do saldo, default 15%)
+b) "Pago valor fixo mensal" (input)
+Mostre: total pago, total de juros, meses até quitar.
+Limite o cálculo a 120 meses (10 anos) como sanidade.
+4. Dividendos gerados com Math.random() — REMOVER
+Arquivo: artifacts/finance-core/app/(more)/investment-report.tsx (linhas ~44 e ~128)
+Problema: usa Math.random() para inventar dividendos e multiplicador 0.8 fixo sobre quantidade de ações.
+Correção:
+
+Remova TODA geração aleatória.
+Consuma o endpoint real do backend para dividendos (procurar em lib/api-spec ou usar /api/investments/:id/dividends se existir; caso não exista, faça GET /api/investments/dividends?from=YYYY-MM-DD&to=YYYY-MM-DD).
+Se o endpoint retornar vazio ou der erro, mostrar EmptyState com mensagem "Sem dividendos registrados no período" e CTA para registrar manualmente. NÃO inventar dados.
+5. CDI/IPCA hardcoded
+Arquivos: artifacts/finance-core/app/(more)/simulators.tsx (~284-285) e investment-report.tsx (~15-16)
+Correção:
+
+Crie artifacts/finance-core/services/benchmarks.ts:
+export async function getBenchmarks(): Promise<{ cdi: number; selic: number; ipca: number; ibov: number }> {
+  return apiGet('/api/market/benchmarks');
+}
+
+Use React Query (@tanstack/react-query, já no catalog) com staleTime: 1000 * 60 * 60 (1h) para cachear.
+Use os valores reais da API como default. Permita o usuário sobrescrever para "e se".
+Se a API falhar: mostre toast "Não foi possível carregar índices atuais. Usando últimos valores conhecidos." e use o último valor cacheado em AsyncStorage. NUNCA usar valor chumbado como fallback silencioso.
+6. Health Score com histórico falso — REMOVER
+Arquivo: artifacts/finance-core/app/(more)/health-score.tsx (linhas ~252-259)
+Problema: quando a API não retorna histórico, gera 6 meses fakes fazendo score - 20, score - 15, etc.
+Correção:
+
+Remover o bloco de fallback que inventa histórico.
+Se history estiver vazio: mostrar mensagem "Histórico será exibido após 30 dias de uso" e ocultar o gráfico (sem placeholder gerado).
+7. Health Score: cap em 100 e divisão por zero
+Arquivo: artifacts/finance-core/app/(more)/health-score.tsx
+Correções:
+
+Linha ~166 (investment score): aplicar Math.min(100, Math.max(0, score)).
+Onde calcular savingsRate: se monthlyIncome === 0, retornar null e mostrar "Sem renda registrada este mês" — NÃO retornar 100 nem 0.
+Idealmente alinhar com a fórmula do backend (server/services/financialHealthDashboard) — se possível, deixar o cálculo local apenas como fallback offline e SEMPRE preferir o resultado de /api/health-score/current.
+8. totalBalance não inclui cartões e investimentos
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (linhas ~739-743)
+Correção:
+
+Renomear o atual totalBalance para cashBalance (soma das contas líquidas).
+Criar netWorth = cashBalance + totalInvestments - totalCardDebt onde:
+totalCardDebt = sum(cards.map(c => c.used || 0))
+totalInvestments = sum(investments.map(i => (i.currentPrice ?? i.purchasePrice) * i.quantity))
+Expor ambos no contexto. Em telas que mostram "patrimônio total", trocar para netWorth. Em "saldo das contas", manter cashBalance.
+9. monthlyIncome/monthlyExpenses usando "últimos 30 dias"
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (linhas ~748-771)
+Correção:
+
+Trocar o filtro t.date >= thirtyDaysAgo por filtro de mês civil:
+const now = new Date();
+const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+// filtrar transações entre startOfMonth e endOfMonth
+
+Aplicar a mesma lógica para prevMonthIncome/Expenses (mês anterior completo).
+10. parseFloat e split('T') quebram em formatos inesperados
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (linhas ~198 e ~216)
+Correção:
+
+Criar helper artifacts/finance-core/utils/parse.ts:
+export function parseAmount(raw: unknown): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  if (typeof raw !== 'string') return 0;
+  // aceita "1234.56", "1.234,56" e "1234,56"
+  const normalized = raw.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+export function parseDate(raw: unknown): string {
+  if (typeof raw !== 'string') return new Date().toISOString().slice(0, 10);
+  const d = new Date(raw);
+  return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+}
+
+Substituir todos os parseFloat(raw.amount) e d.split('T')[0] por essas helpers.
+11. Cast inseguro de Investment.type
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx (~linha 347)
+Correção:
+
+Definir whitelist:
+const INVESTMENT_TYPES = ['STOCK','FII','REIT','ETF','CRYPTO','FIXED_INCOME'] as const;
+type InvestmentType = typeof INVESTMENT_TYPES[number];
+function normalizeType(raw: unknown): InvestmentType {
+  return INVESTMENT_TYPES.includes(raw as InvestmentType) ? (raw as InvestmentType) : 'STOCK';
+}
+
+Aplicar no mapeamento da API.
+Validação ao terminar
+Rode pnpm --filter @workspace/finance-core typecheck — deve passar sem erros.
+Abra cada tela afetada (Simuladores, Health Score, PJ DAS, Relatório de Investimentos, Dashboard) e confirme:
+DAS MEI mostra valor fixo (~R$ 76,90), não 6% do faturamento.
+Relatório de Investimentos não mostra dividendos quando não há dados (mostra empty state).
+Health Score sem histórico não mostra gráfico falso.
+Patrimônio total no dashboard inclui investimentos e desconta dívida de cartão.
+Renda/despesa mensal corresponde ao mês civil atual.
+NÃO commitar nada que dependa de endpoints que ainda não existem no backend — se /api/market/benchmarks ou /api/health-score/current não responder, deixe um TODO claro no código E mostre empty state na UI (não dados falsos).
+Restrições
+Não toque em estilos, navegação, nem em arquivos fora dos listados acima.
+Mantenha as APIs existentes do contexto (useFinance()) com os mesmos nomes; só ADICIONE netWorth e cashBalance.
+Se for necessário criar novos arquivos (utils/parse.ts, constants/pj.ts, services/benchmarks.ts), crie só esses.
+Não rode pnpm install adicionando libs novas. Use só o que já existe no workspace.

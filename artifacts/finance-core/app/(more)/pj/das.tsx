@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Alert
+  View, Text, StyleSheet, ScrollView, Pressable
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,7 +8,14 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
-import { formatBRL, getCurrentMonth } from '@/utils/formatters';
+import { formatBRL } from '@/utils/formatters';
+import {
+  MEI_DAS_2025,
+  MEI_DAS_DEFAULT_CATEGORIA,
+  MEI_DAS_LIST,
+  MEI_LIMITE_ANUAL,
+  type MeiCategoria,
+} from '@/constants/pj';
 
 interface DASRecord {
   id: string;
@@ -20,50 +27,83 @@ interface DASRecord {
 }
 
 const STORAGE_KEY = 'pf_pj_das';
-const MEI_RATE = 0.06;
+const CATEGORIA_KEY = 'pf_pj_das_categoria';
 
 export default function PJDasScreen() {
   const { theme, colors } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [records, setRecords] = useState<DASRecord[]>([]);
+  const [categoria, setCategoria] = useState<MeiCategoria>(MEI_DAS_DEFAULT_CATEGORIA);
+
+  // Load saved categoria
+  React.useEffect(() => {
+    AsyncStorage.getItem(CATEGORIA_KEY).then((raw) => {
+      if (raw && raw in MEI_DAS_2025) setCategoria(raw as MeiCategoria);
+    });
+  }, []);
+
+  const dasInfo = MEI_DAS_2025[categoria];
+  const dasAmount = dasInfo.amount;
+
+  // Faturamento PJ do ano corrente — usado apenas para alertar sobre o limite anual
+  const currentYear = new Date().getFullYear();
+  const yearGrossIncome = transactions
+    .filter((t) =>
+      t.type === 'income' &&
+      (t.notes?.includes('[PJ]') || t.description?.toLowerCase().includes('pj')) &&
+      t.date.startsWith(String(currentYear))
+    )
+    .reduce((s, t) => s + t.amount, 0);
+
+  const exceededAnnualLimit = yearGrossIncome > MEI_LIMITE_ANUAL;
+  const limitPct = Math.min(100, (yearGrossIncome / MEI_LIMITE_ANUAL) * 100);
+
+  // Generate records (fixed value, not percentual). Vencimento = dia 20 do MÊS SEGUINTE.
+  const buildRecords = useCallback((): DASRecord[] => {
+    const generated: DASRecord[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const ref = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const ym = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+      // Mês seguinte da competência — Date faz o rollover de ano automaticamente.
+      const due = new Date(ref.getFullYear(), ref.getMonth() + 1, 20);
+      const dueDate = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+      const isVencido = due.getTime() < now.getTime();
+      generated.push({
+        id: ym,
+        referenceMonth: ym,
+        amount: dasAmount,
+        dueDate,
+        status: isVencido ? 'vencido' : 'pendente',
+      });
+    }
+    return generated;
+  }, [dasAmount]);
 
   const loadRecords = useCallback(async () => {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEY);
       if (data) {
-        setRecords(JSON.parse(data));
+        // Re-apply current dasAmount to any record not yet paid (categoria can change).
+        const stored: DASRecord[] = JSON.parse(data);
+        const refreshed = stored.map((r) => r.status === 'pago' ? r : { ...r, amount: dasAmount });
+        setRecords(refreshed);
       } else {
-        // Auto-generate last 6 months
-        const generated: DASRecord[] = [];
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date();
-          d.setMonth(d.getMonth() - i);
-          const ym = d.toISOString().slice(0, 7);
-          const monthTx = transactions.filter((t) =>
-            t.type === 'income' && t.date.startsWith(ym) &&
-            (t.notes?.includes('[PJ]') || t.description?.toLowerCase().includes('pj'))
-          );
-          const monthIncome = monthTx.reduce((s, t) => s + t.amount, 0);
-          const dueYear = d.getFullYear();
-          const dueMonth = String(d.getMonth() + 2).padStart(2, '0');
-          const dueDate = `${dueYear}-${dueMonth}-20`;
-          const isVencido = new Date(dueDate) < new Date() && !generated.find((r) => r.referenceMonth === ym && r.status === 'pago');
-          generated.push({
-            id: ym,
-            referenceMonth: ym,
-            amount: Math.max(67, monthIncome * MEI_RATE),
-            dueDate,
-            status: isVencido ? 'vencido' : 'pendente',
-          });
-        }
+        const generated = buildRecords();
         setRecords(generated);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(generated));
       }
     } catch {}
-  }, [transactions]);
+  }, [dasAmount, buildRecords]);
 
   React.useEffect(() => { loadRecords(); }, [loadRecords]);
+
+  const onChangeCategoria = async (id: MeiCategoria) => {
+    Haptics.selectionAsync();
+    setCategoria(id);
+    await AsyncStorage.setItem(CATEGORIA_KEY, id);
+  };
 
   const markPaid = async (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -100,9 +140,63 @@ export default function PJDasScreen() {
       <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <Feather name="info" size={16} color={colors.primary} />
         <Text style={[styles.infoText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-          DAS calculado com 6% do faturamento PJ (MEI Comércio). Vencimento todo dia 20 do mês seguinte.
+          DAS-MEI tem valor fixo mensal por categoria de atividade — não é percentual do faturamento.
+          Vencimento todo dia 20 do mês seguinte.
         </Text>
       </View>
+
+      {/* Seletor de categoria */}
+      <View style={[styles.categoriaCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+          Categoria de atividade
+        </Text>
+        <View style={styles.categoriaList}>
+          {MEI_DAS_LIST.map((opt) => {
+            const selected = opt.id === categoria;
+            return (
+              <Pressable
+                key={opt.id}
+                onPress={() => onChangeCategoria(opt.id)}
+                style={[styles.catRow, {
+                  backgroundColor: selected ? `${colors.primary}15` : theme.surfaceElevated,
+                  borderColor: selected ? colors.primary : theme.border,
+                }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.catLabel, {
+                    color: theme.text,
+                    fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                  }]}>
+                    {opt.label}
+                  </Text>
+                  <Text style={[styles.catAmount, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                    {formatBRL(opt.amount)} / mês
+                  </Text>
+                </View>
+                {selected && <Feather name="check-circle" size={18} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Alerta de limite anual */}
+      {exceededAnnualLimit && (
+        <View style={[styles.alertBox, { backgroundColor: `${colors.danger}15`, borderColor: `${colors.danger}40` }]}>
+          <Feather name="alert-triangle" size={16} color={colors.danger} />
+          <Text style={[styles.alertText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
+            Faturamento de {formatBRL(yearGrossIncome)} ultrapassou o limite anual MEI ({formatBRL(MEI_LIMITE_ANUAL)}).
+            Considere migrar para ME.
+          </Text>
+        </View>
+      )}
+      {!exceededAnnualLimit && yearGrossIncome > 0 && (
+        <View style={[styles.limitInfo, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.limitInfoLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+            Faturamento PJ {currentYear}: {formatBRL(yearGrossIncome)} ({limitPct.toFixed(1)}% do limite anual)
+          </Text>
+        </View>
+      )}
 
       {records.map((r) => (
         <View key={r.id} style={[styles.dasCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -154,6 +248,16 @@ export default function PJDasScreen() {
 const styles = StyleSheet.create({
   infoCard: { flexDirection: 'row', gap: 10, borderRadius: 12, padding: 12, borderWidth: 1, alignItems: 'flex-start' },
   infoText: { fontSize: 13, flex: 1, lineHeight: 18 },
+  categoriaCard: { borderRadius: 14, padding: 14, borderWidth: 1, gap: 12 },
+  cardTitle: { fontSize: 14 },
+  categoriaList: { gap: 8 },
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 10, borderWidth: 1 },
+  catLabel: { fontSize: 14 },
+  catAmount: { fontSize: 12, marginTop: 2 },
+  alertBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 12, borderWidth: 1 },
+  alertText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  limitInfo: { padding: 12, borderRadius: 10, borderWidth: 1 },
+  limitInfoLabel: { fontSize: 12 },
   dasCard: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 12 },
   dasHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dasMonth: { fontSize: 16 },

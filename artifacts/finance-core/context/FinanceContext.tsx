@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
+import { parseAmount, parseDate as parseDateSafe } from '@/utils/parse';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -193,9 +194,27 @@ function findCategoryId(
 
 // ── Transform helpers ─────────────────────────────────────────────────────────
 
-function parseDate(d: string | null | undefined): string {
-  if (!d) return new Date().toISOString().split('T')[0];
-  return d.split('T')[0];
+// Local wrapper kept for backwards compatibility — delegates to the shared utility.
+function parseDate(d: unknown): string {
+  return parseDateSafe(d);
+}
+
+const INVESTMENT_TYPES = ['stocks', 'fii', 'reit', 'etf', 'crypto', 'fixed'] as const;
+type InvestmentType = typeof INVESTMENT_TYPES[number];
+
+function normalizeInvestmentType(raw: unknown): InvestmentType {
+  if (typeof raw !== 'string') return 'fixed';
+  const lower = raw.trim().toLowerCase();
+  // Aceita variações comuns que vêm do backend.
+  const map: Record<string, InvestmentType> = {
+    stock: 'stocks', stocks: 'stocks', acao: 'stocks', acoes: 'stocks',
+    fii: 'fii', fund: 'fii',
+    reit: 'reit',
+    etf: 'etf',
+    crypto: 'crypto', cripto: 'crypto',
+    fixed: 'fixed', fixed_income: 'fixed', renda_fixa: 'fixed', cdb: 'fixed', tesouro: 'fixed',
+  };
+  return map[lower] ?? 'fixed';
 }
 
 function goalColor(name: string): string {
@@ -213,7 +232,7 @@ function transformTransaction(raw: Record<string, unknown>, catMap: Record<strin
   return {
     id: raw.id as string,
     description: raw.description as string,
-    amount: Math.abs(parseFloat(raw.amount as string)),
+    amount: Math.abs(parseAmount(raw.amount)),
     type: raw.type as TransactionType,
     category: categoryKey,
     categoryId: raw.categoryId as string | undefined,
@@ -245,11 +264,11 @@ function transformAccount(raw: Record<string, unknown>): Account {
     id: raw.id as string,
     name: raw.name as string,
     type,
-    balance: parseFloat(balanceRaw as string) || 0,
+    balance: parseAmount(balanceRaw),
     institution: (raw.institution as string) || '',
     color: (raw.color as string) || '#0096C7',
     archived: (raw.archived as boolean) || false,
-    creditLimit: raw.creditLimit ? parseFloat(raw.creditLimit as string) : undefined,
+    creditLimit: raw.creditLimit !== undefined && raw.creditLimit !== null ? parseAmount(raw.creditLimit) : undefined,
   };
 }
 
@@ -323,7 +342,7 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
     .reduce((s, t) => s + t.amount, 0);
 
   const used = backendInvoice !== undefined && backendInvoice !== null
-    ? Math.abs(parseFloat(backendInvoice as string))
+    ? Math.abs(parseAmount(backendInvoice))
     : computedUsed;
   return {
     id: raw.id as string,
@@ -332,7 +351,7 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
     institution: (raw.brand as string) || 'Cartão',
     brand: (raw.brand as string) || '',
     lastFourDigits: (raw.lastFourDigits as string) || undefined,
-    limit: parseFloat(raw.creditLimit as string) || 0,
+    limit: parseAmount(raw.creditLimit),
     used,
     dueDate: formatDay(dueDay),
     closingDate: formatDay(closingDay),
@@ -344,15 +363,14 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
 }
 
 function transformInvestment(raw: Record<string, unknown>): Investment {
-  const type = (raw.type as string) as Investment['type'];
   return {
     id: raw.id as string,
     name: (raw.name as string) || (raw.ticker as string) || '',
     ticker: (raw.ticker as string) || '',
-    type,
-    quantity: parseFloat(raw.quantity as string) || 0,
-    avgPrice: parseFloat((raw.purchasePrice || raw.averagePrice) as string) || 0,
-    currentPrice: parseFloat(raw.currentPrice as string) || 0,
+    type: normalizeInvestmentType(raw.type),
+    quantity: parseAmount(raw.quantity),
+    avgPrice: parseAmount(raw.purchasePrice ?? raw.averagePrice),
+    currentPrice: parseAmount(raw.currentPrice),
     currency: 'BRL',
     purchaseDate: raw.purchaseDate ? parseDate(raw.purchaseDate as string) : undefined,
     status: (raw.status as string) || 'active',
@@ -369,7 +387,7 @@ function transformBudget(raw: Record<string, unknown>, catMap: Record<string, Ap
     id: raw.id as string,
     category: categoryKey,
     categoryId: raw.categoryId as string,
-    limit: parseFloat(raw.amount as string) || 0,
+    limit: parseAmount(raw.amount),
     month: `${year}-${String(month).padStart(2, '0')}`,
   };
 }
@@ -380,8 +398,8 @@ function transformGoal(raw: Record<string, unknown>): Goal {
     id: raw.id as string,
     name,
     description: (raw.description as string) || undefined,
-    targetAmount: parseFloat(raw.targetAmount as string) || 0,
-    currentAmount: parseFloat(raw.currentAmount as string) || 0,
+    targetAmount: parseAmount(raw.targetAmount),
+    currentAmount: parseAmount(raw.currentAmount),
     deadline: parseDate(raw.deadline as string),
     icon: (raw.icon as string) || 'target',
     color: (raw.color as string) || goalColor(name),
@@ -473,6 +491,8 @@ interface FinanceContextType {
   refresh: () => Promise<void>;
 
   totalBalance: number;
+  cashBalance: number;
+  netWorth: number;
   monthlyIncome: number;
   monthlyExpenses: number;
   prevMonthIncome: number;
@@ -704,7 +724,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, [creditCards, transactions]);
 
-  const totalBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+  // cashBalance = saldo líquido das contas (não inclui crédito nem arquivadas).
+  // totalBalance é mantido como alias para compatibilidade com código existente.
+  const cashBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+  const totalBalance = cashBalance;
+  const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+  const totalCreditUsed = computedCreditCards.filter((c) => !c.archived).reduce((s, c) => s + (c.used || 0), 0);
+  // netWorth = caixa + investimentos - dívida de cartão.
+  const netWorth = cashBalance + totalInvestments - totalCreditUsed;
   const monthlyIncome = monthlyTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const monthlyExpenses = monthlyTx.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const prevMonthIncome = prevMonthTx.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
@@ -1155,7 +1182,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addBudget, updateBudget, deleteBudget,
       addCategory, updateSettings, markNotificationRead, dismissNotification,
       refresh,
-      totalBalance, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
+      totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
     }}>
       {children}
     </FinanceContext.Provider>

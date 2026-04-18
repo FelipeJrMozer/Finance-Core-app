@@ -1,0 +1,139 @@
+# Fase 3 — Implementar recursos essenciais ausentes no mobile
+Monorepo Finance-Core-app, app em `artifacts/finance-core`. O backend já expõe estes recursos; o mobile só precisa consumir e ter UI.
+## Pré-requisito (backend)
+Verifique no `lib/api-spec/openapi.yaml` (ou rotas em `artifacts/api-server`) se existem:
+- `GET/POST/PATCH/DELETE /api/bills`
+- `POST /api/bills/:id/pay`
+- `GET /api/cards/:id/invoices` e `GET /api/cards/invoices/:id`
+- `POST /api/cards/invoices/:id/pay`
+- `GET /api/transactions/:id/installments`
+- `POST /api/transactions/:id/installments/:installmentId/anticipate`
+- `GET /api/transactions/search?q=&from=&to=&type=&accountId=&categoryId=`
+- `GET /api/alerts` (regras configuradas pelo usuário)
+- `GET /api/mobile/dashboard-summary` (este pode ainda não existir; se faltar, deixe TODO e use os endpoints individuais)
+Se algum endpoint não existir, NÃO o invente no mobile. Liste no final do PR como pendência de backend e implemente o restante.
+---
+## 1. Tela "Contas a Pagar" (Bills)
+**Novo arquivo**: `artifacts/finance-core/app/(more)/bills.tsx` (já existe — preencher)
+**Ações**:
+- Listar bills agrupadas por status: **Vencidas**, **Vence em 7 dias**, **Próximas**, **Pagas**.
+- Cada item: descrição, valor, vencimento (formato dd/mm), categoria, conta vinculada, badge de status.
+- Botão "Marcar como pago" → chama `POST /api/bills/:id/pay` com body `{ accountId, paidAt }`. Otimista: remover da lista e mostrar undo (Snackbar 5s).
+- FAB "+" → modal/route `bill/add.tsx` com form: descrição, valor, vencimento, categoria, conta, recorrente (sim/não + frequência).
+- Pull-to-refresh, empty state quando vazio.
+- Adicionar entrada no menu `(tabs)/more.tsx` em GESTÃO.
+**Contexto**: adicione em `FinanceContext.tsx`:
+```ts
+type Bill = { id: string; description: string; amount: number; dueDate: string; status: 'pending'|'paid'|'overdue'; categoryId?: string; accountId?: string; recurring?: { frequency: 'monthly'|'weekly'|'yearly' } };
+const [bills, setBills] = useState<Bill[]>([]);
+async function loadBills() { /* GET /api/bills */ }
+async function payBill(id: string, accountId: string) { /* POST + invalidate */ }
+async function addBill(input: Omit<Bill,'id'|'status'>) { /* POST + push local */ }
+async function updateBill(id: string, patch: Partial<Bill>) { /* PATCH */ }
+async function deleteBill(id: string) { /* DELETE */ }
+
+2. Faturas de cartão (ciclo completo)
+Arquivo a tocar: artifacts/finance-core/app/card/[id].tsx
+
+Adicionar abas:
+
+Atual (já existe — fatura aberta).
+Histórico: lista de faturas anteriores via GET /api/cards/:id/invoices. Cada fatura: mês de referência, valor total, status (aberta/fechada/paga/atrasada), data de fechamento, data de vencimento.
+Tap em fatura → tela card/invoice/[id].tsx (criar): lista de transações da fatura, total, botão "Pagar fatura" (POST /api/cards/invoices/:id/pay com { accountId }), opção "Pagamento parcial" com input de valor.
+Dashboard do cartão: mostrar progresso da fatura atual (X% do limite usado), data até fechamento, e card de "Próxima fatura: R$ X em DD/MM".
+
+3. Parcelamentos
+Arquivo a tocar: artifacts/finance-core/app/transaction/[id].tsx (criar se não existir).
+
+UI:
+
+Quando a transação tem installmentId, mostrar bloco "Parcelamento":
+"Parcela X de N — R$ Y/mês"
+Lista das parcelas: número, vencimento, valor, status (paga/pendente).
+Botão por parcela "Antecipar" → POST /api/transactions/:id/installments/:installmentId/anticipate (confirmar antes).
+Filtro novo na lista de transações: chip "Parceladas" que filtra installmentId != null.
+
+4. Busca de transações
+Arquivo: artifacts/finance-core/app/(tabs)/transactions.tsx
+
+Mudanças:
+
+O input de busca atual filtra localmente. Trocar para chamar GET /api/transactions/search quando o usuário digitar (debounce 400ms, mínimo 2 chars).
+Filtros adicionais (drawer/modal "Filtros"): tipo (entrada/saída/transferência), conta, categoria, intervalo de datas (presets: hoje, 7 dias, 30 dias, mês atual, mês anterior, custom).
+Aplicar filtros junto com q no endpoint.
+Persistir últimos filtros usados em safeSet('transactions:lastFilters', ...).
+5. Notificações push conectadas a alertas
+Setup:
+
+O app já tem expo-notifications. Garanta que existe services/NotificationService.native.ts com:
+registerForPushNotifications() → solicita permissão, obtém ExpoPushToken, faz POST /api/devices/register com { token, platform: Platform.OS, deviceId }.
+Chamar uma vez em AuthContext após login com sucesso.
+Chamar POST /api/devices/unregister no logout.
+Tela "Alertas" (app/(more)/custom-alerts.tsx já existe):
+
+Trocar a persistência local em AsyncStorage por API real: GET/POST/PATCH/DELETE /api/alerts.
+Tipos: gasto por categoria > limite, saldo < mínimo, fatura > X% do limite, meta atrasada, vencimento em N dias.
+Listener de notificação recebida (Notifications.addNotificationReceivedListener):
+Atualizar badge da tab "Mais".
+Se o app estiver em foreground, mostrar in-app toast em vez do banner do sistema.
+Listener de tap (Notifications.addNotificationResponseReceivedListener): rotear conforme o data.deeplink do push (ex.: abrir tela de bills, fatura específica, transação).
+6. Widget de "Próximos Vencimentos" no Dashboard
+Arquivo: artifacts/finance-core/app/(tabs)/index.tsx
+
+Substituir o UpcomingBills atual (mockado) por componente real:
+Top 3 bills com vencimento ≤ 7 dias E faturas de cartão com vencimento ≤ 7 dias.
+Cada item: descrição, dias até vencer (com cor por urgência), botão "Pagar".
+Tap no card → rota bills.tsx.
+Empty state: "Nenhum vencimento na próxima semana ✓".
+7. Endpoint agregado /api/mobile/dashboard-summary (consumir)
+Quando o backend expuser, este endpoint deve devolver TUDO que o dashboard precisa em uma chamada:
+
+{
+  cashBalance: number,
+  netWorth: number,
+  monthlyIncome: number,
+  monthlyExpenses: number,
+  prevMonthIncome: number,
+  prevMonthExpenses: number,
+  healthScore: number,
+  upcomingBills: Bill[],            // próximos 7 dias
+  upcomingInvoices: Invoice[],      // próximos 7 dias
+  recentTransactions: Transaction[],// últimas 10
+  weeklyChart: { day: string; income: number; expense: number }[],
+  unreadAlerts: number
+}
+
+No mobile:
+
+Crie services/dashboard.ts com fetchDashboardSummary() consumindo esse endpoint.
+Use React Query com staleTime: 60_000 e refetchOnFocus: true.
+Substitua os múltiplos useEffect do dashboard por essa única query (mantenha os endpoints individuais como fallback se a chamada falhar com 404 — backend ainda não tem).
+8. Mapeamento correto de campos ignorados
+Em FinanceContext.tsx, no mapper de transação adicione:
+
+{
+  // existentes...
+  attachmentUrl: raw.attachmentUrl ?? null,
+  isSubscription: !!raw.isSubscription,
+  installmentId: raw.installmentId ?? null,
+  installmentNumber: raw.installmentNumber ?? null,
+  installmentTotal: raw.installmentTotal ?? null,
+  isPaid: raw.isPaid !== false, // default true
+}
+
+Em accounts: respeitar isArchived (não exibir contas arquivadas em listas exceto numa seção dedicada "Arquivadas") e expor institution.
+Em investments: expor quantity e averagePrice (já existe purchasePrice que é mapeado para avgPrice; renomeie internamente para averagePrice mantendo retrocompat).
+Validação ao terminar
+pnpm --filter @workspace/finance-core typecheck passa.
+Tela Bills: criar, pagar, deletar bill — refletido após pull-to-refresh.
+Cartão: ver fatura anterior; pagar fatura debita da conta selecionada (validar no GET seguinte).
+Transação parcelada: lista parcelas; antecipar uma muda status.
+Busca: digitar 3 caracteres dispara request; filtros aplicados.
+Push: instalar em device físico; receber notificação de alerta dispara deep-link correto.
+Dashboard: widget de vencimentos mostra dados reais.
+Restrições
+Se algum endpoint do backend retornar 404, mostre empty state + log silencioso. Não invente fallback.
+Não duplique cálculos no cliente que já vêm prontos do backend (ex: usar healthScore do dashboard-summary em vez de recalcular).
+Mantenha consistência visual com as telas existentes (mesmos componentes SummaryCard, SectionHeader, EmptyState, MonthNavigator, CategoryBadge).
+Use apiGet/apiPost/apiPatch/apiDelete já existentes em services/api.ts. Não crie um cliente HTTP novo.
+Não rode pnpm install adicionando libs novas — expo-notifications já está no package.json.

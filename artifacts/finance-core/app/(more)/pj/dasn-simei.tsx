@@ -7,8 +7,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
+import { MEI_LIMITE_ANUAL } from '@/constants/pj';
 
-const MEI_ANNUAL_LIMIT = 81000;
 const PORTAL_EMPREENDEDOR = 'https://www.gov.br/empresas-e-negocios/pt-br/empreendedor';
 
 const CHECKLIST_KEY = 'pf_dasn_checklist';
@@ -66,8 +66,8 @@ export default function DasnSimeiScreen() {
     return { receitas, despesas };
   }, [transactions, year]);
 
-  const limitPct = Math.min(100, (yearTotals.receitas / MEI_ANNUAL_LIMIT) * 100);
-  const exceeded = yearTotals.receitas > MEI_ANNUAL_LIMIT;
+  const limitPct = Math.min(100, (yearTotals.receitas / MEI_LIMITE_ANUAL) * 100);
+  const exceeded = yearTotals.receitas > MEI_LIMITE_ANUAL;
 
   // Deadline = May 31 of the YEAR AFTER the reference year
   const deadline = new Date(year + 1, 4, 31);
@@ -126,7 +126,7 @@ export default function DasnSimeiScreen() {
           {formatBRL(yearTotals.receitas)}
         </Text>
         <Text style={[styles.cardSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-          Limite MEI: {formatBRL(MEI_ANNUAL_LIMIT)}
+          Limite MEI: {formatBRL(MEI_LIMITE_ANUAL)}
         </Text>
         <View style={[styles.progressBar, { backgroundColor: theme.surfaceElevated }]}>
           <View style={[styles.progressFill, {
