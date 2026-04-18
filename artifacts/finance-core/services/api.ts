@@ -211,7 +211,9 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 async function parseOk<T>(res: Response, methodPath: string): Promise<T> {
   if (!res.ok) throw await buildErrorFromResponse(res, methodPath);
   const text = await res.text();
-  if (!text || text === 'null') return [] as unknown as T;
+  // Body vazio → objeto vazio (não array), pois muitos endpoints retornam objeto.
+  // Consumidores que esperam lista já normalizam via Array.isArray.
+  if (!text || text === 'null') return {} as unknown as T;
   try {
     return JSON.parse(text);
   } catch {

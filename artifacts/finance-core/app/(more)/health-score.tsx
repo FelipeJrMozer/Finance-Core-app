@@ -13,7 +13,9 @@ import {
   fetchHealthScore,
   labelForComponent,
   categoryLabelPT,
+  pillarLabel,
   type HealthScore,
+  type HealthScorePillars,
 } from '@/services/healthScore';
 
 function scoreColor(score: number): string {
@@ -268,6 +270,28 @@ export default function HealthScoreScreen() {
         )}
       </View>
 
+      {/* Pilares (escala 0–100 cada) */}
+      {effective.pillars && Object.values(effective.pillars).some((v) => v != null) && (
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+            Pilares
+          </Text>
+          {(Object.keys(effective.pillars) as (keyof HealthScorePillars)[]).map((k) => {
+            const v = effective.pillars?.[k];
+            if (v == null) return null;
+            return (
+              <ComponentBar
+                key={`pillar-${k}`}
+                name={`pillar-${k}`}
+                label={pillarLabel(k)}
+                score={v}
+                max={100}
+              />
+            );
+          })}
+        </View>
+      )}
+
       {/* Componentes */}
       <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
@@ -283,6 +307,25 @@ export default function HealthScoreScreen() {
           />
         ))}
       </View>
+
+      {/* Recomendações */}
+      {effective.recommendations && effective.recommendations.length > 0 && (
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+            Recomendações
+          </Text>
+          {effective.recommendations.map((r, i) => (
+            <View key={i} style={styles.recRow}>
+              <View style={[styles.recIcon, { backgroundColor: `${colors.primary}20` }]}>
+                <Feather name="check-circle" size={14} color={colors.primary} />
+              </View>
+              <Text style={[styles.recText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                {r}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -291,4 +334,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: 16, gap: 16, borderWidth: 1 },
   cardTitle: { fontSize: 16, marginBottom: 4 },
   scoreNote: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  recRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  recIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  recText: { flex: 1, fontSize: 13, lineHeight: 18 },
 });

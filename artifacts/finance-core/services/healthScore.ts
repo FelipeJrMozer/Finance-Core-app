@@ -12,11 +12,33 @@ export interface HealthScoreHistoryPoint {
   score: number;
 }
 
+export interface HealthScorePillars {
+  gastos?: number;
+  reserva?: number;
+  credito?: number;
+  investimentos?: number;
+  planejamento?: number;
+}
+
 export interface HealthScore {
   overallScore: number;
   category: string;
   components: HealthScoreComponent[];
   history: HealthScoreHistoryPoint[];
+  pillars?: HealthScorePillars;
+  recommendations?: string[];
+}
+
+const PILLAR_LABELS_PT: Record<keyof HealthScorePillars, string> = {
+  gastos: 'Gastos',
+  reserva: 'Reserva',
+  credito: 'Crédito',
+  investimentos: 'Investimentos',
+  planejamento: 'Planejamento',
+};
+
+export function pillarLabel(key: keyof HealthScorePillars): string {
+  return PILLAR_LABELS_PT[key] || String(key);
 }
 
 const COMPONENT_LABELS_PT: Record<string, string> = {
@@ -37,6 +59,11 @@ export function categoryLabelPT(cat: string): string {
     case 'fair': return 'Regular';
     case 'poor': return 'Crítica';
     case 'critical': return 'Crítica';
+    case 'excelente': return 'Excelente';
+    case 'bom': return 'Boa';
+    case 'regular': return 'Regular';
+    case 'baixo': return 'Baixa';
+    case 'critico': return 'Crítica';
     default: return cat || '—';
   }
 }
@@ -62,6 +89,18 @@ export async function fetchHealthScore(): Promise<HealthScore | null> {
             score: Number(h.score || 0),
           }))
         : [],
+      pillars: data.pillars && typeof data.pillars === 'object'
+        ? {
+            gastos: data.pillars.gastos != null ? Number(data.pillars.gastos) : undefined,
+            reserva: data.pillars.reserva != null ? Number(data.pillars.reserva) : undefined,
+            credito: data.pillars.credito != null ? Number(data.pillars.credito) : undefined,
+            investimentos: data.pillars.investimentos != null ? Number(data.pillars.investimentos) : undefined,
+            planejamento: data.pillars.planejamento != null ? Number(data.pillars.planejamento) : undefined,
+          }
+        : undefined,
+      recommendations: Array.isArray(data.recommendations)
+        ? data.recommendations.map((r: any) => String(r)).filter(Boolean)
+        : undefined,
     };
   } catch {
     return null;

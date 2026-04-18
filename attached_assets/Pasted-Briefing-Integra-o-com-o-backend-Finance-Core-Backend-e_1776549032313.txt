@@ -1,0 +1,136 @@
+Briefing — Integração com o backend Finance Core
+Backend está publicado em https://<seu-deploy>.replit.app (substituir pela URL real do deploy). Todos os endpoints abaixo já existem, retornam JSON e exigem Authorization: Bearer <accessToken>.
+
+1) Corrigir URL base do backend (CRÍTICO)
+Arquivo: artifacts/finance-core/services/api.ts (linha 14)
+
+// ANTES
+export function getApiBaseUrl() {
+  return (process.env.EXPO_PUBLIC_API_URL || 'https://pilarfinanceiro.replit.app').replace(/\/$/, '');
+}
+// DEPOIS
+export function getApiBaseUrl() {
+  return (process.env.EXPO_PUBLIC_API_URL || 'https://<URL_REAL_DO_DEPLOY>.replit.app').replace(/\/$/, '');
+}
+
+E em artifacts/finance-core/eas.json, adicionar EXPO_PUBLIC_API_URL em cada perfil de build:
+
+"production": {
+  "env": { "EXPO_PUBLIC_API_URL": "https://<URL_REAL_DO_DEPLOY>.replit.app" }
+}
+
+Também ajustar apiGet (linha 119) para retornar {} em vez de [] quando o body for vazio — alguns endpoints retornam objeto, não array:
+
+if (!text || text === 'null') return ({} as unknown as T);
+
+2) Registrar Push Token no backend (CRÍTICO)
+Arquivo: artifacts/finance-core/services/NotificationService.native.ts — adicionar no final:
+
+import Constants from 'expo-constants';
+import { apiPost } from './api';
+export async function registerPushTokenWithBackend(): Promise<void> {
+  if (Platform.OS === 'web' || !Device.isDevice) return;
+  try {
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      (Constants.easConfig as any)?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
+    const token = tokenData.data;
+    if (!token) return;
+    await apiPost('/api/devices/register', {
+      token,
+      platform: Platform.OS, // 'ios' | 'android'
+    });
+  } catch (err) {
+    console.warn('[Push] Falha ao registrar token:', err);
+  }
+}
+
+Arquivo: artifacts/finance-core/hooks/useNotifications.native.ts — chamar após permissão concedida (dentro de scheduleAll, logo depois de if (!granted) return;):
+
+import { registerPushTokenWithBackend } from '@/services/NotificationService';
+// ...
+const granted = await requestNotificationPermissions();
+if (!granted) return;
+await registerPushTokenWithBackend(); // 👈 nova linha
+
+Contrato do endpoint:
+
+POST /api/devices/register
+Body: { token: string, platform: 'ios' | 'android' | 'web' }
+Resposta sucesso: 200 { ok: true, deviceId: string }
+Idempotente — pode chamar a cada login/abrir do app.
+3) Health Score — rota e escala (CRÍTICO)
+Arquivo: artifacts/finance-core/app/(more)/health-score.tsx
+
+Trocar as duas chamadas (linhas ~185 e ~198) por uma única:
+
+const fetchHealth = useCallback(async () => {
+  if (!API_URL || !token) return;
+  try {
+    const res = await fetch(`${API_URL}/api/health-score/current`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setHealthData(data);
+      setHistory(data.history ?? []);
+    }
+  } catch {}
+}, [token]);
+// remover fetchHistory — vem dentro de /current
+
+Formato da resposta:
+
+{
+  score: number,            // 0..100  (legacy)
+  overallScore: number,     // 0..100
+  category: 'critico' | 'baixo' | 'regular' | 'bom' | 'excelente',
+  pillars: { gastos, reserva, credito, investimentos, planejamento },  // 0..100 cada
+  components: [{ key, label, score, weight }],
+  history: [{ month: 'YYYY-MM', score: number }],
+  recommendations: string[]
+}
+
+Arquivo: artifacts/finance-core/components/HealthScore.tsx — escala está em 0–1000, backend manda 0–100:
+
+// linha 14
+const maxScore = 100;          // era 1000
+// linhas 17-22 e 24-28
+const label =
+  score < 30 ? 'Crítico' :
+  score < 50 ? 'Baixo' :
+  score < 70 ? 'Regular' :
+  score < 85 ? 'Bom'   : 'Excelente';
+const barColor =
+  score < 30 ? colors.danger :
+  score < 50 ? colors.warning :
+  score < 70 ? colors.accentWarm : colors.primary;
+// linha 86 — marcadores
+{[30, 50, 70, 85].map(...)}
+// linha 66 — texto
+<Text>... / 100 pontos</Text>
+
+4) Endpoints novos disponíveis (plugar nas telas)
+Todos sob Authorization: Bearer. Use os helpers apiGet/apiPost/apiPatch do services/api.ts.
+
+Tela	Método + Path	Resposta resumida
+Relatório de investimentos	GET /api/portfolio/twr?from=YYYY-MM-DD&to=YYYY-MM-DD	{ twr: number, insufficientData?: true }
+"	GET /api/portfolio/mwr?from&to	{ mwr, iterations, insufficientData? }
+"	GET /api/portfolio/sortino?riskFreeRate=0.1075	{ sortino, insufficientData? }
+"	GET /api/portfolio/beta?benchmark=IBOV	{ beta, insufficientData? }
+"	GET /api/investments/dividends?year=2026	[{ ticker, amount, paidAt, type }]
+Família	GET /api/family/balance	{ members:[{userId, name, balance}], settlements:[{from,to,amount}] }
+Contas a pagar	GET /api/upcoming-bills?days=30	[{ id, name, amount, nextDueDate, frequency }]
+Recorrentes	GET /api/recurring / POST /api/recurring	lista / cria
+Configurações	GET /api/preferences / PATCH /api/preferences	{ theme, currency, notifyBudget, notifyWeekly, ... }
+Backup	GET /api/backup/json	arquivo JSON completo do usuário
+Backup PDF	GET /api/backup/export-pdf	501 com { message: 'Geração de PDF ainda não disponível...' } — tratar mostrando toast "Use exportação JSON"
+Importante: quando vier insufficientData: true nos cálculos de portfólio, mostrar mensagem amigável tipo "Dados insuficientes — adicione mais movimentações" em vez de tratar como erro.
+
+5) Detalhes do Stripe (quando configurar)
+Webhook do Stripe já está pronto (POST /api/webhooks/stripe) com validação de assinatura e idempotência. O app só precisa chamar POST /api/billing/create-checkout-session para iniciar a compra (já existente). Nada novo aqui.
+
+Se o agente bater dúvidas sobre o formato de algum endpoint, me chama que eu documento o schema exato. Quando ele finalizar, faço uma nova passada no repo pra confirmar.

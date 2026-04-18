@@ -9,7 +9,7 @@ import {
   scheduleWeeklySummary,
   cancelAllNotifications,
 } from '@/services/NotificationService';
-import { registerPushToken } from '@/services/devices';
+import { registerPushTokenWithBackend } from '@/services/devices';
 
 export function useNotifications() {
   const { budgets, transactions, monthlyIncome, monthlyExpenses, netResult } = useFinance();
@@ -32,27 +32,8 @@ export function useNotifications() {
       const granted = await requestNotificationPermissions();
       if (!granted) return;
 
-      // Registra o token de push no backend (idempotente)
-      try {
-        const isExpoGo = (() => {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const Constants = require('expo-constants').default;
-            return Constants.appOwnership === 'expo';
-          } catch { return false; }
-        })();
-        if (!isExpoGo) {
-          const Notifications: any = await import('expo-notifications').catch(() => null);
-          if (Notifications) {
-            const tokenResponse = await Notifications.getDevicePushTokenAsync();
-            if (tokenResponse?.data) {
-              await registerPushToken(String(tokenResponse.data));
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[Notifications] Push token register failed:', err);
-      }
+      // Registra o Expo Push Token no backend (idempotente; no-op em Expo Go/web)
+      await registerPushTokenWithBackend();
 
       if (notifyBudget) {
         const nowDate = new Date();
