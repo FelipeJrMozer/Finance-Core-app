@@ -1,0 +1,46 @@
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core"
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>pnpm remove expo-dev-client
+ WARN  5 deprecated subdependencies found: @xmldom/xmldom@0.8.11, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0
+../..                                    |  -10 -
+../..                                    | Progress: resolved 821, reused 818, downloaded 0, added 0, done
+
+dependencies:
+- expo-dev-client 55.0.27
+
+devDependencies:
+- @expo/config-plugins 55.0.8
+
+Done in 2.8s using pnpm v10.26.1
+
+› Installing 1 SDK 54.0.0 compatible native module using pnpm
+> pnpm add expo-dev-client@~6.0.20
+ WARN  5 deprecated subdependencies found: @xmldom/xmldom@0.8.11, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0
+../..                                    | Progress: resolved 1111, reused 0, downloaded 0, added 0, done
+
+dependencies:
++ expo-dev-client ~6.0.20
+
+../..                                    |   +7 +
+../.. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use …
+│ 'sh' n�o � reconhecido como um comando interno
+│ ou externo, um programa oper�vel ou um arquivo em lotes.
+└─ Failed in 75ms at D:\Sistemas a venda\Finance-Core-app
+ ELIFECYCLE  Command failed with exit code 1.
+Error: pnpm add expo-dev-client@~6.0.20 exited with non-zero code: 1
+Error: pnpm add expo-dev-client@~6.0.20 exited with non-zero code: 1
+    at ChildProcess.completionListener (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\@expo+spawn-async@1.7.2\node_modules\@expo\spawn-async\build\spawnAsync.js:42:23)
+    at Object.onceWrapper (node:events:634:26)
+    at ChildProcess.emit (node:events:519:28)
+    at cp.emit (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\cross-spawn@7.0.6\node_modules\cross-spawn\lib\enoent.js:34:29)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+    ...
+    at spawnAsync (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\@expo+spawn-async@1.7.2\node_modules\@expo\spawn-async\build\spawnAsync.js:7:23)
+    at PnpmPackageManager.runAsync (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\@expo+package-manager@1.10.3\node_modules\@expo\package-manager\build\node\BasePackageManager.js:41:42)
+    at PnpmPackageManager.addAsync (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\@expo+package-manager@1.10.3\node_modules\@expo\package-manager\build\node\PnpmPackageManager.js:36:21)
+    at installPackagesAsync (D:\Sistemas a venda\Finance-Core-app\node_modules\.pnpm\@expo+cli@54.0.23_expo-rout_daef1aa59357a8cccc6b98050d411315\node_modules\@expo\cli\build\src\install\installAsync.js:189:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>
