@@ -1,0 +1,151 @@
+📲 Tarefa: Captura automática de SMS e notificações de bancos
+Contexto
+O backend (https://pilar-financeiro.replit.app) já tem o endpoint pronto:
+
+POST /api/pending-transactions
+Authorization: Bearer <token do usuário logado>
+Content-Type: application/json
+Body:
+{
+  "source": "notification" | "sms",
+  "rawText": "<texto cru capturado>",
+  "amount": 150.00,           // opcional, se conseguir parsear
+  "type": "expense" | "income", // opcional
+  "description": "PADARIA SAO JOAO", // opcional
+  "merchant": "PADARIA SAO JOAO",    // opcional
+  "bank": "Nubank",                  // opcional
+  "metadata": { "packageName": "com.nu.production", "postedAt": 1234567890 }
+}
+
+O backend já parseia o texto cru com o SMSBankingDetector (suporta Nubank, Inter, C6, Itaú, Bradesco, Santander, BB, Caixa e mais). Então basta mandar source + rawText que o servidor preenche o resto. Os outros campos são opcionais (mande se já tiver parseado no client).
+
+A tela app/(more)/pending-transactions.tsx já existe e lista/aprova/rejeita essas capturas. Não mexa nela.
+
+O que fazer
+1. Migrar o app pra Expo Dev Client (build de desenvolvimento)
+Captura de notificação não funciona no Expo Go. Precisa de build nativa.
+
+npx expo install expo-dev-client
+eas build --profile development --platform android
+
+Adicionar expo-dev-client ao app.json se necessário e atualizar o README do app explicando que o usuário precisa instalar a build de desenvolvimento (ou a futura build production).
+
+2. Android — Listener nativo de notificações
+Pacote recomendado: react-native-android-notification-listener (community, MIT).
+
+npx expo install react-native-android-notification-listener
+
+Configurar no app.json (config plugin) ou via expo-build-properties adicionando a permissão:
+
+<uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
+
+Criar services/notificationListener.ts:
+
+import RNAndroidNotificationListener, {
+  RNAndroidNotificationListenerHeadlessJsName,
+} from 'react-native-android-notification-listener';
+import { AppRegistry } from 'react-native';
+import { api } from './api'; // o axios já configurado com Bearer
+const BANK_PACKAGES = new Set([
+  'com.nu.production',                   // Nubank
+  'br.com.intermedium',                  // Inter
+  'com.c6bank.app',                      // C6
+  'com.itau',                            // Itaú
+  'com.bradesco',                        // Bradesco
+  'com.santander.app',                   // Santander
+  'br.com.bb.android',                   // Banco do Brasil
+  'br.com.gabba.Caixa',                  // Caixa
+  'com.picpay',                          // PicPay
+  'com.mercadopago.wallet',              // Mercado Pago
+  'com.willbank.android',                // Will Bank
+  'br.com.original.bank',                // Original
+  'com.next',                            // Next
+  'com.bs2.smart',                       // BS2
+  'com.neon',                            // Neon
+  // adicionar conforme necessário
+]);
+const headlessNotificationListener = async ({ notification }: any) => {
+  try {
+    const parsed = JSON.parse(notification);
+    const pkg = parsed.app || parsed.packageName;
+    const text = `${parsed.title || ''} ${parsed.text || ''}`.trim();
+    // Filtrar: só apps de banco/pagamento E que mencionem valor R$
+    if (!BANK_PACKAGES.has(pkg)) return;
+    if (!/R\$\s*[\d.,]+/i.test(text)) return;
+    await api.post('/api/pending-transactions', {
+      source: 'notification',
+      rawText: text,
+      bank: pkg,
+      metadata: {
+        packageName: pkg,
+        title: parsed.title,
+        text: parsed.text,
+        postedAt: Date.now(),
+      },
+    });
+  } catch (e) {
+    console.warn('[NotifListener] erro:', e);
+  }
+};
+AppRegistry.registerHeadlessTask(
+  RNAndroidNotificationListenerHeadlessJsName,
+  () => headlessNotificationListener
+);
+export async function ensureNotificationPermission() {
+  const status = await RNAndroidNotificationListener.getPermissionStatus();
+  if (status !== 'authorized') {
+    RNAndroidNotificationListener.requestPermission(); // abre tela de configurações
+  }
+}
+
+Registrar a task no entry do app (index.js ou no topo do app/_layout.tsx):
+
+import './services/notificationListener';
+
+3. Tela de onboarding — pedir permissão
+Criar app/(more)/captura-bancaria.tsx com:
+
+Explicação clara: "Para capturar gastos automaticamente, autorize o Finance Core a ler notificações dos seus apps de banco. Os dados ficam só no seu celular até você aprovar."
+Botão "Ativar captura automática" → chama ensureNotificationPermission().
+Lista visual dos bancos suportados.
+Aviso: "Você confirma cada lançamento antes dele virar uma transação."
+Link pra tela de pendentes.
+Adicionar entrada no menu app/(more)/index.tsx chamada "Captura automática" apontando pra essa nova tela.
+
+4. Android — Captura de SMS (opcional mas recomendado)
+Bancos como Itaú, Bradesco, Santander mandam SMS de cartão. Adicionar react-native-get-sms-android ou listener nativo similar:
+
+npx expo install react-native-get-sms-android
+
+Permissão no app.json:
+
+<uses-permission android:name="android.permission.RECEIVE_SMS" />
+<uses-permission android:name="android.permission.READ_SMS" />
+
+Criar listener que escuta SMS recebidos, filtra por sender (números/short codes de bancos: 28041, 27122, etc.) e manda POST /api/pending-transactions com source: 'sms' + rawText.
+
+5. iOS — sem captura automática, só WhatsApp
+Na tela "Captura automática" (no iOS), trocar o conteúdo por:
+
+"No iPhone, devido a restrições do iOS, a captura automática de notificações não é permitida."
+"Use o WhatsApp: mande seu gasto em texto, áudio ou foto do comprovante para o número [exibir o número configurado em EXPO_PUBLIC_WHATSAPP_NUMBER ou hardcoded]."
+Botão "Abrir WhatsApp" → Linking.openURL('https://wa.me/<numero>').
+Sugestão futura: Share Extension manual (usuário compartilha o SMS pro app). Não implementar agora.
+6. Validação
+Build de desenvolvimento Android instalada no celular.
+Permissão concedida nas configurações do Android.
+Receber uma notificação de banco real (ou simular com adb shell) → conferir que apareceu na tela "Lançamentos Pendentes".
+Aprovar o lançamento → conferir que virou transação real.
+iOS: tela explicativa correta + WhatsApp abre.
+7. Documentação
+Atualizar o replit.md do app mobile com:
+
+Como gerar a build de desenvolvimento (eas build --profile development).
+Como ativar a permissão de notificação no Android.
+Limitação iOS.
+Lista de bancos cobertos.
+Restrições
+Não alterar app/(more)/pending-transactions.tsx (já está integrado).
+Não alterar services/api.ts mais do que necessário (URL base já configurada).
+Não tentar isso no Expo Go — vai falhar silenciosamente.
+Filtrar bem os pacotes de notificação pra não enviar dados não-financeiros pro servidor (privacidade).

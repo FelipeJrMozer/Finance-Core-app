@@ -238,6 +238,13 @@ export default function MoreScreen() {
             onPress={() => router.push('/(more)/pending-transactions')}
           />
           <MenuItem
+            testID="menu-captura"
+            icon="zap"
+            label="Captura automática"
+            subtitle={Platform.OS === 'ios' ? 'WhatsApp e fluxo manual' : 'Notificações de bancos'}
+            onPress={() => router.push('/(more)/captura-bancaria')}
+          />
+          <MenuItem
             testID="menu-debts"
             icon="trending-down"
             label="Dívidas"
