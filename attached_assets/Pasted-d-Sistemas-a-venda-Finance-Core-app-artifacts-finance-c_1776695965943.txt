@@ -1,0 +1,58 @@
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core"
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>pnpm add -D @expo/config-plugins
+ WARN  5 deprecated subdependencies found: @xmldom/xmldom@0.8.11, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0
+../..                                    | Progress: resolved 1114, reused 0, downloaded 0, added 0, done
+
+devDependencies:
++ @expo/config-plugins ^55.0.8
+
+../.. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use …
+│ 'sh' n�o � reconhecido como um comando interno
+│ ou externo, um programa oper�vel ou um arquivo em lotes.
+└─ Failed in 95ms at D:\Sistemas a venda\Finance-Core-app
+ ELIFECYCLE  Command failed with exit code 1.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas init
+√ Would you like to create a project for @felipemozer/finance-core? ... yes
+√ Created @felipemozer/finance-core: https://expo.dev/accounts/felipemozer/projects/finance-core
+√ Project successfully linked (ID: ce5306e3-9ee5-47d0-b0fa-d93ee9efe0ba) (modified app.json)
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas build --profile development --platform android
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+Resolved "development" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "development" environment on EAS.
+Environment variables loaded from the "development" build profile "env" configuration: EXPO_PUBLIC_API_URL.
+
+📝  Android application id Learn more: https://expo.fyi/android-package
+√ What would you like your Android application id to be? ... com.felipemozer.financecore
+
+
+The field "cli.appVersionSource" is not set, but it will be required in the future. Learn more: https://docs.expo.dev/build-reference/app-versions/
+√ Using remote Android credentials (Expo server)
+√ Generate a new Android Keystore? ... yes
+Detected that you do not have keytool installed locally.
+√ Generating keystore in the cloud...
+√ Created keystore
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+√ Compressed project files 5s (14.3 MB)
+√ Uploaded to EAS 2s
+√ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/felipemozer/projects/finance-core/builds/00756394-f7a5-4d8f-8dd4-63a920b5d36a
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+  Build queued...
+
+Start builds sooner in the priority queue.
+Sign up for a paid plan at https://expo.dev/accounts/felipemozer/settings/billing
+
+Waiting in Free tier queue
+|■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■|
+
+× Build failed
+🤖 Android build failed:
+Unknown error. See logs of the Install dependencies build phase for more information.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>
