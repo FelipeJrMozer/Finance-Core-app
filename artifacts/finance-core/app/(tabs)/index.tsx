@@ -238,7 +238,7 @@ function QuickActions() {
     { icon: 'maximize' as const, label: 'Escanear', color: '#22C55E', route: '/scan' },
     { icon: 'repeat' as const, label: 'Transferir', color: '#26C6DA', route: '/transfer' },
     { icon: 'trending-up' as const, label: 'Investir', color: colors.info, route: '/investment/add' },
-    { icon: 'cpu' as const, label: 'IA', color: colors.accent, route: '/chat' },
+    { icon: 'cpu' as const, label: 'IA', color: '#A855F7', route: '/chat' },
   ];
 
   return (
