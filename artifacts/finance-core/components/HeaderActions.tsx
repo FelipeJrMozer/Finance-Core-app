@@ -57,14 +57,14 @@ export function HeaderActions({ showProfile = true }: Props) {
         <Pressable
           onPress={() => { Haptics.selectionAsync(); router.push('/(more)/notifications'); }}
           style={[styles.iconBtn, {
-            backgroundColor: theme.surfaceElevated,
-            borderColor: theme.border,
+            backgroundColor: `${colors.primary}15`,
+            borderColor: `${colors.primary}30`,
           }]}
           testID="notifications-bell"
         >
-          <Feather name="bell" size={17} color={theme.text} />
+          <Feather name="bell" size={17} color={colors.primary} />
           {unreadCount > 0 && (
-            <View style={[styles.badge, { backgroundColor: '#FF3B30', borderColor: theme.surface }]}>
+            <View style={[styles.badge, { backgroundColor: '#FF3B30', borderColor: theme.background }]}>
               <Text style={[styles.badgeText, { fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
                 {unreadCount > 9 ? '9+' : String(unreadCount)}
               </Text>
