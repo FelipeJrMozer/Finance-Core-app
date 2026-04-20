@@ -1,0 +1,47 @@
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core"
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>pnpm add -D @expo/config-plugins@^55.0.8
+ WARN  5 deprecated subdependencies found: @xmldom/xmldom@0.8.11, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0
+../..                                    | Progress: resolved 1104, reused 0, downloaded 0, added 0, done
+
+devDependencies:
++ @expo/config-plugins 55.0.8
+
+../..                                    |   +5   -7 +-
+../.. preinstall$ node -e "if(!(process.env.npm_config_user_agent||'').startsWith('pnpm')&&!process.env.EAS_BUILD&&!p…
+└─ Done in 982ms
+Done in 8.9s using pnpm v10.26.1
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>findstr "expo-dev-client" package.json
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>pnpm add expo-dev-client@~6.0.20
+ WARN  5 deprecated subdependencies found: @xmldom/xmldom@0.8.11, glob@7.2.3, inflight@1.0.6, rimraf@3.0.2, uuid@3.4.0
+../..                                    | Progress: resolved 1111, reused 0, downloaded 0, added 0, done
+
+dependencies:
++ expo-dev-client ~6.0.20
+
+../..                                    |   +5 +
+../.. preinstall$ node -e "if(!(process.env.npm_config_user_agent||'').startsWith('pnpm')&&!process.env.EAS_BUILD&&!p…
+└─ Done in 362ms
+Done in 12.7s using pnpm v10.26.1
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas build --profile development --platform android
+Resolved "development" environment for the build. Learn more: https://docs.expo.dev/eas/environment-variables/#setting-the-environment-for-your-builds
+No environment variables with visibility "Plain text" and "Sensitive" found for the "development" environment on EAS.
+Environment variables loaded from the "development" build profile "env" configuration: EXPO_PUBLIC_API_URL.
+
+
+
+√ Using remote Android credentials (Expo server)
+√ Using Keystore from configuration: Build Credentials gCfr0vJXb3 (default)
+
+Compressing project files and uploading to EAS Build. Learn more: https://expo.fyi/eas-build-archive
+√ Compressed project files 3s (14.3 MB)
+√ Uploaded to EAS 2s
+√ Computed project fingerprint
+
+See logs: https://expo.dev/accounts/felipemozer/projects/finance-core/builds/8676daed-c1ee-4cd0-b39e-b35e18ab5152
+
+Waiting for build to complete. You can press Ctrl+C to exit.
+| Build queued...
