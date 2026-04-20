@@ -1,0 +1,82 @@
+ Press s │ switch to development build
+
+› Press a │ open Android
+› Press w │ open web
+
+› Press j │ open debugger
+› Press r │ reload app
+› Press m │ toggle menu
+› shift+m │ more tools
+› Press o │ open project code in your editor
+
+› Press ? │ show all commands
+
+Logs for your project will appear below. Press Ctrl+C to exit.
+Web Bundling failed 18004ms node_modules/.pnpm/expo-router@6.0.23_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__647f0c9f9fafa8cae778bbb6d28cc5ec/node_modules/expo-router/entry.js (1619 modules)
+Unable to resolve "expo-camera" from "artifacts/finance-core/app/scan.tsx"
+   7 | import * as Haptics from 'expo-haptics';
+   8 | import * as Clipboard from 'expo-clipboard';
+>  9 | import { CameraView, useCameraPermissions } from 'expo-camera';
+     |                                                   ^
+  10 | import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  11 | import { useTheme } from '@/context/ThemeContext';
+  12 | import { decodePixCode, isPixCode, extractNFeKey } from '@/utils/pixDecoder';
+
+Import stack:
+
+ artifacts/finance-core/app/scan.tsx
+ | import "expo-camera"
+
+ artifacts/finance-core/app (require.context)
+
+Web Bundling failed 2417ms node_modules/.pnpm/expo-router@6.0.23_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__647f0c9f9fafa8cae778bbb6d28cc5ec/node_modules/expo-router/entry.js (1534 modules)
+Unable to resolve "expo-camera" from "artifacts/finance-core/app/scan.tsx"
+   7 | import * as Haptics from 'expo-haptics';
+   8 | import * as Clipboard from 'expo-clipboard';
+>  9 | import { CameraView, useCameraPermissions } from 'expo-camera';
+     |                                                   ^
+  10 | import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  11 | import { useTheme } from '@/context/ThemeContext';
+  12 | import { decodePixCode, isPixCode, extractNFeKey } from '@/utils/pixDecoder';
+
+Import stack:
+
+ artifacts/finance-core/app/scan.tsx
+ | import "expo-camera"
+
+ artifacts/finance-core/app (require.context)
+
+Web Bundling failed 606ms node_modules/.pnpm/expo-router@6.0.23_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__647f0c9f9fafa8cae778bbb6d28cc5ec/node_modules/expo-router/entry.js (1621 modules)
+Unable to resolve "expo-camera" from "artifacts/finance-core/app/scan.tsx"
+   7 | import * as Haptics from 'expo-haptics';
+   8 | import * as Clipboard from 'expo-clipboard';
+>  9 | import { CameraView, useCameraPermissions } from 'expo-camera';
+     |                                                   ^
+  10 | import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  11 | import { useTheme } from '@/context/ThemeContext';
+  12 | import { decodePixCode, isPixCode, extractNFeKey } from '@/utils/pixDecoder';
+
+Import stack:
+
+ artifacts/finance-core/app/scan.tsx
+ | import "expo-camera"
+
+ artifacts/finance-core/app (require.context)
+
+Web Bundling failed 786ms node_modules/.pnpm/expo-router@6.0.23_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__647f0c9f9fafa8cae778bbb6d28cc5ec/node_modules/expo-router/entry.js (1479 modules)
+Unable to resolve "expo-camera" from "artifacts/finance-core/app/scan.tsx"
+   7 | import * as Haptics from 'expo-haptics';
+   8 | import * as Clipboard from 'expo-clipboard';
+>  9 | import { CameraView, useCameraPermissions } from 'expo-camera';
+     |                                                   ^
+  10 | import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  11 | import { useTheme } from '@/context/ThemeContext';
+  12 | import { decodePixCode, isPixCode, extractNFeKey } from '@/utils/pixDecoder';
+
+Import stack:
+
+ artifacts/finance-core/app/scan.tsx
+ | import "expo-camera"
+
+ artifacts/finance-core/app (require.context)
+
