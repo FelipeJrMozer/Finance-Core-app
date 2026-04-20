@@ -2,9 +2,27 @@
 // Adds FinanceNotificationService + FinanceSmsReceiver to Android native build.
 // Applied automatically during `expo prebuild` or `eas build`.
 
-const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
+
+function resolveConfigPlugins() {
+  const attempts = [
+    () => require('@expo/config-plugins'),
+    () => {
+      const expoPkg = require.resolve('expo/package.json');
+      return require(require.resolve('@expo/config-plugins', { paths: [path.dirname(expoPkg)] }));
+    },
+    () => require(require.resolve('@expo/config-plugins', { paths: [process.cwd()] })),
+    () => require(require.resolve('@expo/config-plugins', { paths: [path.join(process.cwd(), 'artifacts', 'finance-core')] })),
+  ];
+  let lastErr;
+  for (const fn of attempts) {
+    try { return fn(); } catch (e) { lastErr = e; }
+  }
+  throw new Error('Cannot resolve @expo/config-plugins from any known path: ' + (lastErr && lastErr.message));
+}
+
+const { withAndroidManifest, withDangerousMod } = resolveConfigPlugins();
 
 const PACKAGE_DIR = 'com/financecore/notificationlistener';
 
