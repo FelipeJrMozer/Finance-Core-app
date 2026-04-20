@@ -1,0 +1,120 @@
+d:\Sistemas a venda\Finance-Core-app>
+d:\Sistemas a venda\Finance-Core-app>cd "artifacts\finance-core"
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas init
+Unable to resolve a valid config plugin for ./plugins/withNotificationListener.
+• No "app.plugin.js" file found in ./plugins/withNotificationListener: config plugins are typically exported from an "app.plugin.js" file in the package root.
+• main export of ./plugins/withNotificationListener does not appear to be a config plugin: the following error was thrown when importing d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js: Cannot find module '@expo/config-plugins'
+Require stack:
+- d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\plugins\withConfigPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\Config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\build\commands\project\init.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\module-loader.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\help\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\handle.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\command.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\bin\run MODULE_NOT_FOUND
+Verify that ./plugins/withNotificationListener includes a config plugin. If it does not, then remove the entry from plugins in your app config file. Learn more: https://docs.expo.dev/guides/config-plugins/
+    Error: project:init command failed.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "artifacts\finance-core"
+O sistema não pode encontrar o caminho especificado.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "artifacts\finance-core"
+O sistema não pode encontrar o caminho especificado.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas init
+Unable to resolve a valid config plugin for ./plugins/withNotificationListener.
+• No "app.plugin.js" file found in ./plugins/withNotificationListener: config plugins are typically exported from an "app.plugin.js" file in the package root.
+• main export of ./plugins/withNotificationListener does not appear to be a config plugin: the following error was thrown when importing d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js: Cannot find module '@expo/config-plugins'
+Require stack:
+- d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\plugins\withConfigPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\Config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\build\commands\project\init.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\module-loader.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\help\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\handle.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\command.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\bin\run MODULE_NOT_FOUND
+Verify that ./plugins/withNotificationListener includes a config plugin. If it does not, then remove the entry from plugins in your app config file. Learn more: https://docs.expo.dev/guides/config-plugins/
+    Error: project:init command failed.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>cd "d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core"
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas init
+Unable to resolve a valid config plugin for ./plugins/withNotificationListener.
+• No "app.plugin.js" file found in ./plugins/withNotificationListener: config plugins are typically exported from an "app.plugin.js" file in the package root.
+• main export of ./plugins/withNotificationListener does not appear to be a config plugin: the following error was thrown when importing d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js: Cannot find module '@expo/config-plugins'
+Require stack:
+- d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\plugins\withConfigPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\Config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\build\commands\project\init.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\module-loader.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\help\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\handle.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\command.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\bin\run MODULE_NOT_FOUND
+Verify that ./plugins/withNotificationListener includes a config plugin. If it does not, then remove the entry from plugins in your app config file. Learn more: https://docs.expo.dev/guides/config-plugins/
+    Error: project:init command failed.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>pnpm install --ignore-scripts
+Scope: all 10 workspace projects
+Done in 2.3s using pnpm v10.33.0
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>eas init
+Unable to resolve a valid config plugin for ./plugins/withNotificationListener.
+• No "app.plugin.js" file found in ./plugins/withNotificationListener: config plugins are typically exported from an "app.plugin.js" file in the package root.
+• main export of ./plugins/withNotificationListener does not appear to be a config plugin: the following error was thrown when importing d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js: Cannot find module '@expo/config-plugins'
+Require stack:
+- d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core\plugins\withNotificationListener.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\plugins\withPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config-plugins\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\plugins\withConfigPlugins.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\Config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@expo\config\build\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\build\commands\project\init.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\module-loader.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\help\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\handle.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\errors\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\config.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\config\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\command.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\node_modules\@oclif\core\lib\index.js
+- C:\Users\Python\AppData\Roaming\npm\node_modules\eas-cli\bin\run MODULE_NOT_FOUND
+Verify that ./plugins/withNotificationListener includes a config plugin. If it does not, then remove the entry from plugins in your app config file. Learn more: https://docs.expo.dev/guides/config-plugins/
+    Error: project:init command failed.
+
+d:\Sistemas a venda\Finance-Core-app\artifacts\finance-core>
