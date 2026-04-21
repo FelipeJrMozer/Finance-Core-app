@@ -12,6 +12,7 @@ import { PieChart, BarChart } from 'react-native-gifted-charts';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance, Investment } from '@/context/FinanceContext';
 import { formatBRL, formatPercent } from '@/utils/formatters';
+import { FeatureGate } from '@/components/FeatureGate';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
@@ -216,6 +217,12 @@ export default function InvestmentsScreen() {
   const types = ['all', ...Object.keys(TYPE_LABELS).filter((t) => investments.some((i) => i.type === t))];
 
   return (
+    <FeatureGate
+      feature="investments"
+      title="Investimentos profissionais"
+      icon="trending-up"
+      description="Acompanhe carteira, rentabilidade e diversificação com gráficos avançados, DARF automático e análise de risco. Disponível no plano PREMIUM ou superior."
+    >
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -514,6 +521,7 @@ export default function InvestmentsScreen() {
         </View>
       </ScrollView>
     </View>
+    </FeatureGate>
   );
 }
 

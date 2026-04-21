@@ -25,6 +25,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useTransactionIntent } from "@/hooks/useTransactionIntent";
 import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { QuickTransactionModal } from "@/components/QuickTransactionModal";
+import { CookieBanner } from "@/components/CookieBanner";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -129,6 +130,7 @@ export default function RootLayout() {
                       <NotificationGate />
                       <DeepLinksGate />
                       <RootLayoutNav />
+                      <CookieBanner />
                     </KeyboardProvider>
                   </GestureHandlerRootView>
                 </FinanceProvider>

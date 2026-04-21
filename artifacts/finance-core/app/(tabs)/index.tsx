@@ -14,6 +14,7 @@ import { useWallet } from '@/context/WalletContext';
 import { WalletSelectorModal } from '@/components/WalletSelectorModal';
 import { WalletIcon } from '@/components/WalletIcon';
 import { HeaderActions } from '@/components/HeaderActions';
+import { InsightsCards } from '@/components/InsightsCards';
 import { SummaryCard } from '@/components/SummaryCard';
 import { TransactionItem } from '@/components/TransactionItem';
 import { BudgetProgress } from '@/components/BudgetProgress';
@@ -513,6 +514,9 @@ export default function DashboardScreen() {
 
           {/* Upcoming Bills */}
           <UpcomingBills />
+
+          {/* Insights inteligentes (anomalies/recap/emergency-fund) */}
+          <InsightsCards />
 
           {/* Insights */}
           {(topExpenseCategory || savingsRate > 0) && (

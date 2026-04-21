@@ -10,16 +10,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
+import { FeatureGate } from '@/components/FeatureGate';
+import { Stack } from 'expo-router';
 
 const MEI_ANNUAL_LIMIT = 81000;
 const DAS_VENCIMENTO_DIA = 20;
 
 export default function PJDashboard() {
-  const { theme, colors, isDark } = useTheme();
+  const { theme, colors, isDark, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [regime] = useState<'MEI' | 'ME'>('MEI');
-
   const currentMonth = getCurrentMonth();
   const currentYear = new Date().getFullYear();
 
@@ -52,6 +53,13 @@ export default function PJDashboard() {
   ];
 
   return (
+    <FeatureGate
+      feature="pj"
+      title="Gestão PJ / MEI"
+      icon="briefcase"
+      description="Receitas, despesas, pró-labore, DAS, DASN-SIMEI e fluxo de caixa do seu negócio. Disponível nos planos PJ ou FAMILY."
+    >
+    <Stack.Screen options={{ title: 'PJ / MEI' }} />
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       showsVerticalScrollIndicator={false}
@@ -87,10 +95,10 @@ export default function PJDashboard() {
             </Text>
           </View>
           <Text style={[styles.bigValue, { color: theme.text, fontFamily: 'Inter_800ExtraBold' }]}>
-            {formatBRL(monthTotal)}
+            {maskValue(formatBRL(monthTotal))}
           </Text>
           <Text style={[styles.limitLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-            Limite MEI anual: {formatBRL(MEI_ANNUAL_LIMIT)} • Usado: {formatBRL(yearTotal)} ({limitPct.toFixed(1)}%)
+            Limite MEI anual: {formatBRL(MEI_ANNUAL_LIMIT)} • Usado: {maskValue(formatBRL(yearTotal))} ({limitPct.toFixed(1)}%)
           </Text>
           <View style={[styles.barBg, { backgroundColor: theme.surfaceElevated }]}>
             <View style={[styles.barFill, {
@@ -110,10 +118,10 @@ export default function PJDashboard() {
           </View>
           <Text style={[styles.dasInfo, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
             {daysUntilDas > 0
-              ? `Vence em ${daysUntilDas} dias — ${formatBRL(dasAmount)}`
+              ? `Vence em ${daysUntilDas} dias — ${maskValue(formatBRL(dasAmount))}`
               : daysUntilDas === 0
-                ? `Vence hoje — ${formatBRL(dasAmount)}`
-                : `Venceu há ${Math.abs(daysUntilDas)} dias — ${formatBRL(dasAmount)}`
+                ? `Vence hoje — ${maskValue(formatBRL(dasAmount))}`
+                : `Venceu há ${Math.abs(daysUntilDas)} dias — ${maskValue(formatBRL(dasAmount))}`
             }
           </Text>
           <Pressable
@@ -165,7 +173,7 @@ export default function PJDashboard() {
                   </Text>
                 </View>
                 <Text style={[styles.txAmount, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>
-                  {formatBRL(t.amount)}
+                  {maskValue(formatBRL(t.amount))}
                 </Text>
               </View>
             ))
@@ -176,6 +184,7 @@ export default function PJDashboard() {
         </View>
       </View>
     </ScrollView>
+    </FeatureGate>
   );
 }
 

@@ -39,6 +39,12 @@ export default function MoreSubLayout() {
       <Stack.Screen name="pj/saude-negocio" options={{ title: 'Saúde do Negócio' }} />
       <Stack.Screen name="pj/dasn-simei" options={{ title: 'DASN-SIMEI' }} />
       <Stack.Screen name="familia" options={{ title: 'Família' }} />
+      <Stack.Screen name="lgpd" options={{ title: 'Privacidade e LGPD' }} />
+      <Stack.Screen name="sessions" options={{ title: 'Dispositivos e Sessões' }} />
+      <Stack.Screen name="legal-terms" options={{ title: 'Termos de Uso' }} />
+      <Stack.Screen name="legal-privacy" options={{ title: 'Política de Privacidade' }} />
+      <Stack.Screen name="categorization-rules" options={{ title: 'Regras de Categorização' }} />
+      <Stack.Screen name="referral" options={{ title: 'Indicação' }} />
     </Stack>
   );
 }

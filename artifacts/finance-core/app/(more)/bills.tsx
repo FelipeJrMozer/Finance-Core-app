@@ -45,7 +45,7 @@ function isOverdue(bill: Bill): boolean {
 }
 
 export default function BillsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,7 +147,7 @@ export default function BillsScreen() {
           </View>
           <View style={{ alignItems: 'flex-end', gap: 8 }}>
             <Text style={[s.billAmount, { color: item.isPaid ? colors.success : overdue ? colors.danger : theme.text, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(Number(item.amount))}
+              {maskValue(formatBRL(Number(item.amount)))}
             </Text>
             <Pressable
               onPress={() => togglePaid(item)}
@@ -182,12 +182,12 @@ export default function BillsScreen() {
               <View style={[s.summary, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>A pagar</Text>
-                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{formatBRL(pendingTotal)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(pendingTotal))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Pago</Text>
-                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{formatBRL(paidTotal)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(paidTotal))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>

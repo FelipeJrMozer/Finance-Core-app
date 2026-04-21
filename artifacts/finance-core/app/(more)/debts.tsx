@@ -54,7 +54,7 @@ function statusLabel(status: string): string {
 }
 
 export default function DebtsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [debts, setDebts] = useState<Debt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -177,11 +177,11 @@ export default function DebtsScreen() {
         <View style={s.debtAmounts}>
           <View>
             <Text style={[s.amtLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Restante</Text>
-            <Text style={[s.amtValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{formatBRL(remaining)}</Text>
+            <Text style={[s.amtValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(remaining))}</Text>
           </View>
           <View>
             <Text style={[s.amtLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Total</Text>
-            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{formatBRL(total)}</Text>
+            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(total))}</Text>
           </View>
           {item.interestRate ? (
             <View>
@@ -230,17 +230,17 @@ export default function DebtsScreen() {
               <View style={[s.summary, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Dívidas ativas</Text>
-                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalRemaining)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalRemaining))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Já pago</Text>
-                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalPaid)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalPaid))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Total original</Text>
-                  <Text style={[s.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalOriginal)}</Text>
+                  <Text style={[s.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalOriginal))}</Text>
                 </View>
               </View>
               {activeDebts.length === 0 && (
@@ -279,7 +279,7 @@ export default function DebtsScreen() {
             </Text>
             {selectedDebt && (
               <Text style={[s.modalSub, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                {selectedDebt.creditor} • Restante: {formatBRL(Number(selectedDebt.remainingAmount) || 0)}
+                {selectedDebt.creditor} • Restante: {maskValue(formatBRL(Number(selectedDebt.remainingAmount) || 0))}
               </Text>
             )}
             <TextInput

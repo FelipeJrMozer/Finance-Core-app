@@ -1,156 +1,179 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Switch,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Switch, Alert,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
+import {
+  PlanName, getSubscriptionInfo, startCheckout, normalizePlanName, trialDaysRemaining,
+  SubscriptionInfo,
+} from '@/services/subscription';
 
-const MONTHLY_PRICES: Record<string, number> = {
-  Free: 0,
-  Premium: 14.9,
-  Family: 34.9,
-};
+interface PlanDef {
+  id: PlanName;
+  label: string;
+  subtitle: string;
+  color: string;
+  gradient: [string, string];
+  popular?: boolean;
+  paid: boolean;
+  monthly: number;
+  features: string[];
+}
 
 const ANNUAL_DISCOUNT = 0.17;
 
-function annualMonthly(price: number) {
-  return price * (1 - ANNUAL_DISCOUNT);
-}
+const PLANS: PlanDef[] = [
+  {
+    id: 'ESSENCIAL',
+    label: 'Essencial',
+    subtitle: 'Para começar a controlar suas finanças',
+    color: '#6B7280',
+    gradient: ['#374151', '#1F2937'],
+    paid: false,
+    monthly: 0,
+    features: [
+      'Até 100 transações/mês',
+      'Até 2 contas bancárias',
+      'Até 3 orçamentos por categoria',
+      'Histórico de 3 meses',
+      'Dashboard básico',
+    ],
+  },
+  {
+    id: 'PREMIUM',
+    label: 'Premium',
+    subtitle: 'Controle total + investimentos profissionais',
+    color: '#EF4444',
+    gradient: ['#DC2626', '#B91C1C'],
+    popular: true,
+    paid: true,
+    monthly: 29.9,
+    features: [
+      'Transações, contas e cartões ilimitados',
+      'Histórico completo',
+      'Agente de IA financeira',
+      'Investimentos avançados (19 ferramentas)',
+      'DARF automático + Otimizador IR',
+      'Exportação CSV/PDF/Excel',
+      '4 simuladores financeiros',
+    ],
+  },
+  {
+    id: 'FAMILY',
+    label: 'Family',
+    subtitle: 'Premium completo para toda a família',
+    color: '#7C3AED',
+    gradient: ['#7C3AED', '#5B21B6'],
+    paid: true,
+    monthly: 49.9,
+    features: [
+      'Tudo do plano Premium',
+      'Até 5 membros — cada um com dados privados',
+      'Despesas compartilhadas',
+      'Caixinha familiar',
+      'Orçamento e metas familiares',
+      'Suporte prioritário dedicado',
+    ],
+  },
+  {
+    id: 'PJ',
+    label: 'PJ / MEI',
+    subtitle: 'Gestão completa para autônomos e MEI',
+    color: '#10B981',
+    gradient: ['#10B981', '#047857'],
+    paid: true,
+    monthly: 39.9,
+    features: [
+      'Receitas, despesas e clientes PJ',
+      'Pró-labore e retiradas',
+      'DAS e DASN-SIMEI',
+      'Notas fiscais e fluxo de caixa',
+      'Saúde do negócio em tempo real',
+    ],
+  },
+  {
+    id: 'INVESTIDOR_PRO',
+    label: 'Investidor Pro',
+    subtitle: 'Análise de portfólio profissional',
+    color: '#F59E0B',
+    gradient: ['#F59E0B', '#B45309'],
+    paid: true,
+    monthly: 59.9,
+    features: [
+      'Tudo do plano Premium',
+      'Análise de risco e correlação',
+      'Rebalanceamento automático',
+      'Análise técnica e fundamentalista',
+      'Screener de ações + alertas',
+      'Benchmarks personalizados',
+    ],
+  },
+];
 
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const PLANS = [
-  {
-    id: 'Free',
-    label: 'Free',
-    subtitle: 'Para começar a controlar suas finanças',
-    color: '#6B7280',
-    gradient: ['#374151', '#1F2937'] as [string, string],
-    popular: false,
-    trial: false,
-    features: [
-      'Até 100 transações/mês',
-      'Até 2 contas bancárias',
-      'Até 3 orçamentos por categoria',
-      'Até 10 investimentos',
-      'Histórico de 3 meses',
-      'Dashboard básico',
-      '1 controle financeiro',
-    ],
-    missing: [
-      'Exportação de dados',
-      'Agent de IA',
-      'Análises avançadas de portfólio',
-      'DARF automático',
-      'Múltiplos controles financeiros',
-    ],
-  },
-  {
-    id: 'Premium',
-    label: 'Premium',
-    subtitle: 'Controle total + investimentos profissionais',
-    color: '#EF4444',
-    gradient: ['#DC2626', '#B91C1C'] as [string, string],
-    popular: true,
-    trial: true,
-    features: [
-      'Transações, contas e cartões ilimitados',
-      'Histórico completo e ilimitado',
-      'Agent de IA para análise financeira',
-      '19 ferramentas de investimentos',
-      'Análise de risco e correlação de portfólio',
-      'Rebalanceamento automático de carteira',
-      'DARF automático + Otimizador IR',
-      'Análise Técnica e Fundamentalista',
-      'Screener de Ações e Alertas de Preço',
-      'Exportação CSV/PDF/Excel',
-      '4 simuladores financeiros',
-      'Múltiplos controles financeiros',
-    ],
-    missing: [],
-  },
-  {
-    id: 'Family',
-    label: 'Family',
-    subtitle: 'Premium completo para toda a família',
-    color: '#7C3AED',
-    gradient: ['#7C3AED', '#5B21B6'] as [string, string],
-    popular: false,
-    trial: true,
-    features: [
-      'Tudo do plano Premium',
-      'Até 5 membros — cada um com dados privados',
-      'Despesas compartilhadas e divisão automática',
-      'Transferências entre carteiras familiares',
-      'Caixinha familiar com saldo compartilhado',
-      'Orçamento familiar consolidado',
-      'Metas coletivas (férias, reforma, fundo de emergência)',
-      'Dashboard familiar — visão do patrimônio total',
-      'Suporte prioritário dedicado',
-    ],
-    missing: [],
-  },
-];
-
-const PLAN_ORDER = ['Free', 'Premium', 'Family'];
-
-function getPlanIndex(plan?: string) {
-  const idx = PLAN_ORDER.indexOf(plan || 'Free');
-  return idx === -1 ? 0 : idx;
+function annualMonthly(price: number) {
+  return price * (1 - ANNUAL_DISCOUNT);
 }
 
 export default function SubscriptionsScreen() {
   const { theme, colors } = useTheme();
-  const { user, updateUser } = useAuth();
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
   const [annual, setAnnual] = useState(true);
-  const [loading, setLoading] = useState<string | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<PlanName | null>(null);
 
-  const currentPlanId = user?.plan || 'Free';
-  const currentPlanIdx = getPlanIndex(currentPlanId);
-  const currentPlan = PLANS.find((p) => p.id === currentPlanId) || PLANS[0];
-  const isSubscriber = currentPlanIdx > 0;
+  const { data: subInfo } = useQuery<SubscriptionInfo>({
+    queryKey: ['/api/subscription/info'],
+    queryFn: getSubscriptionInfo,
+    staleTime: 30_000,
+    retry: 1,
+  });
 
-  function getPrice(plan: typeof PLANS[0]) {
-    const base = MONTHLY_PRICES[plan.id] || 0;
-    if (base === 0) return base;
-    return annual ? annualMonthly(base) : base;
-  }
+  const currentPlan: PlanName = normalizePlanName(subInfo?.plan?.name as string | undefined);
+  const trialDays = trialDaysRemaining(subInfo?.trialEnd);
+  const isTrialing = subInfo?.status === 'trialing' || trialDays > 0;
 
-  function getPriceLabel(plan: typeof PLANS[0]) {
-    const p = getPrice(plan);
-    if (p === 0) return 'R$ 0';
-    return `R$ ${formatBRL(p)}`;
-  }
-
-  const handleSubscribe = (plan: typeof PLANS[0]) => {
-    if (plan.id === currentPlanId) return;
-    const isUpgrade = getPlanIndex(plan.id) > currentPlanIdx;
-    const isDowngrade = !isUpgrade;
-
-    const verb = isDowngrade ? 'Fazer downgrade para' : plan.trial ? 'Começar trial do' : 'Ativar';
-    const msg = isDowngrade
-      ? `Fazer downgrade para o plano ${plan.label}? Você perderá acesso a alguns recursos.`
-      : plan.trial
-        ? `Começar 30 dias grátis do plano ${plan.label}? Cartão necessário, sem cobrança agora.`
-        : 'Ativar plano gratuito?';
-
+  const handleSubscribe = async (plan: PlanDef) => {
+    if (plan.id === currentPlan) return;
+    if (!plan.paid) {
+      Alert.alert('Plano Essencial', 'Para mudar para o plano Essencial, abra o painel de gerenciamento.');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    setLoading(plan.id);
-    setTimeout(async () => {
-      updateUser({ plan: plan.id });
-      setLoading(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 1200);
+    setLoadingPlan(plan.id);
+    try {
+      const r = await startCheckout(plan.id);
+      if (!r?.url) throw new Error('URL de checkout indisponível.');
+      const result = await WebBrowser.openBrowserAsync(r.url);
+      // Após retornar, revalida o plano
+      qc.invalidateQueries({ queryKey: ['/api/subscription/info'] });
+      if (result?.type === 'cancel') {
+        // Apenas fecha — não notifica erro
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Não foi possível iniciar o checkout.';
+      // Mensagem amigável quando o backend ainda não tem o priceID configurado
+      if (/price.*id|503|configurado|indispon/i.test(msg)) {
+        Alert.alert('Plano indisponível', 'Este plano não está disponível para checkout no momento. Tente novamente mais tarde.');
+      } else {
+        Alert.alert('Erro', msg);
+      }
+    } finally {
+      setLoadingPlan(null);
+    }
   };
+
+  const getPrice = (plan: PlanDef) => (plan.monthly === 0 ? 0 : annual ? annualMonthly(plan.monthly) : plan.monthly);
 
   return (
     <>
@@ -167,14 +190,13 @@ export default function SubscriptionsScreen() {
           </Text>
           <Text style={[styles.heroSubtitle, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
             Todo plano pago começa com{' '}
-            <Text style={{ fontFamily: 'Inter_700Bold', color: theme.text }}>30 dias grátis</Text>
-            . Requer cadastro de cartão — nenhum valor é cobrado durante o período. Renova automaticamente ao final; cancele quando quiser.
+            <Text style={{ fontFamily: 'Inter_700Bold', color: theme.text }}>14 dias grátis</Text>
+            . Cancele quando quiser.
           </Text>
 
-          {/* Billing toggle */}
           <View style={[styles.toggleRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Pressable onPress={() => setAnnual(false)}>
-              <Text style={[styles.toggleLabel, { color: !annual ? theme.text : theme.textTertiary, fontFamily: annual ? 'Inter_400Regular' : 'Inter_600SemiBold' }]}>
+            <Pressable onPress={() => setAnnual(false)} testID="billing-monthly">
+              <Text style={[styles.toggleLabel, { color: !annual ? theme.text : theme.textTertiary, fontFamily: !annual ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
                 Mensal
               </Text>
             </Pressable>
@@ -183,65 +205,46 @@ export default function SubscriptionsScreen() {
               onValueChange={(v) => { setAnnual(v); Haptics.selectionAsync(); }}
               trackColor={{ false: theme.border, true: '#EF4444' }}
               thumbColor="#fff"
+              testID="billing-toggle"
             />
-            <Pressable onPress={() => setAnnual(true)} style={styles.annualRow}>
+            <Pressable onPress={() => setAnnual(true)} style={styles.annualRow} testID="billing-annual">
               <Text style={[styles.toggleLabel, { color: annual ? theme.text : theme.textTertiary, fontFamily: annual ? 'Inter_600SemiBold' : 'Inter_400Regular' }]}>
                 Anual
               </Text>
-              <View style={styles.discountBadge}>
-                <Text style={styles.discountText}>17% OFF</Text>
-              </View>
+              <View style={styles.discountBadge}><Text style={styles.discountText}>17% OFF</Text></View>
             </Pressable>
           </View>
         </View>
 
-        {/* Current plan banner for subscribers */}
-        {isSubscriber && (
-          <LinearGradient
-            colors={currentPlan.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.currentBanner}
-          >
-            <View style={styles.currentBannerTop}>
-              <View>
-                <Text style={styles.currentBannerSub}>Plano atual</Text>
-                <Text style={styles.currentBannerTitle}>{currentPlan.label}</Text>
-              </View>
-              <View style={styles.currentBadge}>
-                <Feather name="check-circle" size={13} color="#fff" />
-                <Text style={styles.currentBadgeText}>Ativo</Text>
-              </View>
-            </View>
-            <Text style={styles.currentBannerPrice}>
-              {getPriceLabel(currentPlan)}
-              <Text style={styles.currentBannerPeriod}>/mês</Text>
+        {/* Trial banner */}
+        {isTrialing && trialDays > 0 && (
+          <View style={[styles.trialBanner, { backgroundColor: `${colors.warning}15`, borderColor: `${colors.warning}40` }]}>
+            <Feather name="clock" size={16} color={colors.warning} />
+            <Text style={[styles.trialBannerText, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+              Você está em teste gratuito — restam {trialDays} {trialDays === 1 ? 'dia' : 'dias'} no plano {currentPlan}.
             </Text>
-            {currentPlan.trial && (
-              <Text style={styles.currentBannerNote}>Próxima cobrança em 15/04/2026</Text>
-            )}
-          </LinearGradient>
+          </View>
         )}
 
-        {/* Plan cards */}
+        {/* Cards */}
         <View style={styles.cards}>
           {PLANS.map((plan) => {
-            const isCurrent = plan.id === currentPlanId;
-            const isUpgrade = getPlanIndex(plan.id) > currentPlanIdx;
-            const isLoading = loading === plan.id;
+            const isCurrent = plan.id === currentPlan;
+            const isLoading = loadingPlan === plan.id;
             const price = getPrice(plan);
-            const monthlyBase = MONTHLY_PRICES[plan.id];
-
             return (
               <View
                 key={plan.id}
                 style={[
                   styles.card,
-                  { backgroundColor: theme.card, borderColor: isCurrent ? plan.color : plan.popular ? plan.color : theme.border },
+                  {
+                    backgroundColor: theme.card,
+                    borderColor: isCurrent ? plan.color : plan.popular ? plan.color : theme.border,
+                  },
                   (isCurrent || plan.popular) && { borderWidth: 2 },
                 ]}
+                testID={`plan-${plan.id}`}
               >
-                {/* Badges */}
                 {plan.popular && !isCurrent && (
                   <View style={[styles.badge, { backgroundColor: plan.color }]}>
                     <Text style={styles.badgeText}>MAIS POPULAR</Text>
@@ -253,10 +256,9 @@ export default function SubscriptionsScreen() {
                   </View>
                 )}
 
-                {/* Plan header */}
                 <View style={styles.cardHeader}>
                   <View style={[styles.planDot, { backgroundColor: plan.color }]} />
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={[styles.planName, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
                       {plan.label}
                     </Text>
@@ -266,103 +268,51 @@ export default function SubscriptionsScreen() {
                   </View>
                 </View>
 
-                {/* Price */}
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceMain, { color: isCurrent ? plan.color : theme.text, fontFamily: 'Inter_700Bold' }]}>
-                    {getPriceLabel(plan)}
+                    {price === 0 ? 'R$ 0' : `R$ ${formatBRL(price)}`}
                   </Text>
-                  {price > 0 && (
-                    <Text style={[styles.pricePeriod, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                      /mês
-                    </Text>
-                  )}
-                  {price === 0 && monthlyBase === 0 && (
-                    <Text style={[styles.pricePeriod, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                      /sempre
-                    </Text>
-                  )}
+                  <Text style={[styles.pricePeriod, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+                    {price === 0 ? '/sempre' : '/mês'}
+                  </Text>
                 </View>
-
-                {/* Annual savings note */}
-                {annual && price > 0 && (
-                  <Text style={[styles.annualNote, { color: plan.color, fontFamily: 'Inter_400Regular' }]}>
-                    {plan.trial ? '30 dias grátis — sem cobrança agora' : `Economize 17% no plano anual`}
-                  </Text>
-                )}
-                {!annual && plan.trial && (
-                  <Text style={[styles.annualNote, { color: plan.color, fontFamily: 'Inter_400Regular' }]}>
-                    30 dias grátis — sem cobrança agora
-                  </Text>
-                )}
-                {plan.trial && (
-                  <Text style={[styles.trialNote, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                    Requer cartão · Renova automático · Cancele quando quiser
+                {plan.paid && (
+                  <Text style={[styles.trialNote, { color: plan.color, fontFamily: 'Inter_400Regular' }]}>
+                    {annual ? '14 dias grátis · cobrança anual' : '14 dias grátis · sem fidelidade'}
                   </Text>
                 )}
 
-                {/* Features */}
                 <View style={styles.featureList}>
                   {plan.features.map((f) => (
                     <View key={f} style={styles.featureRow}>
                       <Feather name="check" size={14} color={plan.color} />
-                      <Text style={[styles.featureText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                        {f}
-                      </Text>
-                    </View>
-                  ))}
-                  {plan.missing.map((f) => (
-                    <View key={f} style={styles.featureRow}>
-                      <Feather name="x" size={14} color={theme.textTertiary} />
-                      <Text style={[styles.featureText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }, styles.featureMissing]}>
-                        {f}
-                      </Text>
+                      <Text style={[styles.featureText, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{f}</Text>
                     </View>
                   ))}
                 </View>
 
-                {/* CTA */}
                 {isCurrent ? (
-                  <Pressable
-                    style={[styles.ctaOutline, { borderColor: plan.color }]}
-                    onPress={() => {}}
-                  >
-                    <Text style={[styles.ctaOutlineText, { color: plan.color, fontFamily: 'Inter_500Medium' }]}>
-                      Gerenciar assinatura
+                  <View style={[styles.ctaOutline, { borderColor: plan.color }]}>
+                    <Text style={[styles.ctaOutlineText, { color: plan.color, fontFamily: 'Inter_600SemiBold' }]}>
+                      Plano atual
                     </Text>
-                  </Pressable>
-                ) : plan.id === 'Free' ? (
-                  <Pressable
-                    style={[styles.ctaOutline, { borderColor: theme.border }]}
-                    onPress={() => handleSubscribe(plan)}
-                    disabled={!!isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color={theme.textSecondary} />
-                    ) : (
-                      <Text style={[styles.ctaOutlineText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-                        Usar grátis
-                      </Text>
-                    )}
-                  </Pressable>
+                  </View>
                 ) : (
                   <Pressable
+                    onPress={() => handleSubscribe(plan)}
+                    disabled={isLoading}
                     style={({ pressed }) => [
                       styles.ctaSolid,
                       { backgroundColor: plan.color, opacity: pressed ? 0.85 : 1 },
                     ]}
-                    onPress={() => handleSubscribe(plan)}
-                    disabled={!!isLoading}
+                    testID={`subscribe-${plan.id}`}
                   >
                     {isLoading ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <>
-                        <Text style={[styles.ctaSolidText, { fontFamily: 'Inter_600SemiBold' }]}>
-                          {isUpgrade
-                            ? `Começar 30 dias grátis →`
-                            : `Mudar para ${plan.label}`}
-                        </Text>
-                      </>
+                      <Text style={[styles.ctaSolidText, { fontFamily: 'Inter_600SemiBold' }]}>
+                        {plan.paid ? 'Começar 14 dias grátis →' : 'Continuar no Essencial'}
+                      </Text>
                     )}
                   </Pressable>
                 )}
@@ -371,7 +321,6 @@ export default function SubscriptionsScreen() {
           })}
         </View>
 
-        {/* Footer notes */}
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
             • Cancele a qualquer momento sem taxas
@@ -392,8 +341,7 @@ export default function SubscriptionsScreen() {
 const styles = StyleSheet.create({
   hero: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 12 },
   heroTitle: { fontSize: 24, textAlign: 'center' },
-  heroSubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 20, color: '#666' },
-
+  heroSubtitle: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, paddingVertical: 10, paddingHorizontal: 16,
@@ -401,27 +349,17 @@ const styles = StyleSheet.create({
   },
   toggleLabel: { fontSize: 15 },
   annualRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  discountBadge: {
-    backgroundColor: '#EF4444', borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 2,
-  },
+  discountBadge: { backgroundColor: '#EF4444', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
   discountText: { fontSize: 11, color: '#fff', fontFamily: 'Inter_700Bold' },
 
-  currentBanner: {
-    marginHorizontal: 16, marginBottom: 8, marginTop: 12,
-    borderRadius: 16, padding: 18, gap: 4,
+  trialBanner: {
+    marginHorizontal: 16, marginTop: 12, padding: 12, borderRadius: 12, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
   },
-  currentBannerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
-  currentBannerSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular' },
-  currentBannerTitle: { fontSize: 20, color: '#fff', fontFamily: 'Inter_700Bold' },
-  currentBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  currentBadgeText: { fontSize: 12, color: '#fff', fontFamily: 'Inter_600SemiBold' },
-  currentBannerPrice: { fontSize: 24, color: '#fff', fontFamily: 'Inter_700Bold' },
-  currentBannerPeriod: { fontSize: 14, fontFamily: 'Inter_400Regular' },
-  currentBannerNote: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'Inter_400Regular' },
+  trialBannerText: { fontSize: 13, flex: 1 },
 
   cards: { paddingHorizontal: 16, gap: 12, marginTop: 12 },
-  card: { borderRadius: 16, borderWidth: 1, padding: 18, gap: 0 },
+  card: { borderRadius: 16, borderWidth: 1, padding: 18 },
   badge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 12 },
   badgeText: { fontSize: 11, color: '#fff', fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
@@ -431,12 +369,10 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginBottom: 4 },
   priceMain: { fontSize: 30 },
   pricePeriod: { fontSize: 14 },
-  annualNote: { fontSize: 13, marginBottom: 2 },
-  trialNote: { fontSize: 11, marginBottom: 12 },
+  trialNote: { fontSize: 12, marginBottom: 12 },
   featureList: { gap: 7, marginBottom: 16, marginTop: 8 },
   featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   featureText: { fontSize: 13, flex: 1, lineHeight: 18 },
-  featureMissing: { opacity: 0.5, textDecorationLine: 'line-through' },
 
   ctaSolid: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   ctaSolidText: { fontSize: 15, color: '#fff' },

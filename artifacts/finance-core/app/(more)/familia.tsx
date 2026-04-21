@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL } from '@/utils/formatters';
 import { fetchFamilyBalance, type FamilyBalance } from '@/services/family';
+import { FeatureGate } from '@/components/FeatureGate';
 
 type Tab = 'members' | 'expenses' | 'wallet' | 'goals';
 
@@ -37,11 +38,10 @@ const STORAGE_KEY = 'pf_familia_state_v1';
 const MEMBER_COLORS = ['#0096C7', '#FF6B6B', '#A29BFE', '#2ED573', '#FD9644', '#6C5CE7'];
 
 export default function FamiliaScreen() {
-  const { theme, colors, isDark } = useTheme();
+  const { theme, colors, isDark, maskValue } = useTheme();
   const { user } = useAuth();
   const { accounts, goals } = useFinance();
   const insets = useSafeAreaInsets();
-
   const [tab, setTab] = useState<Tab>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<SharedExpense[]>([]);
@@ -202,6 +202,12 @@ export default function FamiliaScreen() {
   ];
 
   return (
+    <FeatureGate
+      feature="family"
+      title="Plano Família"
+      icon="users"
+      description="Convide até 5 membros, divida despesas, gerencie a caixinha familiar e metas em conjunto. Disponível no plano FAMILY."
+    >
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <Stack.Screen options={{ title: 'Família' }} />
 
@@ -227,13 +233,13 @@ export default function FamiliaScreen() {
           <View style={[styles.statCard, { backgroundColor: `${colors.primary}15` }]}>
             <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Caixinha</Text>
             <Text style={[styles.statValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(familyWalletBalance, true)}
+              {maskValue(formatBRL(familyWalletBalance, true))}
             </Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: `${colors.danger}15` }]}>
             <Text style={[styles.statLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Despesas</Text>
             <Text style={[styles.statValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(totalShared, true)}
+              {maskValue(formatBRL(totalShared, true))}
             </Text>
           </View>
         </View>
@@ -286,7 +292,7 @@ export default function FamiliaScreen() {
                       {bal > 0 ? 'A receber' : bal < 0 ? 'A pagar' : 'Quite'}
                     </Text>
                     <Text style={[styles.balVal, { color: bal > 0 ? colors.primary : bal < 0 ? colors.danger : theme.textSecondary, fontFamily: 'Inter_700Bold' }]}>
-                      {formatBRL(Math.abs(bal), true)}
+                      {maskValue(formatBRL(Math.abs(bal), true))}
                     </Text>
                   </View>
                   {m.role !== 'owner' && (
@@ -336,11 +342,11 @@ export default function FamiliaScreen() {
                         {e.description}
                       </Text>
                       <Text style={[styles.expMeta, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                        Pago por {payer?.name || '—'} • Dividido por {splitCount} • {formatBRL(share, true)} cada
+                        Pago por {payer?.name || '—'} • Dividido por {splitCount} • {maskValue(formatBRL(share, true))} cada
                       </Text>
                     </View>
                     <Text style={[styles.expAmt, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>
-                      {formatBRL(e.amount, true)}
+                      {maskValue(formatBRL(e.amount, true))}
                     </Text>
                   </View>
                 );
@@ -371,7 +377,7 @@ export default function FamiliaScreen() {
                 Saldo da caixinha familiar
               </Text>
               <Text style={[styles.walletBal, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-                {formatBRL(familyWalletBalance)}
+                {maskValue(formatBRL(familyWalletBalance))}
               </Text>
               <Text style={[styles.walletSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular', textAlign: 'center' }]}>
                 Use a caixinha para acumular dinheiro destinado a despesas conjuntas (mercado, viagens, contas).
@@ -448,7 +454,7 @@ export default function FamiliaScreen() {
                         <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: g.color }]} />
                       </View>
                       <Text style={[styles.expMeta, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                        {formatBRL(g.currentAmount, true)} de {formatBRL(g.targetAmount, true)} • {(pct * 100).toFixed(0)}%
+                        {maskValue(formatBRL(g.currentAmount, true))} de {maskValue(formatBRL(g.targetAmount, true))} • {(pct * 100).toFixed(0)}%
                       </Text>
                     </View>
                   </Pressable>
@@ -579,6 +585,7 @@ export default function FamiliaScreen() {
         </Pressable>
       </Modal>
     </View>
+    </FeatureGate>
   );
 }
 
