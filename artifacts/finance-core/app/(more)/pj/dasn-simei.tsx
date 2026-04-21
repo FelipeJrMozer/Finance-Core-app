@@ -31,7 +31,7 @@ function isPjTransaction(t: { notes?: string; category?: string; description?: s
 }
 
 export default function DasnSimeiScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -123,7 +123,7 @@ export default function DasnSimeiScreen() {
           </Text>
         </View>
         <Text style={[styles.bigValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-          {formatBRL(yearTotals.receitas)}
+          {maskValue(formatBRL(yearTotals.receitas))}
         </Text>
         <Text style={[styles.cardSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
           Limite MEI: {formatBRL(MEI_LIMITE_ANUAL)}
@@ -146,7 +146,7 @@ export default function DasnSimeiScreen() {
         <View style={styles.miniRow}>
           <Text style={[styles.miniLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Despesas dedutíveis</Text>
           <Text style={[styles.miniValue, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
-            {formatBRL(yearTotals.despesas)}
+            {maskValue(formatBRL(yearTotals.despesas))}
           </Text>
         </View>
       </View>

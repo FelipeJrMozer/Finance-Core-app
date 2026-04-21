@@ -14,7 +14,7 @@ import { MonthNavigator } from '@/components/MonthNavigator';
 import { EmptyState } from '@/components/EmptyState';
 
 export default function PJReceitasScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions, addTransaction, categories } = useFinance();
   const insets = useSafeAreaInsets();
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
@@ -43,7 +43,7 @@ export default function PJReceitasScreen() {
           Total de Receitas PJ
         </Text>
         <Text style={[styles.totalValue, { color: colors.success, fontFamily: 'Inter_800ExtraBold' }]}>
-          {formatBRL(total)}
+          {maskValue(formatBRL(total))}
         </Text>
       </View>
 
@@ -75,7 +75,7 @@ export default function PJReceitasScreen() {
               </Text>
             </View>
             <Text style={[styles.txAmount, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(t.amount)}
+              {maskValue(formatBRL(t.amount))}
             </Text>
           </View>
         ))

@@ -62,7 +62,7 @@ function EmptyState({ title, message, theme }: { title: string; message: string;
 }
 
 export default function InvestmentReportScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { investments } = useFinance();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<TabId>('dividendos');
@@ -198,7 +198,7 @@ export default function InvestmentReportScreen() {
           <View style={styles.summaryRow}>
             <View>
               <Text style={[styles.summaryLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Investido</Text>
-              <Text style={[styles.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalInvested)}</Text>
+              <Text style={[styles.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalInvested))}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.summaryLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Retorno total</Text>
@@ -230,7 +230,7 @@ export default function InvestmentReportScreen() {
               <>
                 <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <Text style={[styles.cardTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>Total recebido no semestre</Text>
-                  <Text style={[styles.bigValue, { color: colors.success, fontFamily: 'Inter_800ExtraBold' }]}>{formatBRL(totalDividends)}</Text>
+                  <Text style={[styles.bigValue, { color: colors.success, fontFamily: 'Inter_800ExtraBold' }]}>{maskValue(formatBRL(totalDividends))}</Text>
                   <BarChart
                     data={dividendBars}
                     width={CHART_W}
@@ -256,7 +256,7 @@ export default function InvestmentReportScreen() {
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={[styles.divAmount, { color: colors.success, fontFamily: 'Inter_600SemiBold' }]}>
-                        {formatBRL(row.amount)}
+                        {maskValue(formatBRL(row.amount))}
                       </Text>
                       <Text style={[styles.divLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>recebido</Text>
                     </View>

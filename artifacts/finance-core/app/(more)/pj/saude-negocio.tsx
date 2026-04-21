@@ -35,7 +35,7 @@ interface MetricResult {
 }
 
 export default function SaudeNegocioScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions, accounts } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -95,7 +95,7 @@ export default function SaudeNegocioScreen() {
         hint: proScore < 14 ? 'Equilibre suas retiradas com o faturamento (ideal ≤ 40%).' : undefined },
       { label: 'Reserva de emergência', value: `${reservaMonths.toFixed(1)} meses`, score: reservaScore, max: 20,
         hint: reservaScore < 14 ? 'Acumule pelo menos 3 meses de despesas em conta PJ.' : undefined },
-      { label: 'DAS em dia', value: dasTotal > 0 ? `Pago (${formatBRL(dasTotal)})` : 'Em aberto', score: dasScore, max: 20,
+      { label: 'DAS em dia', value: dasTotal > 0 ? `Pago (${maskValue(formatBRL(dasTotal))})` : 'Em aberto', score: dasScore, max: 20,
         hint: dasScore === 0 ? 'Pague o DAS deste mês para evitar multas.' : undefined },
       { label: 'Crescimento de receita', value: `${growth >= 0 ? '+' : ''}${growth.toFixed(1)}%`, score: growthScore, max: 20,
         hint: growthScore < 14 ? 'Foque em vendas/clientes para reverter a queda.' : undefined },

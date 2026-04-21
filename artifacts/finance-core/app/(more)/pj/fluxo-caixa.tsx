@@ -21,7 +21,7 @@ function isPjTransaction(t: { notes?: string; category?: string; description?: s
 }
 
 export default function FluxoCaixaScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
 
@@ -69,19 +69,19 @@ export default function FluxoCaixaScreen() {
           <View style={[styles.resumeBox, { backgroundColor: `${colors.success}15` }]}>
             <Feather name="arrow-up" size={14} color={colors.success} />
             <Text style={[styles.resumeLabel, { color: colors.success, fontFamily: 'Inter_500Medium' }]}>Entradas</Text>
-            <Text style={[styles.resumeValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(monthData.income)}</Text>
+            <Text style={[styles.resumeValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(monthData.income))}</Text>
           </View>
           <View style={[styles.resumeBox, { backgroundColor: `${colors.danger}15` }]}>
             <Feather name="arrow-down" size={14} color={colors.danger} />
             <Text style={[styles.resumeLabel, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>Saídas</Text>
-            <Text style={[styles.resumeValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(monthData.expense)}</Text>
+            <Text style={[styles.resumeValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(monthData.expense))}</Text>
           </View>
         </View>
         <View style={[styles.balanceRow, { borderTopColor: theme.border }]}>
           <Text style={[styles.balanceLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Saldo</Text>
           <Text style={[styles.balanceValue, {
             color: monthBalance >= 0 ? colors.success : colors.danger, fontFamily: 'Inter_700Bold'
-          }]}>{formatBRL(monthBalance)}</Text>
+          }]}>{maskValue(formatBRL(monthBalance))}</Text>
         </View>
       </View>
 
@@ -133,10 +133,10 @@ export default function FluxoCaixaScreen() {
           </Text>
         </View>
         <Text style={[styles.projValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-          {formatBRL(projectedAnnual)}
+          {maskValue(formatBRL(projectedAnnual))}
         </Text>
         <Text style={[styles.projSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-          Baseado na média dos últimos 3 meses ({formatBRL(avgIncome3)}/mês × 12)
+          Baseado na média dos últimos 3 meses ({maskValue(formatBRL(avgIncome3))}/mês × 12)
         </Text>
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
         <View style={styles.faixa}>

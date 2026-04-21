@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/EmptyState';
 const PJ_CATEGORIES = ['Contador', 'Escritório', 'Marketing', 'Equipamentos', 'Serviços', 'Outros'];
 
 export default function PJDespesasScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
@@ -44,7 +44,7 @@ export default function PJDespesasScreen() {
           Total de Despesas PJ
         </Text>
         <Text style={[styles.totalValue, { color: colors.danger, fontFamily: 'Inter_800ExtraBold' }]}>
-          {formatBRL(total)}
+          {maskValue(formatBRL(total))}
         </Text>
       </View>
 
@@ -69,7 +69,7 @@ export default function PJDespesasScreen() {
           return (
             <View key={cat} style={[styles.catRow, { borderBottomColor: theme.border }]}>
               <Text style={[styles.catLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{cat}</Text>
-              <Text style={[styles.catAmount, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>{formatBRL(catTotal)}</Text>
+              <Text style={[styles.catAmount, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(catTotal))}</Text>
             </View>
           );
         })}
@@ -91,7 +91,7 @@ export default function PJDespesasScreen() {
               </Text>
             </View>
             <Text style={[styles.txAmount, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(t.amount)}
+              {maskValue(formatBRL(t.amount))}
             </Text>
           </View>
         ))

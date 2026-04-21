@@ -30,7 +30,7 @@ const STATUS_LABEL: Record<Invoice['status'], string> = {
 };
 
 export default function NotasFiscaisScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -125,7 +125,7 @@ export default function NotasFiscaisScreen() {
               Emitido este mês
             </Text>
             <Text style={[styles.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(monthIssued)}
+              {maskValue(formatBRL(monthIssued))}
             </Text>
           </View>
           <View style={[styles.summaryCard, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}30` }]}>
@@ -158,7 +158,7 @@ export default function NotasFiscaisScreen() {
                   </Text>
                 </View>
                 <Text style={[styles.invAmount, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-                  {formatBRL(inv.amount)}
+                  {maskValue(formatBRL(inv.amount))}
                 </Text>
               </View>
               {inv.description && (

@@ -24,7 +24,7 @@ const SALARIO_MINIMO = 1412;
 const INSS_RATE = 0.11;
 
 export default function PJRetiradasScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [retiradas, setRetiradas] = useState<Retirada[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -74,14 +74,14 @@ export default function PJRetiradasScreen() {
       <View style={[styles.infoCard, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}30` }]}>
         <View style={styles.infoRow}>
           <Text style={[styles.infoLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>INSS sobre pró-labore</Text>
-          <Text style={[styles.infoValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{formatBRL(inssAmount)}/mês</Text>
+          <Text style={[styles.infoValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(inssAmount))}/mês</Text>
         </View>
         <Text style={[styles.infoSub, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
           11% sobre 1 salário mínimo (R$ {SALARIO_MINIMO.toLocaleString('pt-BR')})
         </Text>
         <View style={styles.infoRow}>
           <Text style={[styles.infoLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Total retirado no ano</Text>
-          <Text style={[styles.infoValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalYear)}</Text>
+          <Text style={[styles.infoValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalYear))}</Text>
         </View>
       </View>
 
@@ -121,7 +121,7 @@ export default function PJRetiradasScreen() {
           <View style={[styles.inssRow, { backgroundColor: `${colors.warning}10`, borderColor: `${colors.warning}30` }]}>
             <Feather name="alert-circle" size={14} color={colors.warning} />
             <Text style={[styles.inssText, { color: colors.warning, fontFamily: 'Inter_400Regular' }]}>
-              INSS: {formatBRL(inssAmount)} será recolhido no DAS
+              INSS: {maskValue(formatBRL(inssAmount))} será recolhido no DAS
             </Text>
           </View>
           <Pressable onPress={save} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
@@ -142,8 +142,8 @@ export default function PJRetiradasScreen() {
               {r.notes && <Text style={[styles.cardNotes, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{r.notes}</Text>}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.cardAmount, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{formatBRL(r.amount)}</Text>
-              <Text style={[styles.cardInss, { color: colors.warning, fontFamily: 'Inter_400Regular' }]}>INSS: {formatBRL(r.inss)}</Text>
+              <Text style={[styles.cardAmount, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(r.amount))}</Text>
+              <Text style={[styles.cardInss, { color: colors.warning, fontFamily: 'Inter_400Regular' }]}>INSS: {maskValue(formatBRL(r.inss))}</Text>
             </View>
           </View>
         ))

@@ -30,7 +30,7 @@ const STORAGE_KEY = 'pf_pj_das';
 const CATEGORIA_KEY = 'pf_pj_das_categoria';
 
 export default function PJDasScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { transactions } = useFinance();
   const insets = useSafeAreaInsets();
   const [records, setRecords] = useState<DASRecord[]>([]);
@@ -170,7 +170,7 @@ export default function PJDasScreen() {
                     {opt.label}
                   </Text>
                   <Text style={[styles.catAmount, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                    {formatBRL(opt.amount)} / mês
+                    {maskValue(formatBRL(opt.amount))} / mês
                   </Text>
                 </View>
                 {selected && <Feather name="check-circle" size={18} color={colors.primary} />}
@@ -185,7 +185,7 @@ export default function PJDasScreen() {
         <View style={[styles.alertBox, { backgroundColor: `${colors.danger}15`, borderColor: `${colors.danger}40` }]}>
           <Feather name="alert-triangle" size={16} color={colors.danger} />
           <Text style={[styles.alertText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
-            Faturamento de {formatBRL(yearGrossIncome)} ultrapassou o limite anual MEI ({formatBRL(MEI_LIMITE_ANUAL)}).
+            Faturamento de {maskValue(formatBRL(yearGrossIncome))} ultrapassou o limite anual MEI ({formatBRL(MEI_LIMITE_ANUAL)}).
             Considere migrar para ME.
           </Text>
         </View>
@@ -193,7 +193,7 @@ export default function PJDasScreen() {
       {!exceededAnnualLimit && yearGrossIncome > 0 && (
         <View style={[styles.limitInfo, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={[styles.limitInfoLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-            Faturamento PJ {currentYear}: {formatBRL(yearGrossIncome)} ({limitPct.toFixed(1)}% do limite anual)
+            Faturamento PJ {currentYear}: {maskValue(formatBRL(yearGrossIncome))} ({limitPct.toFixed(1)}% do limite anual)
           </Text>
         </View>
       )}
@@ -213,7 +213,7 @@ export default function PJDasScreen() {
           <View style={styles.dasDetails}>
             <View>
               <Text style={[styles.detailLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Valor</Text>
-              <Text style={[styles.detailValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(r.amount)}</Text>
+              <Text style={[styles.detailValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(r.amount))}</Text>
             </View>
             <View>
               <Text style={[styles.detailLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Vencimento</Text>
