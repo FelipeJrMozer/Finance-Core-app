@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Switch, Alert, ActivityIndicator, TextInput,
+  View, Text, StyleSheet, ScrollView, Pressable, Switch, Alert, ActivityIndicator, TextInput, Linking,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -74,13 +74,13 @@ export default function LgpdScreen() {
   };
 
   const handleDelete = async () => {
-    if (confirmText.trim().toUpperCase() !== 'EXCLUIR') {
-      Alert.alert('Confirmação inválida', 'Digite exatamente EXCLUIR para confirmar.');
+    if (confirmText.trim().toUpperCase() !== 'EXCLUIR MINHA CONTA') {
+      Alert.alert('Confirmação inválida', 'Digite exatamente EXCLUIR MINHA CONTA para confirmar.');
       return;
     }
     setDeleting(true);
     try {
-      await apiDeleteAccount({ confirmation: 'EXCLUIR' });
+      await apiDeleteAccount({ confirmation: 'EXCLUIR MINHA CONTA' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         'Conta excluída',
@@ -228,12 +228,12 @@ export default function LgpdScreen() {
             </Text>
             <Text style={[styles.deleteBody, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
               Após a exclusão você perderá acesso permanente a transações, contas, investimentos, metas e todos os seus dados.
-              Para confirmar, digite <Text style={{ fontFamily: 'Inter_700Bold', color: theme.text }}>EXCLUIR</Text> abaixo.
+              Para confirmar, digite <Text style={{ fontFamily: 'Inter_700Bold', color: theme.text }}>EXCLUIR MINHA CONTA</Text> abaixo.
             </Text>
             <TextInput
               value={confirmText}
               onChangeText={setConfirmText}
-              placeholder="Digite EXCLUIR"
+              placeholder="Digite EXCLUIR MINHA CONTA"
               placeholderTextColor={theme.textTertiary}
               autoCapitalize="characters"
               testID="confirm-delete-input"
@@ -241,12 +241,12 @@ export default function LgpdScreen() {
             />
             <Pressable
               onPress={handleDelete}
-              disabled={deleting || confirmText.trim().toUpperCase() !== 'EXCLUIR'}
+              disabled={deleting || confirmText.trim().toUpperCase() !== 'EXCLUIR MINHA CONTA'}
               style={({ pressed }) => [
                 styles.deleteBtn,
                 {
                   backgroundColor: colors.danger,
-                  opacity: deleting || confirmText.trim().toUpperCase() !== 'EXCLUIR' ? 0.5 : pressed ? 0.85 : 1,
+                  opacity: deleting || confirmText.trim().toUpperCase() !== 'EXCLUIR MINHA CONTA' ? 0.5 : pressed ? 0.85 : 1,
                 },
               ]}
               testID="confirm-delete"
@@ -259,6 +259,31 @@ export default function LgpdScreen() {
             </Pressable>
           </View>
         )}
+      </View>
+
+      <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <Text style={[styles.cardTitle, { color: theme.textTertiary, fontFamily: 'Inter_600SemiBold' }]}>
+          Encarregado de Dados (DPO)
+        </Text>
+        <Text style={[styles.rowSub, { color: theme.textSecondary, fontFamily: 'Inter_400Regular', marginBottom: 8 }]}>
+          Para dúvidas sobre o tratamento dos seus dados pessoais ou para exercer seus direitos pela LGPD,
+          entre em contato com nosso Encarregado de Proteção de Dados.
+        </Text>
+        <Pressable
+          onPress={() => Linking.openURL('mailto:privacidade@financecore.com.br?subject=LGPD%20%E2%80%93%20Solicita%C3%A7%C3%A3o%20do%20titular')}
+          style={({ pressed }) => [{
+            flexDirection: 'row', alignItems: 'center', gap: 10,
+            paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10,
+            backgroundColor: `${colors.primary}15`,
+            opacity: pressed ? 0.8 : 1,
+          }]}
+          testID="dpo-email-link"
+        >
+          <Feather name="mail" size={16} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>
+            privacidade@financecore.com.br
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );

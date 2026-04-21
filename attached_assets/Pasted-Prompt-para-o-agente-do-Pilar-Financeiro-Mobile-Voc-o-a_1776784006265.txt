@@ -1,0 +1,160 @@
+Prompt para o agente do Pilar Financeiro Mobile
+Você é o agente responsável pelo app mobile (React Native + Expo) em artifacts/finance-core. O backend e a versão web acabaram de receber um grande refinamento (LGPD, segurança, encantamento, monetização). Sua missão é trazer paridade e acabamento ao mobile.
+
+Contexto
+Backend produção: https://pilar-financeiro.replit.app
+Stack mobile: Expo + React Native + TypeScript + TanStack Query
+Backend compartilhado — não crie rotas novas, só consuma
+Novas rotas do backend a integrar
+LGPD / Direitos do titular
+
+GET /api/legal/versions → versão atual de termos/privacidade (público)
+POST /api/user/consent { type, accepted } → aceitar termos/privacidade/marketing
+GET /api/user/consents → histórico de consentimentos
+GET /api/user/legal-status → status de aceite do usuário
+GET /api/user/export-data → exporta JSON com todos os dados (dispara download)
+POST /api/user/delete-account { confirmation: "EXCLUIR MINHA CONTA", reason? } → anonimiza dados
+POST /api/user/hide-balances { hideBalances: boolean } → persiste preferência
+Segurança (sessões)
+
+POST /api/user/sessions/track → registra sessão (chame no login/abrir app)
+GET /api/user/sessions → lista sessões ativas
+DELETE /api/user/sessions/:id → encerra sessão
+Categorização automática
+
+GET|POST /api/categorization-rules — CRUD
+PUT|DELETE /api/categorization-rules/:id
+POST /api/categorization-rules/test { text } → testa qual regra bateria
+POST /api/transaction-splits e GET /api/transaction-splits/:transactionId
+Insights
+
+GET /api/insights/anomalies?months=3 → gastos fora do padrão
+GET /api/insights/monthly-recap?month=YYYY-MM → resumo mensal
+GET /api/insights/emergency-fund → status da reserva de emergência
+Programa de indicação
+
+GET /api/referral/my-code → { code, shareUrl, totalReferrals, convertedReferrals }
+POST /api/referral/apply { code } → aplica código (na tela de cadastro)
+GET /api/referral/list → lista de indicados
+Tarefas
+1. LGPD
+ Na tela de cadastro, checkbox "Aceito os Termos e Política de Privacidade" obrigatório, com links que abrem modais/telas em WebView lendo /api/legal/versions ou telas nativas.
+ Após o cadastro, chamar POST /api/user/consent para terms e privacy com a versão corrente.
+ Em Settings adicionar seção "Privacidade e LGPD" com:
+Toggle "Comunicações de marketing" (POST /api/user/consent { type:"marketing" })
+Botão "Exportar meus dados" → baixa JSON via /api/user/export-data usando expo-file-system + Sharing.shareAsync
+Botão "Excluir minha conta" → modal exigindo digitar EXCLUIR MINHA CONTA, chama /api/user/delete-account, depois faz logout
+Link para e-mail do DPO (privacidade@financecore.com.br)
+ Banner de cookies/tracking (usar AsyncStorage para lembrar escolha).
+2. Segurança
+ No login/splash, chamar POST /api/user/sessions/track enviando { device: Device.modelName, os: Platform.OS, appVersion }.
+ Em Settings > Privacidade, listar sessões (GET /api/user/sessions) com botão "Encerrar".
+ Biometria (expo-local-authentication) para reabrir o app quando hideBalances estiver ativo.
+3. Modo discreto (esconder valores)
+ Criar hook usePrivacy() que:
+Persiste hideBalances em AsyncStorage e sincroniza com /api/user/hide-balances
+Expõe maskValue(n) que retorna "• • • •" quando ativo
+ Botão olho no header do app para alternar.
+ Aplicar maskValue em todos os saldos/valores das telas Dashboard, Contas, Cartões, Transações, Investimentos.
+4. Regras de categorização
+ Nova tela CategorizationRulesScreen:
+Formulário: padrão + tipo (contains/starts/equals/regex) + categoria
+Lista de regras com toggle ativo e swipe-to-delete
+Campo de teste (envia POST /api/categorization-rules/test)
+ Integrar em Settings ou num menu "Automação".
+5. Splits de transação
+ Na tela de edição de transação, botão "Dividir em múltiplas categorias" que abre modal:
+Permite adicionar N linhas (categoria + valor OU percentual)
+Validação: soma = 100% ou igual ao valor total
+Salva em /api/transaction-splits
+6. Widgets de insights no Dashboard
+ Card "Gastos fora do padrão" (/api/insights/anomalies) exibindo até 3 alertas
+ Card "Resumo do mês" (/api/insights/monthly-recap) com totais, top categoria, mudança %
+ Card "Reserva de emergência" (/api/insights/emergency-fund) com progresso
+7. Programa de indicação
+ Nova tela ReferralScreen:
+Exibe code e shareUrl
+Botão "Compartilhar" usando Share.share({ message: shareUrl })
+Contadores de indicações totais e convertidas
+Lista dos indicados com status
+ Ao cadastrar, se deep link trouxer ?ref=CODIGO, chamar /api/referral/apply após auth.
+8. Monetização
+ Na tela de Assinatura/Pricing:
+Destacar banner de 14 dias grátis (trial)
+Botão "Iniciar teste grátis" → POST /api/subscriptions { planName:"PREMIUM", startTrial:true }
+Mostrar trialEnd e quantos dias restantes se status = trialing
+ Paywall gracioso para recursos Premium quando usuário está em FREE e não em trial.
+9. Captura passiva (revisar o já existente)
+ Aplicar regras de categorização automaticamente na tela de Pendentes antes do usuário aprovar (chamar /api/pending/:id/approve mantém o fluxo atual; a categorização já acontece no backend quando há regra ativa).
+Critérios de aceite
+Ao cadastrar, usuário só consegue prosseguir após aceitar termos e privacidade; o aceite é registrado no backend.
+Dashboard mostra saldos mascarados quando hideBalances = true.
+Settings tem seção LGPD completa, inclusive exclusão de conta funcional.
+Sessões ativas listam pelo menos o dispositivo atual.
+Exportação de dados gera JSON abrível.
+Regras de categorização podem ser criadas, testadas e deletadas.
+Trial de 14 dias visível e iniciável.
+Código de indicação pode ser compartilhado via share nativo.
+Observações
+Todas as requisições usam o mesmo padrão de auth já configurado (cookies/JWT bearer conforme o app atual).
+Respeite o design system atual do app mobile.
+Adicione testID nos componentes interativos principais.
+Atualize artifacts/finance-core/README.md com as novas telas.
+Atualizações finais (abril/2026) — OBRIGATÓRIAS
+O backend passou por code review e mudou algumas regras. Adapte o mobile aos pontos abaixo antes de considerar o trabalho pronto.
+
+A. Registro com consentimento explícito
+POST /api/auth/register agora exige os campos termsAccepted: true e privacyAccepted: true no body. Se não vierem, retorna 400.
+No app, antes de habilitar o botão "Criar conta", o checkbox de Termos/Privacidade tem que estar marcado e o body deve conter:
+{ email, password, firstName, lastName,
+  termsAccepted: true, privacyAccepted: true,
+  termsVersion, privacyVersion }
+
+termsVersion/privacyVersion vêm de GET /api/legal/versions (faça um useQuery e renderize "Versão X — atualizado em Y" nas telas de Termos e Privacidade e no próprio texto do checkbox). Não hardcode "1.0.0".
+B. Sessões e JWT vinculados (sid)
+O backend agora embute o sid (id da sessão) dentro do JWT. Quando o usuário encerra uma sessão via DELETE /api/user/sessions/:id, o access token e o refresh token daquela sessão passam a retornar 401 com mensagem "Sessão encerrada".
+Tratamento no app:
+Se qualquer request retornar 401 com esse message, limpe o storage (SecureStore/AsyncStorage) e redirecione para login sem tentar refresh.
+Se receber 401 "Token revogado" ou "Sessão encerrada" no fluxo de refresh, não fique em loop — faça logout imediato.
+Ao chamar POST /api/user/sessions/track no boot, envie deviceId estável (use expo-application.applicationId + Device.osInternalBuildId ou equivalente).
+C. Reestruturação em 5 planos
+Os planos agora são: ESSENCIAL (grátis), PREMIUM, FAMILY, PJ, INVESTIDOR_PRO.
+
+GET /api/subscription/info retorna plan.name como um desses 5 valores (o antigo FREE foi renomeado para ESSENCIAL). Trate legado: se vier FREE, renderize como ESSENCIAL.
+Reescreva a tela de Pricing/Assinatura:
+Lista vertical com 5 cards (no mobile, scroll vertical) mostrando nome, preço BRL, bullets de benefícios, badge "Mais popular" em PREMIUM.
+CTA chama POST /api/stripe/checkout { planName } e abre result.url em WebBrowser.openBrowserAsync (expo-web-browser), aguardando o retorno pelo deep link de sucesso para invalidar ["/api/subscription/info"].
+Se o backend retornar 503 com "Price ID não configurado", mostre toast "Plano indisponível no momento" — não quebre a tela.
+Crie hooks/useFeatureAccess.ts:
+type Feature = "ai" | "investments" | "pj" | "family" | "advancedPortfolio";
+export function useFeatureAccess(feature: Feature): boolean
+
+Consumindo GET /api/subscription/info. Use para gate nas telas:
+ai → tela de IA / chat.
+investments → telas de Investimentos, Dividendos, Performance.
+pj → módulo PJ/MEI (DARF, DAS, Livro Caixa).
+family → módulo Family.
+advancedPortfolio → Correlation, Drawdown, Scorecard, Portfolio Analysis.
+Quando o gate bloqueia, mostre tela/card com ícone de cadeado, mensagem "Disponível no plano {X}" e botão "Ver planos" navegando para Pricing.
+D. Modo discreto — cobertura total
+Além de Dashboard/Contas/Cartões/Transações/Investimentos, aplique maskValue em: Bills, Debts, Goals, Budgets, FinancialReports, Family (saldos do grupo), PJ (receitas/despesas), CardAnalytics. Em gráficos, só mascare tooltips — não os eixos.
+
+E. Split de transação — validação exata
+Ao salvar splits (POST /api/transaction-splits), a soma das linhas deve bater com o valor da transação (tolerância R$ 0,01). Mostre a diferença em tempo real no modal e só habilite o botão "Salvar" quando bater.
+Ofereça botão "Distribuir igualmente" que reparte o total entre as N linhas (arredondando para 2 casas, sobra na 1ª linha).
+F. Anomalias e recap no Dashboard
+Card de anomalias deve mostrar a badge colorida por severidade (increasePct >= 100 vermelho, >= 50 âmbar, senão cinza).
+Se GET /api/insights/anomalies retornar array vazio, não renderize o card.
+Tratamento de erro silencioso: se a query falhar, o dashboard segue sem o card (não quebre o fluxo).
+G. Checklist final de validação (mobile)
+ Registro bloqueia sem aceite; consent é gravado com a versão vinda de /api/legal/versions.
+ /termos e /privacidade (telas nativas ou WebView) mostram versão dinâmica.
+ Logout encerra sessão no backend; encerrar outra sessão pelo painel invalida imediatamente o token daquele outro device (testar com dois aparelhos/simuladores).
+ Tela de Pricing mostra 5 planos; checkout abre no browser e volta atualizando o status.
+ useFeatureAccess bloqueia corretamente usuários ESSENCIAL das telas premium.
+ Toggle olho no header mascara todas as telas listadas no item D.
+ Split exige soma exata; botão "Distribuir igualmente" funciona.
+ Dashboard: card de anomalias aparece com dados reais e some quando vazio.
+ Deep link ?ref=CODIGO após cadastro chama /api/referral/apply e mostra toast de sucesso.
+ Trial de 14 dias exibido com dias restantes quando status = trialing.
+Quando terminar, atualize o README.md do artifacts/finance-core listando todas as telas finais e variáveis de ambiente esperadas (EXPO_PUBLIC_API_URL, etc.), e rode um teste manual completo em iOS e Android (ou ao menos Expo Go) antes de entregar.
