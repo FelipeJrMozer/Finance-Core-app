@@ -10,6 +10,7 @@ import {
   cancelAllNotifications,
 } from '@/services/NotificationService';
 import { registerPushTokenWithBackend } from '@/services/devices';
+import { DISABLE_BACKGROUND_TASKS } from '@/config/featureFlags';
 
 export function useNotifications() {
   const { budgets, transactions, monthlyIncome, monthlyExpenses, netResult } = useFinance();
@@ -18,6 +19,7 @@ export function useNotifications() {
 
   const scheduleAll = useCallback(async () => {
     if (Platform.OS === 'web') return;
+    if (DISABLE_BACKGROUND_TASKS) return;
 
     const now = Date.now();
     if (now - lastScheduleRef.current < 60_000) return;

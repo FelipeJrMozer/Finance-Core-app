@@ -26,8 +26,10 @@ import { useTransactionIntent } from "@/hooks/useTransactionIntent";
 import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { QuickTransactionModal } from "@/components/QuickTransactionModal";
 import { CookieBanner } from "@/components/CookieBanner";
+import { logBackgroundTasksStatus } from "@/config/featureFlags";
 
 SplashScreen.preventAutoHideAsync();
+logBackgroundTasksStatus();
 
 const queryClient = new QueryClient();
 

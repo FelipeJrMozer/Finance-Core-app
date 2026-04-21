@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { DISABLE_BACKGROUND_TASKS } from '@/config/featureFlags';
 
 function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';
@@ -114,6 +115,7 @@ export interface DARFLike {
 }
 
 export async function scheduleDARFNotifications(darfs: DARFLike[]) {
+  if (DISABLE_BACKGROUND_TASKS) return;
   if (isExpoGo() || Platform.OS === 'web') return;
   try {
     const Notifications = await getNotifs();
@@ -150,6 +152,7 @@ export interface BudgetLike {
 }
 
 export async function checkAndNotifyBudgets(budgets: BudgetLike[]) {
+  if (DISABLE_BACKGROUND_TASKS) return;
   if (isExpoGo() || Platform.OS === 'web') return;
   try {
     const Notifications = await getNotifs();
@@ -182,6 +185,7 @@ export interface SubscriptionLike {
 }
 
 export async function scheduleSubscriptionReminders(subscriptions: SubscriptionLike[]) {
+  if (DISABLE_BACKGROUND_TASKS) return;
   if (isExpoGo() || Platform.OS === 'web') return;
   try {
     const Notifications = await getNotifs();
@@ -212,6 +216,7 @@ export async function scheduleSubscriptionReminders(subscriptions: SubscriptionL
 }
 
 export async function scheduleWeeklySummary(monthlyExpenses: number, monthlyIncome: number, netResult: number) {
+  if (DISABLE_BACKGROUND_TASKS) return;
   if (isExpoGo() || Platform.OS === 'web') return;
   try {
     const Notifications = await getNotifs();

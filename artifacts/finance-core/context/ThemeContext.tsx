@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native';
 import { Colors, ACCENT_PRESETS, AccentId, DEFAULT_ACCENT_ID } from '@/constants/colors';
 import { safeGet, safeSet } from '@/utils/storage';
 import { getAccessToken } from '@/services/api';
+import { DISABLE_BACKGROUND_TASKS } from '@/config/featureFlags';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -128,7 +129,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     init();
 
     // Poll API every 30s to pick up web changes
-    if (API_URL) {
+    if (API_URL && !DISABLE_BACKGROUND_TASKS) {
       syncIntervalRef.current = setInterval(async () => {
         const remote = await fetchRemotePrefs();
         if (!remote) return;

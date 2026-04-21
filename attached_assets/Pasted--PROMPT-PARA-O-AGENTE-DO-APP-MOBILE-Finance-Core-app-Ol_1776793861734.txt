@@ -1,0 +1,40 @@
+ PROMPT PARA O AGENTE DO APP MOBILE (Finance-Core-app)
+
+Olá. Fizemos duas mudanças no backend do Pilar Financeiro (repo pilar-financeiro web) e preciso que você alinhe o app mobile (Expo/React Native) com elas. Faça as verificações e ajustes abaixo:
+
+Contexto:
+
+O backend migrou o banco de dados PostgreSQL pra um Neon Free Tier próprio do usuário. Isso é transparente pra qualquer cliente HTTP — o app mobile não precisa mudar URL nem credenciais de banco. Confirme que o app mobile não tem conexão direta com banco; deve consumir só a API REST do backend. Se tiver qualquer string de conexão Postgres no código mobile, é bug e precisa ser removida.
+
+No backend foi adicionada uma flag DISABLE_CRON_JOBS=true em desenvolvimento, que pausa: notificações automáticas (email/push de hora em hora, 8h, 18h e DARFs dias 18-20), atualização periódica de cotações de mercado (10h/14h/18h seg-sex), atualização diária de benchmarks (CDI/Ibov), limpeza semanal de dados antigos.
+
+Tarefas:
+
+Verificar URL da API: confirme que o app mobile aponta pro backend correto via env var (algo como EXPO_PUBLIC_API_URL ou similar). Não deve haver URL hardcoded de banco.
+
+Auditar tarefas em background no mobile:
+
+Procure por: BackgroundFetch, expo-background-fetch, expo-task-manager, expo-notifications com agendamento local, setInterval em hooks/contexts, polling em useQuery com refetchInterval.
+Liste tudo que encontrar.
+Adicionar flag equivalente no mobile: crie uma constante (ex: em src/config/featureFlags.ts ou app.config.ts):
+
+export const DISABLE_BACKGROUND_TASKS = process.env.EXPO_PUBLIC_DISABLE_BACKGROUND_TASKS === 'true';
+
+E envolva qualquer registro de background fetch / notificação local agendada / setInterval de polling com:
+
+if (!DISABLE_BACKGROUND_TASKS) { /* registrar tarefa */ }
+
+Documente quais módulos foram afetados.
+
+Ajustar refetchInterval do TanStack Query: se houver queries com refetch automático curto (ex: cotações a cada 30s), aumente pra 5min em desenvolvimento ou desabilite quando DISABLE_BACKGROUND_TASKS=true. Mantenha refetchOnWindowFocus normal — isso é interação do usuário.
+
+Setar a env var em desenvolvimento: adicione EXPO_PUBLIC_DISABLE_BACKGROUND_TASKS=true no arquivo .env (ou equivalente do Expo). Em produção, deixe sem definir (ou false) pra que tudo rode normal.
+
+Validar: rode o app, faça login, abra dashboard e investimentos. Confirme que dados aparecem (carregamento sob demanda funcionando) e que não há tarefas de background sendo registradas — pode logar [JOBS-MOBILE] background tasks disabled no startup como o backend faz.
+
+NÃO mexer: em telas, navegação, autenticação, pagamentos, lógica de negócio. As mudanças são só de infraestrutura/scheduling.
+
+NÃO criar: documentação extra (READMEs, etc.) a menos que eu peça.
+
+No fim, me devolva: (a) lista do que foi auditado, (b) lista do que foi alterado com caminho dos arquivos, (c) confirmação de que o app continua funcional sob demanda.
+
