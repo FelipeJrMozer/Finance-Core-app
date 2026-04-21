@@ -12,6 +12,7 @@ import { formatBRL } from '@/utils/formatters';
 import { apiGet } from '@/services/api';
 import { useBenchmarks } from '@/services/benchmarks';
 import { fetchPortfolioReturns, type PortfolioReturns } from '@/services/portfolio';
+import { FeatureGate } from '@/components/FeatureGate';
 
 const { width } = Dimensions.get('window');
 const CHART_W = width - 64;
@@ -172,6 +173,12 @@ export default function InvestmentReportScreen() {
   ];
 
   return (
+    <FeatureGate
+      feature="investments"
+      title="Relatório de Investimentos"
+      icon="trending-up"
+      description="Análise completa de dividendos, performance e patrimônio. Disponível nos planos Premium, Family e Investidor Pro."
+    >
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* Tabs */}
       <View style={[styles.tabBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
@@ -366,6 +373,7 @@ export default function InvestmentReportScreen() {
         )}
       </ScrollView>
     </View>
+    </FeatureGate>
   );
 }
 
