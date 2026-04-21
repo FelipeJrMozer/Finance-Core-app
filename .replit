@@ -83,3 +83,9 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+APP_DATABASE_URL = "postgresql://neondb_owner:npg_pseQ61DvanZR@ep-soft-unit-acz0chzg-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DISABLE_CRON_JOBS = "true"
