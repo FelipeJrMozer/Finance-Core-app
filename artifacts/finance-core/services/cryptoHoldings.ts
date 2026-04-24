@@ -63,25 +63,18 @@ export async function listCryptoHoldings(portfolioId?: string): Promise<CryptoHo
   }
 }
 
-export async function createCryptoHolding(payload: CryptoHoldingPayload & { portfolioId?: string }): Promise<CryptoHolding | null> {
+export async function createCryptoHolding(payload: CryptoHoldingPayload & { portfolioId?: string }): Promise<CryptoHolding> {
   const raw = await apiPost<any>('/api/crypto-holdings', payload);
-  return raw?.id ? transform(raw) : null;
+  if (!raw?.id) throw new Error('Resposta inválida ao criar cripto.');
+  return transform(raw);
 }
 
-export async function updateCryptoHolding(id: string, payload: Partial<CryptoHoldingPayload>): Promise<CryptoHolding | null> {
-  try {
-    const raw = await apiPatch<any>(`/api/crypto-holdings/${id}`, payload);
-    return raw?.id ? transform(raw) : null;
-  } catch {
-    return null;
-  }
+export async function updateCryptoHolding(id: string, payload: Partial<CryptoHoldingPayload>): Promise<CryptoHolding> {
+  const raw = await apiPatch<any>(`/api/crypto-holdings/${id}`, payload);
+  if (!raw?.id) throw new Error('Resposta inválida ao atualizar cripto.');
+  return transform(raw);
 }
 
-export async function deleteCryptoHolding(id: string): Promise<boolean> {
-  try {
-    await apiDelete(`/api/crypto-holdings/${id}`);
-    return true;
-  } catch {
-    return false;
-  }
+export async function deleteCryptoHolding(id: string): Promise<void> {
+  await apiDelete(`/api/crypto-holdings/${id}`);
 }

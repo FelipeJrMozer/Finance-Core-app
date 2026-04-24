@@ -95,6 +95,7 @@ export interface Investment {
   purchaseDate?: string;
   status?: string;
   institution?: string;
+  portfolioId?: string;
 }
 
 export interface Budget {
@@ -401,6 +402,7 @@ function transformInvestment(raw: Record<string, unknown>): Investment {
     purchaseDate: raw.purchaseDate ? parseDate(raw.purchaseDate as string) : undefined,
     status: (raw.status as string) || 'active',
     institution: (raw.institution as string) || undefined,
+    portfolioId: (raw.portfolioId as string) || undefined,
   };
 }
 

@@ -75,10 +75,12 @@ export function CriptoTab({ portfolioId }: { portfolioId?: string }) {
       {
         text: 'Excluir', style: 'destructive',
         onPress: async () => {
-          const ok = await deleteCryptoHolding(h.id);
-          if (ok) {
+          try {
+            await deleteCryptoHolding(h.id);
             setItems((prev) => prev.filter((i) => i.id !== h.id));
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (e: any) {
+            Alert.alert('Erro', e?.message || 'Não foi possível excluir.');
           }
         },
       },
@@ -99,26 +101,18 @@ export function CriptoTab({ portfolioId }: { portfolioId?: string }) {
           symbol: sym, quantity: qty, averagePrice: avg,
           exchange: exchange.trim() || undefined,
         });
-        if (updated) {
-          setItems((prev) => prev.map((i) => (i.id === editing.id ? updated : i)));
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setShowForm(false);
-        } else {
-          Alert.alert('Erro', 'Não foi possível atualizar.');
-        }
+        setItems((prev) => prev.map((i) => (i.id === editing.id ? updated : i)));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowForm(false);
       } else {
         const created = await createCryptoHolding({
           symbol: sym, quantity: qty, averagePrice: avg,
           exchange: exchange.trim() || undefined,
           portfolioId,
         });
-        if (created) {
-          setItems((prev) => [created, ...prev]);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setShowForm(false);
-        } else {
-          Alert.alert('Erro', 'Não foi possível adicionar.');
-        }
+        setItems((prev) => [created, ...prev]);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowForm(false);
       }
     } catch (e: any) {
       Alert.alert('Erro', e?.message || 'Falha ao salvar.');

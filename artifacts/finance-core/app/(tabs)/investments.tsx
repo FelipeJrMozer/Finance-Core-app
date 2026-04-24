@@ -494,8 +494,15 @@ export default function InvestmentsScreen() {
   const selectedPortfolio = portfolios.find((p) => p.id === selectedPortfolioId);
   const portfolioLabel = selectedPortfolio?.name || 'Todos os portfólios';
 
-  const totalInvested = investments.reduce((s, i) => s + i.quantity * i.avgPrice, 0);
-  const totalCurrent = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+  const filteredInvestments = useMemo(
+    () => (selectedPortfolioId
+      ? investments.filter((i) => i.portfolioId === selectedPortfolioId)
+      : investments),
+    [investments, selectedPortfolioId],
+  );
+
+  const totalInvested = filteredInvestments.reduce((s, i) => s + i.quantity * i.avgPrice, 0);
+  const totalCurrent = filteredInvestments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const totalProfit = totalCurrent - totalInvested;
   const pctReturn = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
@@ -601,7 +608,7 @@ export default function InvestmentsScreen() {
 
           {/* Tab content */}
           <View style={{ padding: 16 }}>
-            {activeTab === 'carteira'   && <CarteiraTabContent investments={investments} />}
+            {activeTab === 'carteira'   && <CarteiraTabContent investments={filteredInvestments} />}
             {activeTab === 'analise'    && <AnaliseTab portfolioId={selectedPortfolioId} />}
             {activeTab === 'dividendos' && <DividendosTab portfolioId={selectedPortfolioId} />}
             {activeTab === 'cripto'     && <CriptoTab portfolioId={selectedPortfolioId} />}
