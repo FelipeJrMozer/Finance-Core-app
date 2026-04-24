@@ -77,7 +77,7 @@ waitForPort = 8080
 PORT = "8080"
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
