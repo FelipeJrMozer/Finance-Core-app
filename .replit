@@ -79,6 +79,7 @@ PORT = "8080"
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
+integrations = ["javascript_anthropic_ai_integrations:2.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
@@ -89,3 +90,6 @@ timeoutMs = 20000
 [userenv.shared]
 APP_DATABASE_URL = "postgresql://neondb_owner:npg_pseQ61DvanZR@ep-soft-unit-acz0chzg-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 DISABLE_CRON_JOBS = "true"
+
+[nix]
+channel = "stable-25_05"
