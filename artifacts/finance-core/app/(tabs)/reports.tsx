@@ -252,25 +252,39 @@ export default function ReportsScreen() {
     return { ...b, spent, pct: spent / b.limit };
   });
 
-  // ── Sazonalidade: compara mês atual com média dos últimos 6 meses por categoria ──
+  // ── Sazonalidade: compara mês atual com mesmo mês do ano anterior (YoY) ──
+  // Requer pelo menos 12 meses de histórico para mostrar; caso contrário retorna vazio
+  // e a UI exibe um aviso "—".
   const seasonality = useMemo(() => {
-    const now = new Date(selY, selM - 1, 1);
-    const months: string[] = [];
-    for (let i = 1; i <= 6; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-    const totalsPerCat: Record<string, number[]> = {};
-    months.forEach((m) => {
-      transactions
-        .filter((t) => t.type === 'expense' && (t.transactionDate ?? t.date).startsWith(m))
-        .forEach((t) => {
-          const k = t.category || 'other';
-          if (!totalsPerCat[k]) totalsPerCat[k] = Array(6).fill(0);
-          const idx = months.indexOf(m);
-          totalsPerCat[k][idx] += t.amount;
-        });
-    });
+    // Mês N do ano anterior
+    const prevYear = selY - 1;
+    const prevMonthKey = `${prevYear}-${String(selM).padStart(2, '0')}`;
+
+    // Verifica se temos pelo menos 12 meses de histórico de transações
+    const allDates = transactions
+      .map((t) => (t.transactionDate ?? t.date))
+      .filter(Boolean)
+      .sort();
+    if (allDates.length === 0) return { rows: [] as Array<{ cat: string; prev: number; cur: number; delta: number }>, hasYear: false };
+    const earliest = allDates[0].slice(0, 7); // YYYY-MM
+    const earliestDate = new Date(`${earliest}-01`);
+    const refDate = new Date(selY, selM - 1, 1);
+    const monthsDiff =
+      (refDate.getFullYear() - earliestDate.getFullYear()) * 12 +
+      (refDate.getMonth() - earliestDate.getMonth());
+    const hasYear = monthsDiff >= 12;
+    if (!hasYear) return { rows: [], hasYear: false };
+
+    // Despesas do mesmo mês do ano anterior
+    const prevByCat: Record<string, number> = {};
+    transactions
+      .filter((t) => t.type === 'expense' && (t.transactionDate ?? t.date).startsWith(prevMonthKey))
+      .forEach((t) => {
+        const k = t.category || 'other';
+        prevByCat[k] = (prevByCat[k] || 0) + t.amount;
+      });
+
+    // Despesas do mês atual
     const currentByCat: Record<string, number> = {};
     currentMonthTx
       .filter((t) => t.type === 'expense')
@@ -278,19 +292,22 @@ export default function ReportsScreen() {
         const k = t.category || 'other';
         currentByCat[k] = (currentByCat[k] || 0) + t.amount;
       });
-    const cats = new Set([...Object.keys(totalsPerCat), ...Object.keys(currentByCat)]);
+
+    const cats = new Set([...Object.keys(prevByCat), ...Object.keys(currentByCat)]);
     const rows = Array.from(cats).map((cat) => {
-      const series = totalsPerCat[cat] ?? [];
-      const sum = series.reduce((s, v) => s + v, 0);
-      const avg = series.length ? sum / series.length : 0;
+      const prev = prevByCat[cat] ?? 0;
       const cur = currentByCat[cat] ?? 0;
-      const delta = avg > 0 ? ((cur - avg) / avg) * 100 : (cur > 0 ? 100 : 0);
-      return { cat, avg, cur, delta };
+      const delta = prev > 0 ? ((cur - prev) / prev) * 100 : (cur > 0 ? 100 : 0);
+      return { cat, prev, cur, delta };
     });
-    return rows
-      .filter((r) => r.avg >= 30 || r.cur >= 30)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, 4);
+
+    return {
+      rows: rows
+        .filter((r) => r.prev >= 30 || r.cur >= 30) // mínimo R$30 em algum dos meses
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+        .slice(0, 4),
+      hasYear: true,
+    };
   }, [transactions, currentMonthTx, selY, selM]);
 
   const healthScore = useMemo(() => {
@@ -471,43 +488,59 @@ export default function ReportsScreen() {
                 )}
               </SectionCard>
 
-              {/* Sazonalidade — chips comparando mês atual vs média 6m */}
-              {seasonality.length > 0 && (
-                <SectionCard title="Sazonalidade — vs. média 6m" icon="calendar">
-                  <View style={seas.row}>
-                    {seasonality.map((s) => {
-                      const info = getCategoryInfo(s.cat);
-                      const up = s.delta > 5;
-                      const down = s.delta < -5;
-                      const chipColor = up ? colors.danger : down ? colors.primary : theme.textSecondary;
-                      return (
-                        <View
-                          key={s.cat}
-                          style={[seas.chip, { backgroundColor: `${chipColor}15`, borderColor: `${chipColor}40` }]}
-                        >
-                          <Feather
-                            name={up ? 'trending-up' : down ? 'trending-down' : 'minus'}
-                            size={12}
-                            color={chipColor}
-                          />
-                          <Text
-                            style={[seas.chipLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
-                            numberOfLines={1}
-                          >
-                            {info.label}
-                          </Text>
-                          <Text style={[seas.chipDelta, { color: chipColor, fontFamily: 'Inter_700Bold' }]}>
-                            {s.delta > 0 ? '+' : ''}{s.delta.toFixed(0)}%
-                          </Text>
-                        </View>
-                      );
-                    })}
+              {/* Sazonalidade — chips comparando mês atual vs mesmo mês do ano anterior */}
+              <SectionCard title="Sazonalidade — vs. ano anterior" icon="calendar">
+                {!seasonality.hasYear ? (
+                  <View testID="seasonality-insufficient" style={{ alignItems: 'center', paddingVertical: 12 }}>
+                    <Text style={[seas.chipDelta, { color: theme.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>
+                      —
+                    </Text>
+                    <Text style={[seas.hint, { color: theme.textTertiary, fontFamily: 'Inter_400Regular', marginTop: 4, textAlign: 'center' }]}>
+                      Sem 12 meses de histórico para comparação anual.
+                    </Text>
                   </View>
+                ) : seasonality.rows.length === 0 ? (
                   <Text style={[seas.hint, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                    Categorias com maior variação em relação à média dos últimos 6 meses.
+                    Sem variações significativas frente ao mesmo mês do ano anterior.
                   </Text>
-                </SectionCard>
-              )}
+                ) : (
+                  <>
+                    <View style={seas.row}>
+                      {seasonality.rows.map((s) => {
+                        const info = getCategoryInfo(s.cat);
+                        const up = s.delta > 5;
+                        const down = s.delta < -5;
+                        const chipColor = up ? colors.danger : down ? colors.primary : theme.textSecondary;
+                        return (
+                          <View
+                            key={s.cat}
+                            testID={`seasonality-chip-${s.cat}`}
+                            style={[seas.chip, { backgroundColor: `${chipColor}15`, borderColor: `${chipColor}40` }]}
+                          >
+                            <Feather
+                              name={up ? 'trending-up' : down ? 'trending-down' : 'minus'}
+                              size={12}
+                              color={chipColor}
+                            />
+                            <Text
+                              style={[seas.chipLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
+                              numberOfLines={1}
+                            >
+                              {info.label}
+                            </Text>
+                            <Text style={[seas.chipDelta, { color: chipColor, fontFamily: 'Inter_700Bold' }]}>
+                              {s.delta > 0 ? '+' : ''}{s.delta.toFixed(0)}%
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    <Text style={[seas.hint, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                      Comparação com {selM}/{selY - 1}. Categorias com mais de R$ 30 em algum dos meses.
+                    </Text>
+                  </>
+                )}
+              </SectionCard>
 
               {/* Savings Rate Trend */}
               {savingsRateData.some((d) => d.value > 0) && (

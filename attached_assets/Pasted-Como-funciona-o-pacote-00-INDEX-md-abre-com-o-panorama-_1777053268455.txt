@@ -1,0 +1,27 @@
+Como funciona o pacote:
+
+00-INDEX.md abre com o panorama: o que o mobile já tem, o que falta, mapa das 10 fases na ordem de dependência, e a lista completa dos endpoints do backend que o mobile ainda não está usando (são quase 100 rotas prontas que o agente vai poder consumir).
+
+Cada fase-XX-*.md é um prompt autônomo — você pode colar diretamente no agente que vai executar e ele vai entender o escopo, os endpoints exatos, o "antes/depois" do código onde aplicável, e os critérios de aceitação.
+
+Resumo do que cada fase entrega:
+
+Fase	O que sai pronto
+1 — Cálculos críticos	Health Score real (5 pilares), faturas via /api/card-invoices, paginação de lançamentos, Bills funcionando, dashboard agregado, PM ponderado dos investimentos, sazonalidade ano-a-ano
+2 — Marca	Renomear pra "Pilar Financeiro", logo diamante, 8 acentos com IDs idênticos ao web, Roboto Mono nos valores, menu reorganizado em 7 seções, micro-interações de press/elevate
+3 — Investimentos	XIRR, TWR/MWR, drawdown, allocation, watchlist, alertas de preço, comparador de ações, scorecard, dividend calendar, cripto separado
+4 — IRPF/DARF/MEI	Painel IRPF, geração de arquivo .DEC importável, DARF como tela dedicada, calendário fiscal, DASN-SIMEI, PJ migrado para /api/pj/*
+5 — Filtros & relatórios	Bottom sheet de 8 filtros, abas Visão Geral / Fluxo / Categorias / Insights, DRE, calendário financeiro, hidden fees, monthly comparison
+6 — Telas ausentes	Net Worth com timeline 24m, Categorias CRUD hierárquico, Brokerage Import (PDF de nota), Arquivados, Educação, Mercado
+7 — Simuladores	Lista oficial de 20 simuladores (7 novos: Aportes Mensais, Renda Fixa, FGTS, 13º, Aluguel vs Compra, Dividend Yield, Aposentadoria, Meta Financeira), padrão de tela único
+8 — Performance	React Query + persist, FlashList, paginação infinita, prefetch ao logar, code splitting de simuladores, redução de re-renders
+9 — UX polish	Skeletons em todas as telas, sistema de toasts, empty states refinados, transições, haptics, FAB com 4 ações, ActionSheet pra confirmações destrutivas, a11y, i18n preparado
+10 — Sync & push	Custom alerts migrados pra /api/alert-rules, push notifications end-to-end, Settings completo (25+ toggles), biometria, backup acionável, sessões/dispositivos, LGPD completo
+Pontos importantes que descobri na análise e estão documentados:
+
+O ID dos presets de cor está dessincronizado — mobile tem royalblue/ocean/etc., web tem blue/ocean/etc. A Fase 2 padroniza pros 8 IDs do web pra que /api/preferences realmente sincronize.
+O Health Score no mobile usa só taxa de poupança simples; o web tem 5 pilares ponderados — a Fase 1 conserta isso.
+O card.used é computado no cliente e ignora estornos/parcelamento de fatura — Fase 1 troca pra /api/card-invoices.
+Mobile não chama nenhum endpoint /api/tax/* (zero suporte a IRPF) — é o maior gap funcional.
+Custom alerts são local-only — usuário cria no mobile, não aparece no web. Fase 10 migra pro server-side.
+Pode começar pela Fase 1 com tranquilidade — ela conserta os cálculos errados antes que as fases seguintes propaguem o problema.

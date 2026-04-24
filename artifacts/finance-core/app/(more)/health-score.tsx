@@ -10,7 +10,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { getCurrentMonth } from '@/utils/formatters';
 import {
-  fetchHealthScore,
   labelForComponent,
   categoryLabelPT,
   pillarLabel,
@@ -130,13 +129,16 @@ const pb = StyleSheet.create({
 
 export default function HealthScoreScreen() {
   const { theme, colors } = useTheme();
-  const { transactions, accounts, creditCards, investments, budgets } = useFinance();
+  const {
+    transactions, accounts, creditCards, investments, budgets,
+    serverHealthScore, isLoadingHealthScore, refreshHealthScore,
+  } = useFinance();
   const insets = useSafeAreaInsets();
 
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [data, setData] = useState<HealthScore | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const usingFallback = !serverHealthScore || serverHealthScore.components.length === 0;
+  const data = !usingFallback ? serverHealthScore : null;
+  const loading = isLoadingHealthScore && !serverHealthScore;
 
   // Local fallback computation when backend has no data yet
   const localFallback = React.useMemo<HealthScore>(() => {
@@ -181,25 +183,9 @@ export default function HealthScoreScreen() {
     };
   }, [transactions, accounts, creditCards, budgets, investments]);
 
-  const load = useCallback(async () => {
-    const remote = await fetchHealthScore();
-    if (remote && remote.components.length > 0) {
-      setData(remote);
-      setUsingFallback(false);
-    } else {
-      setData(null);
-      setUsingFallback(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [load]);
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await refreshHealthScore();
     setRefreshing(false);
   };
 

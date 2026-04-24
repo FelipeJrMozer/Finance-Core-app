@@ -27,6 +27,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="pending-transactions" options={{ title: 'Lançamentos Pendentes' }} />
       <Stack.Screen name="debts" options={{ title: 'Dívidas' }} />
       <Stack.Screen name="bills" options={{ title: 'Contas a Pagar' }} />
+      <Stack.Screen name="recurring" options={{ title: 'Recorrências' }} />
       <Stack.Screen name="sinking-funds" options={{ title: 'Reservas Programadas' }} />
       <Stack.Screen name="pj/index" options={{ title: 'Módulo PJ / MEI' }} />
       <Stack.Screen name="pj/receitas" options={{ title: 'Receitas PJ' }} />

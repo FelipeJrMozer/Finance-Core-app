@@ -44,7 +44,10 @@ function formatDateHeader(dateStr: string) {
 
 export default function TransactionsScreen() {
   const { theme, colors } = useTheme();
-  const { transactions, accounts, isLoading, refresh, searchTransactionsRemote } = useFinance();
+  const {
+    transactions, accounts, isLoading, refresh, searchTransactionsRemote,
+    loadMoreTransactions, hasMoreTransactions, isLoadingMore,
+  } = useFinance();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -402,6 +405,28 @@ export default function TransactionsScreen() {
         )}
         ListHeaderComponent={renderHeader}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        onEndReached={() => {
+          if (!isSearching && hasMoreTransactions && !isLoadingMore) {
+            loadMoreTransactions();
+          }
+        }}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={() => (
+          isLoadingMore ? (
+            <View style={{ paddingVertical: 24, alignItems: 'center' }} testID="loading-more-transactions">
+              <ActivityIndicator color={colors.primary} />
+              <Text style={[styles.emptyText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular', marginTop: 6 }]}>
+                Carregando mais…
+              </Text>
+            </View>
+          ) : !hasMoreTransactions && filtered.length > 10 && !isSearching ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <Text style={[styles.emptyText, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                Fim do histórico
+              </Text>
+            </View>
+          ) : null
+        )}
         ListEmptyComponent={() => (
           <View style={styles.emptyState}>
             <Feather name="inbox" size={48} color={theme.textTertiary} />

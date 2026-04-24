@@ -5,6 +5,7 @@ import { useWallet } from '@/context/WalletContext';
 import { parseAmount, parseDate as parseDateSafe } from '@/utils/parse';
 import { logger } from '@/utils/logger';
 import { notifyError } from '@/utils/notify';
+import { fetchHealthScore, type HealthScore } from '@/services/healthScore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -386,13 +387,15 @@ function transformCard(raw: Record<string, unknown>, transactions: Transaction[]
 }
 
 function transformInvestment(raw: Record<string, unknown>): Investment {
+  // Prefer averagePrice (computed from real buy/sell history) over purchasePrice (initial entry).
+  const avg = raw.averagePrice ?? raw.purchasePrice;
   return {
     id: raw.id as string,
     name: (raw.name as string) || (raw.ticker as string) || '',
     ticker: (raw.ticker as string) || '',
     type: normalizeInvestmentType(raw.type),
     quantity: parseAmount(raw.quantity),
-    avgPrice: parseAmount(raw.purchasePrice ?? raw.averagePrice),
+    avgPrice: parseAmount(avg),
     currentPrice: parseAmount(raw.currentPrice),
     currency: 'BRL',
     purchaseDate: raw.purchaseDate ? parseDate(raw.purchaseDate as string) : undefined,
@@ -515,6 +518,16 @@ interface FinanceContextType {
   searchTransactionsRemote: (query: string, signal?: AbortSignal) => Promise<Transaction[]>;
   getInstallments: (transactionId: string) => Promise<InstallmentEntry[]>;
 
+  // Pagination
+  loadMoreTransactions: () => Promise<void>;
+  hasMoreTransactions: boolean;
+  isLoadingMore: boolean;
+
+  // Server-side health score
+  serverHealthScore: HealthScore | null;
+  isLoadingHealthScore: boolean;
+  refreshHealthScore: () => Promise<void>;
+
   totalBalance: number;
   cashBalance: number;
   netWorth: number;
@@ -525,6 +538,9 @@ interface FinanceContextType {
   netResult: number;
   healthScore: number;
 }
+
+const TX_PAGE_SIZE = 50;
+const TX_INITIAL_LIMIT = 100;
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -565,6 +581,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [serverHealthScore, setServerHealthScore] = useState<HealthScore | null>(null);
+  const [isLoadingHealthScore, setIsLoadingHealthScore] = useState(false);
+  const txOffsetRef = useRef<number>(0);
+  const isLoadingMoreRef = useRef<boolean>(false);
 
   const catMapRef = useRef<Record<string, ApiCategory>>({});
   const openingBalancesRef = useRef<Record<string, number>>({});
@@ -596,7 +618,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const [cats, accs, txs, invs, buds, gls, cards, tagList, notifs, settingsRaw] = await Promise.allSettled([
         apiGet<unknown>(wq('/api/categories')),
         apiGet<unknown>(wq('/api/accounts')),
-        apiGet<unknown>(wq('/api/transactions')),
+        apiGet<unknown>(wq(`/api/transactions?limit=${TX_INITIAL_LIMIT}&offset=0`)),
         apiGet<unknown>(wq('/api/investments')),
         apiGet<unknown>(wq('/api/budgets')),
         apiGet<unknown>(wq('/api/goals')),
@@ -625,6 +647,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       const mappedTx = txsData.map((r) => transformTransaction(r, catMap));
       setTransactions(mappedTx);
       transactionsRef.current = mappedTx;
+      txOffsetRef.current = mappedTx.length;
+      setHasMoreTransactions(mappedTx.length >= TX_INITIAL_LIMIT);
 
       recalibrateOpeningBalances(mappedAccounts, mappedTx);
 
@@ -1291,9 +1315,65 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // ── Pagination ─────────────────────────────────────────────────────────────
+
+  const loadMoreTransactions = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMoreTransactions) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    try {
+      const offset = txOffsetRef.current;
+      const data = await apiGet<unknown>(
+        wq(`/api/transactions?limit=${TX_PAGE_SIZE}&offset=${offset}`)
+      );
+      const arr = toArray<Record<string, unknown>>(data);
+      if (arr.length === 0) {
+        setHasMoreTransactions(false);
+        return;
+      }
+      const mapped = arr.map((r) => transformTransaction(r, catMapRef.current));
+      setTransactions((prev) => {
+        const seen = new Set(prev.map((t) => t.id));
+        const fresh = mapped.filter((t) => !seen.has(t.id));
+        const next = [...prev, ...fresh];
+        transactionsRef.current = next;
+        return next;
+      });
+      txOffsetRef.current = offset + arr.length;
+      if (arr.length < TX_PAGE_SIZE) setHasMoreTransactions(false);
+    } catch (e) {
+      logger.warn('[loadMoreTransactions]', e);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [hasMoreTransactions, wq]);
+
+  // ── Server Health Score ────────────────────────────────────────────────────
+
+  const refreshHealthScore = useCallback(async () => {
+    setIsLoadingHealthScore(true);
+    try {
+      const data = await fetchHealthScore();
+      setServerHealthScore(data);
+    } finally {
+      setIsLoadingHealthScore(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !walletReady) {
+      setServerHealthScore(null);
+      return;
+    }
+    refreshHealthScore();
+  }, [isAuthenticated, walletReady, selectedWalletId, refreshHealthScore]);
+
   // ── Refresh ────────────────────────────────────────────────────────────────
 
-  const refresh = useCallback(() => loadAll(), [loadAll]);
+  const refresh = useCallback(async () => {
+    await Promise.all([loadAll(), refreshHealthScore()]);
+  }, [loadAll, refreshHealthScore]);
 
   return (
     <FinanceContext.Provider value={{
@@ -1308,6 +1388,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addBudget, updateBudget, deleteBudget,
       addCategory, updateSettings, markNotificationRead, dismissNotification,
       refresh, searchTransactionsRemote, getInstallments,
+      loadMoreTransactions, hasMoreTransactions, isLoadingMore,
+      serverHealthScore, isLoadingHealthScore, refreshHealthScore,
       totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
     }}>
       {children}

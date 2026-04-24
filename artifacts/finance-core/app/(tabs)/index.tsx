@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Platform
 } from 'react-native';
@@ -21,6 +21,8 @@ import { BudgetProgress } from '@/components/BudgetProgress';
 import { TransactionSkeleton, CardSkeleton } from '@/components/ui/SkeletonLoader';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { formatBRL, getCurrentMonth } from '@/utils/formatters';
+import { fetchDashboardSummary, invalidateDashboardCache, type DashboardSummary } from '@/services/dashboard';
+import { fetchUpcomingBills, type UpcomingBill } from '@/services/upcomingBills';
 
 // ── Weekly sparkline ──────────────────────────────────────
 function WeeklyChart() {
@@ -156,37 +158,54 @@ const hgStyles = StyleSheet.create({
   labelText: { fontSize: 14 },
 });
 
-// ── Upcoming Bills ──────────────────────────────────────
-function UpcomingBills() {
-  const { theme, colors } = useTheme();
-  const { creditCards } = useFinance();
+// ── Upcoming Bills (server-driven) ──────────────────────────────────────
+function UpcomingBillsWidget({ items, loading }: { items: UpcomingBill[]; loading: boolean }) {
+  const { theme, colors, maskValue } = useTheme();
 
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  if (loading && items.length === 0) {
+    return (
+      <View style={[ubStyles.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID="upcoming-bills-loading">
+        <View style={ubStyles.header}>
+          <Feather name="clock" size={16} color={colors.warning} />
+          <Text style={[ubStyles.title, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+            Próximos Vencimentos
+          </Text>
+        </View>
+        <Text style={[ubStyles.billDate, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+          Carregando…
+        </Text>
+      </View>
+    );
+  }
 
-  const upcoming = [
-    ...creditCards.map((c) => ({
-      id: c.id,
-      label: c.name,
-      amount: c.used,
-      dueDate: c.dueDate,
-      icon: 'credit-card' as const,
-      color: c.color || colors.primary,
-    })),
-  ]
-    .filter((b) => b.dueDate >= todayStr)
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 3);
-
+  const upcoming = items.slice(0, 5);
   if (upcoming.length === 0) return null;
 
-  const getDaysUntil = (dateStr: string) => {
-    const diff = new Date(dateStr).getTime() - today.getTime();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  const sourceIcon = (s: UpcomingBill['source']): keyof typeof Feather.glyphMap => {
+    if (s === 'invoice') return 'credit-card';
+    if (s === 'recurring') return 'repeat';
+    return 'file-text';
+  };
+
+  const sourceColor = (s: UpcomingBill['source']): string => {
+    if (s === 'invoice') return colors.info;
+    if (s === 'recurring') return colors.warning;
+    return colors.primary;
+  };
+
+  const navigateForSource = (b: UpcomingBill) => {
+    Haptics.selectionAsync();
+    if (b.source === 'invoice' && b.cardId) {
+      router.push({ pathname: '/card/[id]', params: { id: b.cardId } });
+    } else if (b.source === 'recurring') {
+      router.push('/(more)/recurring');
+    } else {
+      router.push('/(more)/bills');
+    }
   };
 
   return (
-    <View style={[ubStyles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+    <View style={[ubStyles.card, { backgroundColor: theme.surface, borderColor: theme.border }]} testID="upcoming-bills">
       <View style={ubStyles.header}>
         <Feather name="clock" size={16} color={colors.warning} />
         <Text style={[ubStyles.title, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
@@ -194,25 +213,40 @@ function UpcomingBills() {
         </Text>
       </View>
       {upcoming.map((bill) => {
-        const days = getDaysUntil(bill.dueDate);
-        const urgent = days <= 5;
+        const days = bill.daysUntil;
+        const urgent = days <= 3;
+        const overdue = days < 0;
+        const color = sourceColor(bill.source);
         return (
-          <View key={bill.id} style={[ubStyles.bill, { borderColor: theme.border }]}>
-            <View style={[ubStyles.billIcon, { backgroundColor: `${bill.color}20` }]}>
-              <Feather name={bill.icon} size={14} color={bill.color} />
+          <Pressable
+            key={`${bill.source}-${bill.id}`}
+            testID={`upcoming-bill-${bill.id}`}
+            onPress={() => navigateForSource(bill)}
+            style={[ubStyles.bill, { borderColor: theme.border }]}
+          >
+            <View style={[ubStyles.billIcon, { backgroundColor: `${color}20` }]}>
+              <Feather name={sourceIcon(bill.source)} size={14} color={color} />
             </View>
             <View style={ubStyles.billInfo}>
               <Text style={[ubStyles.billLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]} numberOfLines={1}>
-                {bill.label}
+                {bill.description || bill.cardName || 'Vencimento'}
               </Text>
-              <Text style={[ubStyles.billDate, { color: urgent ? colors.danger : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-                {days === 0 ? 'Vence hoje!' : `Vence em ${days} dia${days !== 1 ? 's' : ''}`}
+              <Text style={[ubStyles.billDate, {
+                color: overdue || urgent ? colors.danger : theme.textTertiary,
+                fontFamily: 'Inter_400Regular',
+              }]}>
+                {overdue
+                  ? `Vencido há ${Math.abs(days)} dia${Math.abs(days) !== 1 ? 's' : ''}`
+                  : days === 0 ? 'Vence hoje!' : `Vence em ${days} dia${days !== 1 ? 's' : ''}`}
               </Text>
             </View>
-            <Text style={[ubStyles.billAmount, { color: urgent ? colors.danger : theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-              {formatBRL(bill.amount, true)}
+            <Text style={[ubStyles.billAmount, {
+              color: overdue || urgent ? colors.danger : theme.text,
+              fontFamily: 'Inter_600SemiBold',
+            }]}>
+              {maskValue(formatBRL(bill.amount, true))}
             </Text>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -278,23 +312,61 @@ export default function DashboardScreen() {
     netResult, healthScore,
     transactions, budgets, isLoading, accounts, investments, creditCards
   } = useFinance();
-  const { selectedWallet } = useWallet();
+  const { selectedWallet, selectedWalletId } = useWallet();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalVisible, setWalletModalVisible] = useState(false);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary | null>(null);
+  const [upcomingItems, setUpcomingItems] = useState<UpcomingBill[]>([]);
+  const [loadingUpcoming, setLoadingUpcoming] = useState(true);
+
+  const loadServerData = useCallback(async (fresh = false) => {
+    try {
+      const [summary, upcoming] = await Promise.allSettled([
+        fetchDashboardSummary(fresh),
+        fetchUpcomingBills(30),
+      ]);
+      if (summary.status === 'fulfilled') setDashboardSummary(summary.value);
+      if (upcoming.status === 'fulfilled') setUpcomingItems(upcoming.value);
+    } finally {
+      setLoadingUpcoming(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setLoadingUpcoming(true);
+    loadServerData(false);
+  }, [loadServerData, selectedWalletId]);
 
   const recentTransactions = transactions.slice(0, 5);
   const currentMonth = getCurrentMonth();
   const monthlyTx = transactions.filter((t) => (t.transactionDate ?? t.date).startsWith(currentMonth));
 
-  const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
-  const totalCreditUsed = creditCards.reduce((s, c) => s + c.used, 0);
-  const netWorth = totalBalance + totalInvestments - totalCreditUsed;
+  // Server-driven KPIs (preferred when dashboard summary is available);
+  // fall back to local calculations for offline/legacy support.
+  const incomeForCards = dashboardSummary?.monthlyIncome ?? monthlyIncome;
+  const expensesForCards = dashboardSummary?.monthlyExpenses ?? monthlyExpenses;
+  const prevIncomeForCards = dashboardSummary?.prevMonthIncome ?? prevMonthIncome;
+  const prevExpensesForCards = dashboardSummary?.prevMonthExpenses ?? prevMonthExpenses;
+  const netResultForCards = incomeForCards - expensesForCards;
+  const totalInvestmentsForCards = dashboardSummary?.totalInvestments
+    ?? investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
+  const totalCreditUsedForCards = dashboardSummary?.totalCardDebt
+    ?? creditCards.reduce((s, c) => s + c.used, 0);
+  const balanceForCards = dashboardSummary?.cashBalance ?? totalBalance;
+  const netWorthForCards = dashboardSummary?.netWorth
+    ?? (balanceForCards + totalInvestmentsForCards - totalCreditUsedForCards);
+  const healthScoreForCards = dashboardSummary?.healthScore ?? healthScore;
 
-  const savingsRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
+  // Legacy locals retained for sections that still depend on transactions[]
+  const totalInvestments = totalInvestmentsForCards;
+  const totalCreditUsed = totalCreditUsedForCards;
+  const netWorth = netWorthForCards;
 
-  const incomeTrend = prevMonthIncome > 0 ? ((monthlyIncome - prevMonthIncome) / prevMonthIncome) * 100 : undefined;
-  const expensesTrend = prevMonthExpenses > 0 ? ((monthlyExpenses - prevMonthExpenses) / prevMonthExpenses) * 100 : undefined;
+  const savingsRate = incomeForCards > 0 ? ((incomeForCards - expensesForCards) / incomeForCards) * 100 : 0;
+
+  const incomeTrend = prevIncomeForCards > 0 ? ((incomeForCards - prevIncomeForCards) / prevIncomeForCards) * 100 : undefined;
+  const expensesTrend = prevExpensesForCards > 0 ? ((expensesForCards - prevExpensesForCards) / prevExpensesForCards) * 100 : undefined;
 
   const topExpenseCategory = (() => {
     const cats: Record<string, number> = {};
@@ -325,7 +397,12 @@ export default function DashboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      await invalidateDashboardCache();
+      await loadServerData(true);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -377,20 +454,20 @@ export default function DashboardScreen() {
             style={styles.balanceCard}
           >
             <Text style={[styles.balanceLabel, { fontFamily: 'Inter_400Regular' }]}>Saldo Total</Text>
-            <Text style={[styles.balanceValue, { fontFamily: 'Inter_700Bold' }]}>
-              {maskValue(formatBRL(totalBalance))}
+            <Text style={[styles.balanceValue, { fontFamily: 'Inter_700Bold' }]} testID="balance-total">
+              {maskValue(formatBRL(balanceForCards))}
             </Text>
             <View style={styles.balanceFooter}>
               <View style={styles.balanceMetric}>
                 <Feather name="arrow-up-circle" size={13} color="rgba(0,0,0,0.7)" />
-                <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
-                  {maskValue(formatBRL(monthlyIncome, true))}
+                <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]} testID="balance-income">
+                  {maskValue(formatBRL(incomeForCards, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
                 <Feather name="arrow-down-circle" size={13} color="rgba(0,0,0,0.7)" />
-                <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]}>
-                  {maskValue(formatBRL(monthlyExpenses, true))}
+                <Text style={[styles.balanceMeta, { fontFamily: 'Inter_400Regular' }]} testID="balance-expenses">
+                  {maskValue(formatBRL(expensesForCards, true))}
                 </Text>
               </View>
               <View style={styles.balanceMetric}>
@@ -419,47 +496,48 @@ export default function DashboardScreen() {
                     Patrimônio Líquido
                   </Text>
                   <Text
-                    style={[styles.netWorthValue, { color: netWorth >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_700Bold' }]}
+                    style={[styles.netWorthValue, { color: netWorthForCards >= 0 ? colors.primary : colors.danger, fontFamily: 'Inter_700Bold' }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                     minimumFontScale={0.6}
+                    testID="networth-value"
                   >
-                    {maskValue(formatBRL(netWorth))}
+                    {maskValue(formatBRL(netWorthForCards))}
                   </Text>
                   <View style={styles.netWorthBreakdown}>
                     <View style={styles.nwRow}>
                       <View style={[styles.nwDot, { backgroundColor: colors.primary }]} />
                       <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Contas</Text>
                       <Text style={[styles.nwVal, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
-                        {maskValue(formatBRL(totalBalance, true))}
+                        {maskValue(formatBRL(balanceForCards, true))}
                       </Text>
                     </View>
                     <View style={styles.nwRow}>
                       <View style={[styles.nwDot, { backgroundColor: colors.info }]} />
                       <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Invest.</Text>
                       <Text style={[styles.nwVal, { color: colors.info, fontFamily: 'Inter_500Medium' }]}>
-                        {maskValue(formatBRL(totalInvestments, true))}
+                        {maskValue(formatBRL(totalInvestmentsForCards, true))}
                       </Text>
                     </View>
                     <View style={styles.nwRow}>
                       <View style={[styles.nwDot, { backgroundColor: colors.danger }]} />
                       <Text style={[styles.nwLbl, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Crédito</Text>
                       <Text style={[styles.nwVal, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
-                        -{maskValue(formatBRL(totalCreditUsed, true))}
+                        -{maskValue(formatBRL(totalCreditUsedForCards, true))}
                       </Text>
                     </View>
                   </View>
                 </View>
               </View>
 
-              {/* Summary Cards */}
+              {/* Summary Cards (server-driven when summary available) */}
               <View style={styles.summaryRow}>
-                <SummaryCard label="Receitas" value={formatBRL(monthlyIncome, true)} icon="arrow-up" color={colors.primary} trend={incomeTrend} testID="income-card" />
-                <SummaryCard label="Despesas" value={formatBRL(monthlyExpenses, true)} icon="arrow-down" color={colors.danger} trend={expensesTrend} testID="expenses-card" />
+                <SummaryCard label="Receitas" value={formatBRL(incomeForCards, true)} icon="arrow-up" color={colors.primary} trend={incomeTrend} testID="income-card" />
+                <SummaryCard label="Despesas" value={formatBRL(expensesForCards, true)} icon="arrow-down" color={colors.danger} trend={expensesTrend} testID="expenses-card" />
               </View>
               <View style={styles.summaryRow}>
-                <SummaryCard label="Resultado" value={formatBRL(netResult, true)} icon="activity" color={netResult >= 0 ? colors.primary : colors.danger} testID="net-card" />
-                <SummaryCard label="Invest." value={formatBRL(totalInvestments, true)} icon="trending-up" color={colors.info} testID="invest-card" />
+                <SummaryCard label="Resultado" value={formatBRL(netResultForCards, true)} icon="activity" color={netResultForCards >= 0 ? colors.primary : colors.danger} testID="net-card" />
+                <SummaryCard label="Invest." value={formatBRL(totalInvestmentsForCards, true)} icon="trending-up" color={colors.info} testID="invest-card" />
               </View>
             </>
           )}
@@ -476,7 +554,7 @@ export default function DashboardScreen() {
                 </Text>
               </Pressable>
             </View>
-            <HealthGauge score={healthScore} />
+            <HealthGauge score={healthScoreForCards} />
             <View style={styles.healthFactors}>
               {[
                 { label: 'Taxa de poupança', ok: savingsRate >= 20, val: `${savingsRate.toFixed(0)}%` },
@@ -512,8 +590,8 @@ export default function DashboardScreen() {
             <WeeklyChart />
           </View>
 
-          {/* Upcoming Bills */}
-          <UpcomingBills />
+          {/* Upcoming Bills (server-driven, /api/upcoming-bills?days=30) */}
+          <UpcomingBillsWidget items={upcomingItems} loading={loadingUpcoming} />
 
           {/* Insights inteligentes (anomalies/recap/emergency-fund) */}
           <InsightsCards />
