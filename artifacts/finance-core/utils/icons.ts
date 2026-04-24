@@ -114,15 +114,34 @@ export const ICONS = {
   // UI utilitários
   chevronRight:     { lib: 'Feather', name: 'chevron-right' },
   chevronLeft:      { lib: 'Feather', name: 'chevron-left' },
+  'chevron-right':  { lib: 'Feather', name: 'chevron-right' },
+  'chevron-left':   { lib: 'Feather', name: 'chevron-left' },
+  'chevron-down':   { lib: 'Feather', name: 'chevron-down' },
+  'chevron-up':     { lib: 'Feather', name: 'chevron-up' },
   plus:             { lib: 'Feather', name: 'plus' },
   minus:            { lib: 'Feather', name: 'minus' },
   search:           { lib: 'Feather', name: 'search' },
   edit:             { lib: 'Feather', name: 'edit-2' },
   delete:           { lib: 'Feather', name: 'trash-2' },
   check:            { lib: 'Feather', name: 'check' },
+  'check-circle':   { lib: 'Feather', name: 'check-circle' },
   close:            { lib: 'Feather', name: 'x' },
   info:             { lib: 'Feather', name: 'info' },
   alert:            { lib: 'Feather', name: 'alert-circle' },
+  copy:             { lib: 'Feather', name: 'copy' },
+  share:            { lib: 'Feather', name: 'share-2' },
+  download:         { lib: 'Feather', name: 'download' },
+  upload:           { lib: 'Feather', name: 'upload' },
+  external:         { lib: 'Feather', name: 'external-link' },
+  refresh:          { lib: 'Feather', name: 'refresh-cw' },
+  'trending-down':  { lib: 'Feather', name: 'trending-down' },
+  'trending-up':    { lib: 'Feather', name: 'trending-up' },
+  'file-text':      { lib: 'Feather', name: 'file-text' },
+  calendar:         { lib: 'Feather', name: 'calendar' },
+  // Aliases semânticos para Fase 4
+  export:           { lib: 'Feather', name: 'download' },
+  income:           { lib: 'Feather', name: 'arrow-down-circle' },
+  deduction:        { lib: 'Feather', name: 'minus-circle' },
 } as const satisfies Record<string, IconSpec>;
 
 export type IconName = keyof typeof ICONS;
@@ -143,13 +162,14 @@ interface IconProps {
 export function Icon({ name, size = 20, color, style }: IconProps) {
   const spec = ICONS[name];
   if (!spec) return null;
-  if (spec.lib === 'MaterialCommunityIcons') {
+  const lib = spec.lib as IconLib;
+  if (lib === 'MaterialCommunityIcons') {
     return React.createElement(
       MaterialCommunityIcons as React.ComponentType<{ name: string; size?: number; color?: string; style?: unknown }>,
       { name: spec.name, size, color, style }
     );
   }
-  if (spec.lib === 'MaterialIcons') {
+  if (lib === 'MaterialIcons') {
     return React.createElement(
       MaterialIcons as React.ComponentType<{ name: string; size?: number; color?: string; style?: unknown }>,
       { name: spec.name, size, color, style }

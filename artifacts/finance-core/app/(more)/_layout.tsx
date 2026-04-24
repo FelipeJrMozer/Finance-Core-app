@@ -46,6 +46,13 @@ export default function MoreSubLayout() {
       <Stack.Screen name="legal-privacy" options={{ title: 'Política de Privacidade' }} />
       <Stack.Screen name="categorization-rules" options={{ title: 'Regras de Categorização' }} />
       <Stack.Screen name="referral" options={{ title: 'Indicação' }} />
+      {/* Fase 4 — Imposto de Renda */}
+      <Stack.Screen name="taxes" options={{ title: 'Imposto de Renda' }} />
+      <Stack.Screen name="darf" options={{ title: 'DARF' }} />
+      <Stack.Screen name="tax-calendar" options={{ title: 'Calendário fiscal' }} />
+      <Stack.Screen name="irpf-export" options={{ title: 'Exportar IRPF' }} />
+      <Stack.Screen name="tax-incomes" options={{ title: 'Rendimentos' }} />
+      <Stack.Screen name="tax-deductions" options={{ title: 'Deduções' }} />
     </Stack>
   );
 }
