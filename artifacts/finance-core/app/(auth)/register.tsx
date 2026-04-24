@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useLegalVersions } from '@/hooks/useLegalVersions';
 import { buildLegalUrl } from '@/services/legal';
+import { BrandLogo } from '@/components/BrandLogo';
 
 function CheckRow({
   checked,
@@ -127,6 +128,9 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        <View style={{ alignItems: 'center', gap: 8, marginTop: insets.top + 8, marginBottom: 8 }}>
+          <BrandLogo size={48} showWordmark wordmarkSize={20} testID="brand-register" />
+        </View>
         <Text style={[styles.title, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
           Criar sua conta
         </Text>

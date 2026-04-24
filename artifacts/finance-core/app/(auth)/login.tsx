@@ -12,6 +12,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function LoginScreen() {
   const { theme, colors, isDark } = useTheme();
@@ -57,13 +58,16 @@ export default function LoginScreen() {
             colors={[colors.primaryGlow, 'transparent']}
             style={styles.iconGlow}
           >
-            <View style={[styles.iconContainer, { backgroundColor: colors.primary }]}>
-              <Feather name="trending-up" size={32} color="#000" />
-            </View>
+            <BrandLogo size={64} showWordmark={false} testID="brand-logo" />
           </LinearGradient>
-          <Text style={[styles.title, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-            Pilar Financeiro
-          </Text>
+          <BrandLogo
+            size={0}
+            showWordmark
+            wordmarkSize={30}
+            direction="row"
+            style={styles.brandRow}
+            testID="brand-wordmark"
+          />
           <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
             Controle total das suas finanças
           </Text>
@@ -138,6 +142,7 @@ const styles = StyleSheet.create({
     width: 72, height: 72, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
   },
+  brandRow: { marginTop: -4 },
   title: { fontSize: 32 },
   subtitle: { fontSize: 16, textAlign: 'center' },
   form: { gap: 16 },

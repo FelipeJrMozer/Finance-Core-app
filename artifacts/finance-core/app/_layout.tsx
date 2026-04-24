@@ -1,9 +1,15 @@
 import {
+  Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import {
+  RobotoMono_400Regular,
+  RobotoMono_500Medium,
+  RobotoMono_700Bold,
+} from "@expo-google-fonts/roboto-mono";
 import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -103,10 +109,14 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
+    Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    RobotoMono_400Regular,
+    RobotoMono_500Medium,
+    RobotoMono_700Bold,
     ...Feather.font,
     Feather: FeatherFont,
   });

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useColorScheme } from 'react-native';
-import { Colors, ACCENT_PRESETS, AccentId, DEFAULT_ACCENT_ID } from '@/constants/colors';
+import { Colors, ACCENT_PRESETS, AccentId, DEFAULT_ACCENT_ID, normalizeAccentId } from '@/constants/colors';
 import { safeGet, safeSet } from '@/utils/storage';
 import { getAccessToken } from '@/services/api';
 import { DISABLE_BACKGROUND_TASKS } from '@/config/featureFlags';
@@ -96,8 +96,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       if (tm) setThemeModeState(tm as ThemeMode);
-      const localAccent = ac as AccentId | null;
-      if (localAccent) setAccentId(localAccent);
+      // Normaliza IDs antigos (ex.: royalblue → blue) para alinhar com o web.
+      const localAccent = ac ? normalizeAccentId(ac) : null;
+      if (localAccent) {
+        setAccentId(localAccent);
+        if (ac && ac !== localAccent) await safeSet('accentColor', localAccent);
+      }
       if (vv !== null) setValuesVisible(vv === 'true');
       if (nd !== null) setNotifyDARF(nd === 'true');
       if (nb !== null) setNotifyBudget(nb === 'true');
@@ -109,10 +113,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const remote = await fetchRemotePrefs();
         setIsSyncingColors(false);
         if (remote) {
-          if (remote.accentId && remote.accentId !== localAccent) {
-            const id = remote.accentId as AccentId;
-            setAccentId(id);
-            await safeSet('accentColor', id);
+          if (remote.accentId) {
+            const id = normalizeAccentId(remote.accentId);
+            if (id !== localAccent) {
+              setAccentId(id);
+              await safeSet('accentColor', id);
+            }
           }
           if (remote.themeMode && remote.themeMode !== tm) {
             setThemeModeState(remote.themeMode as ThemeMode);
@@ -134,10 +140,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         const remote = await fetchRemotePrefs();
         if (!remote) return;
         if (remote.accentId) {
+          const id = normalizeAccentId(remote.accentId);
           setAccentId((prev) => {
-            if (prev !== remote.accentId) {
-              safeSet('accentColor', remote.accentId!);
-              return remote.accentId as AccentId;
+            if (prev !== id) {
+              safeSet('accentColor', id);
+              return id;
             }
             return prev;
           });

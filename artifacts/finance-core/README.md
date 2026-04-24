@@ -1,4 +1,4 @@
-# Finance Core (Expo / React Native)
+# Pilar Financeiro (Expo / React Native)
 
 App mobile do **Pilar Financeiro**, em paridade com o backend hospedado em
 `https://pilar-financeiro.replit.app`.
