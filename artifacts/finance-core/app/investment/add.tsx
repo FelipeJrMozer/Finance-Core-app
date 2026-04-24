@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,13 +22,16 @@ export default function AddInvestmentScreen() {
   const { theme, colors } = useTheme();
   const { addInvestment } = useFinance();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ ticker?: string; name?: string; type?: string; price?: string }>();
+  const initialType = (typeof params.type === 'string' && ['stocks', 'fii', 'reit', 'fixed', 'crypto', 'etf'].includes(params.type)
+    ? params.type : 'stocks') as 'stocks' | 'fii' | 'reit' | 'fixed' | 'crypto' | 'etf';
 
-  const [type, setType] = useState<'stocks' | 'fii' | 'reit' | 'fixed' | 'crypto' | 'etf'>('stocks');
-  const [name, setName] = useState('');
-  const [ticker, setTicker] = useState('');
+  const [type, setType] = useState<'stocks' | 'fii' | 'reit' | 'fixed' | 'crypto' | 'etf'>(initialType);
+  const [name, setName] = useState(typeof params.name === 'string' ? params.name : '');
+  const [ticker, setTicker] = useState(typeof params.ticker === 'string' ? params.ticker.toUpperCase() : '');
   const [quantity, setQuantity] = useState('');
   const [avgPrice, setAvgPrice] = useState('');
-  const [currentPrice, setCurrentPrice] = useState('');
+  const [currentPrice, setCurrentPrice] = useState(typeof params.price === 'string' ? params.price : '');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {

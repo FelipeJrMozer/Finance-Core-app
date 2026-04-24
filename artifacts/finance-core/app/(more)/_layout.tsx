@@ -27,6 +27,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="pending-transactions" options={{ title: 'Lançamentos Pendentes' }} />
       <Stack.Screen name="debts" options={{ title: 'Dívidas' }} />
       <Stack.Screen name="bills" options={{ title: 'Contas a Pagar' }} />
+      <Stack.Screen name="recurring" options={{ title: 'Recorrências' }} />
       <Stack.Screen name="sinking-funds" options={{ title: 'Reservas Programadas' }} />
       <Stack.Screen name="pj/index" options={{ title: 'Módulo PJ / MEI' }} />
       <Stack.Screen name="pj/receitas" options={{ title: 'Receitas PJ' }} />
@@ -39,6 +40,25 @@ export default function MoreSubLayout() {
       <Stack.Screen name="pj/saude-negocio" options={{ title: 'Saúde do Negócio' }} />
       <Stack.Screen name="pj/dasn-simei" options={{ title: 'DASN-SIMEI' }} />
       <Stack.Screen name="familia" options={{ title: 'Família' }} />
+      <Stack.Screen name="lgpd" options={{ title: 'Privacidade e LGPD' }} />
+      <Stack.Screen name="sessions" options={{ title: 'Dispositivos e Sessões' }} />
+      <Stack.Screen name="legal-terms" options={{ title: 'Termos de Uso' }} />
+      <Stack.Screen name="legal-privacy" options={{ title: 'Política de Privacidade' }} />
+      <Stack.Screen name="categorization-rules" options={{ title: 'Regras de Categorização' }} />
+      <Stack.Screen name="referral" options={{ title: 'Indicação' }} />
+      {/* Fase 4 — Imposto de Renda */}
+      <Stack.Screen name="taxes" options={{ title: 'Imposto de Renda' }} />
+      <Stack.Screen name="darf" options={{ title: 'DARF' }} />
+      <Stack.Screen name="tax-calendar" options={{ title: 'Calendário fiscal' }} />
+      <Stack.Screen name="irpf-export" options={{ title: 'Exportar IRPF' }} />
+      <Stack.Screen name="tax-incomes" options={{ title: 'Rendimentos' }} />
+      <Stack.Screen name="tax-deductions" options={{ title: 'Deduções' }} />
+      {/* Fase 3 — Investimentos avançados */}
+      <Stack.Screen name="portfolios" options={{ title: 'Portfólios' }} />
+      <Stack.Screen name="watchlist" options={{ title: 'Watchlist' }} />
+      <Stack.Screen name="price-alerts" options={{ title: 'Alertas de preço' }} />
+      <Stack.Screen name="stock-comparator" options={{ title: 'Comparador de ativos' }} />
+      <Stack.Screen name="stock-detail/[ticker]" options={{ title: 'Ativo' }} />
     </Stack>
   );
 }

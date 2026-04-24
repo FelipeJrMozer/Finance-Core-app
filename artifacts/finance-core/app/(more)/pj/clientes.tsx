@@ -23,7 +23,7 @@ interface PJClient {
 const STORAGE_KEY = 'pf_pj_clients';
 
 export default function PJClientesScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [clients, setClients] = useState<PJClient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -143,7 +143,7 @@ export default function PJClientesScreen() {
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
             <Text style={[styles.clientBilled, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(c.totalBilled)}
+              {maskValue(formatBRL(c.totalBilled))}
             </Text>
             <Pressable onPress={() => deleteClient(c.id)} hitSlop={8}>
               <Feather name="trash-2" size={16} color={colors.danger} />

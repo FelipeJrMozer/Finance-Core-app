@@ -25,7 +25,7 @@ function getMonthLabel(ym: string): string {
 }
 
 export default function BudgetsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const { budgets, addBudget, transactions, refresh } = useFinance();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
@@ -139,9 +139,9 @@ export default function BudgetsScreen() {
                 Gasto total
               </Text>
               <Text style={[styles.summaryValue, { color: totalPct > 1 ? colors.danger : theme.text, fontFamily: 'Inter_700Bold' }]}>
-                {totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                {maskValue(totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
                 <Text style={[styles.summaryOf, { color: theme.textTertiary }]}>
-                  {' '}/ {totalLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {' '}/ {maskValue(totalLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }))}
                 </Text>
               </Text>
             </View>

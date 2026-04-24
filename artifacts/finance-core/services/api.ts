@@ -170,6 +170,31 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+// Mensagens vindas do backend que indicam que a sessão foi encerrada/revogada
+// pelo servidor. Nesses casos NÃO devemos tentar refresh — o refreshToken
+// está atrelado ao mesmo `sid` revogado e tentar refresh viraria loop.
+const REVOKED_SESSION_PATTERNS = [
+  /sess[aã]o encerrada/i,
+  /sess[aã]o revogada/i,
+  /sess[aã]o expirada/i,
+  /token revogado/i,
+  /sid revogado/i,
+];
+
+async function isRevokedSession(res: Response): Promise<boolean> {
+  try {
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) return false;
+    // clone() para preservar o body original para o caller
+    const data: any = await res.clone().json().catch(() => null);
+    const msg: string = data?.message || data?.error || '';
+    if (!msg) return false;
+    return REVOKED_SESSION_PATTERNS.some((p) => p.test(msg));
+  } catch {
+    return false;
+  }
+}
+
 export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const base = getApiBaseUrl();
   const method = (options.method || 'GET').toUpperCase();
@@ -189,19 +214,35 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
   const url = `${base}${path}`;
   let res = await fetchWithTimeout(url, { ...options, headers: buildHeaders(_accessToken) });
 
-  if (res.status === 401 && _refreshToken) {
-    const newToken = await refreshAccessToken();
-    if (!newToken) {
-      // O refresh em si falhou → sessão realmente inválida → logout.
+  if (res.status === 401) {
+    // Sessão revogada pelo servidor → logout imediato, sem refresh-loop.
+    if (await isRevokedSession(res)) {
+      logger.warn('[api] sessão revogada detectada em', method, path);
+      await clearTokens();
       onAuthFailureCb?.();
       return res;
     }
-    // Refresh ok → tenta de novo. Se ainda 401, é problema específico do endpoint
-    // (não-existente, sem permissão, etc.), NÃO da sessão. Apenas propaga o erro
-    // — não desloga o usuário, senão um único endpoint quebrado mata a sessão.
-    res = await fetchWithTimeout(url, { ...options, headers: buildHeaders(newToken) });
-    if (res.status === 401) {
-      logger.warn('[api] 401 persistente após refresh em', method, path, '— não deslogando');
+
+    if (_refreshToken) {
+      const newToken = await refreshAccessToken();
+      if (!newToken) {
+        // O refresh em si falhou → sessão realmente inválida → logout.
+        onAuthFailureCb?.();
+        return res;
+      }
+      // Refresh ok → tenta de novo. Se ainda 401, é problema específico do endpoint
+      // (não-existente, sem permissão, etc.), NÃO da sessão.
+      res = await fetchWithTimeout(url, { ...options, headers: buildHeaders(newToken) });
+      if (res.status === 401) {
+        // Pode ser que a sessão tenha sido revogada NO MEIO do retry
+        if (await isRevokedSession(res)) {
+          logger.warn('[api] sessão revogada após retry em', method, path);
+          await clearTokens();
+          onAuthFailureCb?.();
+          return res;
+        }
+        logger.warn('[api] 401 persistente após refresh em', method, path, '— não deslogando');
+      }
     }
   }
 

@@ -54,7 +54,7 @@ function formatDate(d?: string): string {
 }
 
 export default function SinkingFundsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
   const [funds, setFunds] = useState<SinkingFund[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -176,15 +176,15 @@ export default function SinkingFundsScreen() {
         <View style={s.amountsRow}>
           <View>
             <Text style={[s.amtLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Acumulado</Text>
-            <Text style={[s.amtValue, { color: accentColor, fontFamily: 'Inter_700Bold' }]}>{formatBRL(current)}</Text>
+            <Text style={[s.amtValue, { color: accentColor, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(current))}</Text>
           </View>
           <View>
             <Text style={[s.amtLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Meta</Text>
-            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{formatBRL(target)}</Text>
+            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(target))}</Text>
           </View>
           <View>
             <Text style={[s.amtLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>Mensal</Text>
-            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{formatBRL(Number(item.monthlyContribution || 0))}</Text>
+            <Text style={[s.amtValue, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(Number(item.monthlyContribution || 0)))}</Text>
           </View>
         </View>
 
@@ -232,17 +232,17 @@ export default function SinkingFundsScreen() {
               <View style={[s.summary, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Total acumulado</Text>
-                  <Text style={[s.summaryValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalSaved)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.primary, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalSaved))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Total das metas</Text>
-                  <Text style={[s.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalTarget)}</Text>
+                  <Text style={[s.summaryValue, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalTarget))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Aporte mensal</Text>
-                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{formatBRL(totalMonthly)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(totalMonthly))}</Text>
                 </View>
               </View>
               {funds.length === 0 && (
@@ -270,7 +270,7 @@ export default function SinkingFundsScreen() {
             <Text style={[s.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Fazer Aporte</Text>
             {selectedFund && (
               <Text style={[s.modalSub, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-                {selectedFund.name} • Acumulado: {formatBRL(Number(selectedFund.currentAmount))}
+                {selectedFund.name} • Acumulado: {maskValue(formatBRL(Number(selectedFund.currentAmount)))}
               </Text>
             )}
             <TextInput

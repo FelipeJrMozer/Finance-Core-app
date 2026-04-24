@@ -11,6 +11,7 @@ import {
 import { safeGet, safeSet, safeRemove } from '@/utils/storage';
 import { logger } from '@/utils/logger';
 import { isBiometricAvailable, isBiometricEnabled, authenticateBiometric } from '@/services/biometric';
+import { trackSession } from '@/services/sessions';
 
 export interface User {
   id: string;
@@ -21,6 +22,15 @@ export interface User {
   firstLogin?: boolean;
 }
 
+export interface RegisterConsent {
+  termsAccepted: boolean;
+  privacyAccepted: boolean;
+  termsVersion: string;
+  privacyVersion: string;
+  marketingAccepted?: boolean;
+  referralCode?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -29,7 +39,7 @@ interface AuthContextType {
   requireBiometric: boolean;
   unlock: () => Promise<boolean>;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, consent: RegisterConsent) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
   apiUrl: string;
@@ -141,6 +151,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const fresh = mapApiUser(raw);
                 setUser(fresh);
                 await safeSet(USER_KEY, JSON.stringify(fresh));
+                // Re-track sessão no resume
+                trackSession();
               } else if (res.status === 401) {
                 await clearTokens();
                 await safeRemove(USER_KEY);
@@ -181,9 +193,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveTokens(accessToken, refreshToken);
     setRequireBiometric(false);
     await persistUser(u);
+    // Registra a sessão no backend (deviceId estável)
+    trackSession();
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
+  const register = useCallback(async (
+    name: string,
+    email: string,
+    password: string,
+    consent: RegisterConsent,
+  ) => {
+    if (!consent?.termsAccepted || !consent?.privacyAccepted) {
+      throw new Error('É preciso aceitar os Termos de Uso e a Política de Privacidade.');
+    }
+    if (!consent.termsVersion || !consent.privacyVersion) {
+      throw new Error('Versões dos documentos legais indisponíveis. Tente novamente.');
+    }
     const [firstName, ...rest] = name.trim().split(' ');
     const lastName = rest.join(' ') || '';
     const base = getApiBaseUrl();
@@ -191,7 +216,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${base}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ firstName, lastName, email, password }),
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        password,
+        termsAccepted: true,
+        privacyAccepted: true,
+        termsVersion: consent.termsVersion,
+        privacyVersion: consent.privacyVersion,
+        marketingAccepted: consent.marketingAccepted ?? false,
+        referralCode: consent.referralCode || undefined,
+      }),
     });
 
     if (!res.ok) {
@@ -207,6 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveTokens(accessToken, refreshToken);
     setRequireBiometric(false);
     await persistUser(loginUser);
+    trackSession();
   }, []);
 
   const updateUser = useCallback((data: Partial<User>) => {

@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Modal, Alert,
-  KeyboardAvoidingView, Platform, TextInput, FlatList, Switch
+  KeyboardAvoidingView, Platform, TextInput, FlatList, Switch, ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -12,6 +12,11 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, formatDate } from '@/utils/formatters';
 import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
+import {
+  listInvoices, getInvoiceDetails, payInvoice as apiPayInvoice,
+  earlyPayment as apiEarlyPayment, installInvoice as apiInstallInvoice,
+  type CardInvoiceDetails,
+} from '@/services/cardInvoices';
 
 type Tab = 'invoice' | 'installments' | 'details';
 
@@ -59,7 +64,7 @@ function formatBillingDate(dateStr: string): string {
 export default function CardDetailScreen() {
   const { id, month: initialMonth } = useLocalSearchParams<{ id: string; month?: string }>();
   const { theme, colors, maskValue } = useTheme();
-  const { creditCards, accounts, transactions, addCardExpense, payCardInvoice, deleteCreditCard, deleteTransaction, advanceInstallment, getCardTransactions } = useFinance();
+  const { creditCards, accounts, transactions, addCardExpense, payCardInvoice, deleteCreditCard, deleteTransaction, advanceInstallment, getCardTransactions, refresh } = useFinance();
   const insets = useSafeAreaInsets();
 
   const now = new Date();
@@ -80,6 +85,16 @@ export default function CardDetailScreen() {
   const [expNotes, setExpNotes] = useState('');
   const [selectedPayAccount, setSelectedPayAccount] = useState(accounts[0]?.id || '');
   const [payAmount, setPayAmount] = useState('');
+
+  // API-backed invoice state
+  const [apiInvoice, setApiInvoice] = useState<CardInvoiceDetails | null>(null);
+  const [loadingApiInvoice, setLoadingApiInvoice] = useState(false);
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [installCountStr, setInstallCountStr] = useState('3');
+  const [installFeeStr, setInstallFeeStr] = useState('0');
+  const [actionLoading, setActionLoading] = useState(false);
 
   const card = creditCards.find((c) => c.id === id);
   if (!card) return (
@@ -111,6 +126,87 @@ export default function CardDetailScreen() {
     getCardTransactions(id).filter((t) => (t.installments || 1) > 1),
     [id, transactions]
   );
+
+  const loadApiInvoice = useCallback(async () => {
+    if (!id) return;
+    setLoadingApiInvoice(true);
+    try {
+      const list = await listInvoices(id, selectedMonth);
+      const target = list[0];
+      if (target?.id) {
+        const details = await getInvoiceDetails(target.id);
+        setApiInvoice(details);
+      } else {
+        setApiInvoice(null);
+      }
+    } finally {
+      setLoadingApiInvoice(false);
+    }
+  }, [id, selectedMonth]);
+
+  useEffect(() => { loadApiInvoice(); }, [loadApiInvoice]);
+
+  // Centralized handler: when API invoice exists, the backend records the cash
+  // movement; we MUST NOT also call the local `payCardInvoice` (which would
+  // create a duplicated transfer transaction). When no API invoice is present,
+  // fall back to the local-only flow.
+  const apiPayHandler = async () => {
+    const amt = parseFloat(payAmount.replace(',', '.'));
+    if (isNaN(amt) || amt <= 0) { Alert.alert('Atenção', 'Informe um valor válido'); return; }
+    if (!selectedPayAccount) { Alert.alert('Atenção', 'Selecione uma conta para débito'); return; }
+
+    if (!apiInvoice) {
+      // Local-only fallback (no server invoice for this period)
+      handlePayInvoice();
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const ok = await apiPayInvoice(apiInvoice.id, selectedPayAccount, amt);
+      if (!ok) { Alert.alert('Erro', 'Não foi possível registrar o pagamento.'); return; }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowPayModal(false);
+      // Backend is the source of truth: refresh local context (accounts,
+      // transactions, cards) instead of duplicating the financial movement.
+      await Promise.all([loadApiInvoice(), refresh()]);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const submitAdvance = async () => {
+    if (!apiInvoice) return;
+    const amt = parseFloat(advanceAmount.replace(',', '.'));
+    if (isNaN(amt) || amt <= 0) { Alert.alert('Valor inválido'); return; }
+    setActionLoading(true);
+    try {
+      const ok = await apiEarlyPayment(apiInvoice.id, amt, selectedPayAccount || undefined);
+      if (!ok) { Alert.alert('Erro', 'Não foi possível antecipar o pagamento.'); return; }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowAdvanceModal(false);
+      setAdvanceAmount('');
+      await Promise.all([loadApiInvoice(), refresh()]);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const submitInstall = async () => {
+    if (!apiInvoice) return;
+    const n = parseInt(installCountStr, 10);
+    const fee = parseFloat(installFeeStr.replace(',', '.')) || 0;
+    if (!isFinite(n) || n < 2) { Alert.alert('Informe ao menos 2 parcelas'); return; }
+    setActionLoading(true);
+    try {
+      const ok = await apiInstallInvoice(apiInvoice.id, n, fee);
+      if (!ok) { Alert.alert('Erro', 'Não foi possível parcelar a fatura.'); return; }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowInstallModal(false);
+      await Promise.all([loadApiInvoice(), refresh()]);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const usedPct = Math.min(card.used / card.limit, 1);
   const available = card.limit - card.used;
@@ -325,6 +421,72 @@ export default function CardDetailScreen() {
                 <Feather name="chevron-right" size={20} color={selectedMonth < currentMonthStr ? theme.textSecondary : theme.border} />
               </Pressable>
             </View>
+
+            {/* API-backed invoice status (when available) */}
+            {loadingApiInvoice && !apiInvoice ? (
+              <View style={[styles.invoiceSummary, { backgroundColor: theme.surface, borderColor: theme.border, alignItems: 'center' }]} testID="invoice-api-loading">
+                <ActivityIndicator size="small" color={colors.primary} />
+              </View>
+            ) : apiInvoice ? (
+              <View style={[styles.invoiceSummary, { backgroundColor: theme.surface, borderColor: theme.border }]} testID="invoice-api-status">
+                <View style={styles.invoiceRow}>
+                  <Text style={[styles.invoiceLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Total (servidor)</Text>
+                  <Text style={[styles.invoiceTotal, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+                    {maskValue(formatBRL(apiInvoice.totalAmount))}
+                  </Text>
+                </View>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <View style={styles.invoiceRow}>
+                  <Text style={[styles.invoiceLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Pago</Text>
+                  <Text style={[styles.invoiceInfoText, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                    {maskValue(formatBRL(apiInvoice.paidAmount))}
+                  </Text>
+                </View>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <View style={styles.invoiceRow}>
+                  <Text style={[styles.invoiceLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Restante</Text>
+                  <Text style={[styles.invoiceInfoText, {
+                    color: apiInvoice.remainingAmount > 0 ? colors.danger : colors.primary,
+                    fontFamily: 'Inter_700Bold',
+                  }]}>
+                    {maskValue(formatBRL(apiInvoice.remainingAmount))}
+                  </Text>
+                </View>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <View style={[styles.invoiceRow, { gap: 8, flexWrap: 'wrap' }]}>
+                  <Pressable
+                    testID="invoice-action-pay"
+                    onPress={() => {
+                      setPayAmount(apiInvoice.remainingAmount.toFixed(2));
+                      setShowPayModal(true);
+                    }}
+                    style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+                  >
+                    <Feather name="check-circle" size={14} color="#000" />
+                    <Text style={[styles.actionBtnText, { color: '#000', fontFamily: 'Inter_600SemiBold' }]}>Pagar</Text>
+                  </Pressable>
+                  <Pressable
+                    testID="invoice-action-advance"
+                    onPress={() => {
+                      setAdvanceAmount(apiInvoice.remainingAmount.toFixed(2));
+                      setShowAdvanceModal(true);
+                    }}
+                    style={[styles.actionBtn, { backgroundColor: `${colors.info}20`, borderWidth: 1, borderColor: colors.info }]}
+                  >
+                    <Feather name="zap" size={14} color={colors.info} />
+                    <Text style={[styles.actionBtnText, { color: colors.info, fontFamily: 'Inter_600SemiBold' }]}>Antecipar</Text>
+                  </Pressable>
+                  <Pressable
+                    testID="invoice-action-install"
+                    onPress={() => setShowInstallModal(true)}
+                    style={[styles.actionBtn, { backgroundColor: `${colors.warning}20`, borderWidth: 1, borderColor: colors.warning }]}
+                  >
+                    <Feather name="layers" size={14} color={colors.warning} />
+                    <Text style={[styles.actionBtnText, { color: colors.warning, fontFamily: 'Inter_600SemiBold' }]}>Parcelar</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             <View style={[styles.invoiceSummary, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.invoiceRow}>
@@ -889,12 +1051,96 @@ export default function CardDetailScreen() {
           </View>
 
           <Pressable
-            onPress={handlePayInvoice}
-            style={[styles.saveBtn, { backgroundColor: colors.success, marginTop: 16 }]}
+            testID="confirm-pay-invoice"
+            onPress={apiPayHandler}
+            disabled={actionLoading}
+            style={[styles.saveBtn, { backgroundColor: colors.success, marginTop: 16, opacity: actionLoading ? 0.6 : 1 }]}
           >
-            <Feather name="check-circle" size={18} color="#000" />
-            <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Confirmar pagamento</Text>
+            {actionLoading ? <ActivityIndicator size="small" color="#000" /> : (
+              <>
+                <Feather name="check-circle" size={18} color="#000" />
+                <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Confirmar pagamento</Text>
+              </>
+            )}
           </Pressable>
+        </View>
+      </Modal>
+
+      {/* Advance Payment Modal */}
+      <Modal visible={showAdvanceModal} transparent animationType="slide" onRequestClose={() => setShowAdvanceModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={[styles.modal, { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 }]}>
+            <Text style={[styles.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+              Antecipar fatura
+            </Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', marginTop: 8 }]}>
+              Valor a antecipar
+            </Text>
+            <TextInput
+              testID="advance-amount-input"
+              style={[styles.textInput, { backgroundColor: theme.surfaceElevated, color: theme.text, borderColor: theme.border }]}
+              keyboardType="decimal-pad"
+              value={advanceAmount}
+              onChangeText={setAdvanceAmount}
+              placeholder="0.00"
+              placeholderTextColor={theme.textTertiary}
+            />
+            <Pressable
+              testID="confirm-advance-invoice"
+              onPress={submitAdvance}
+              disabled={actionLoading}
+              style={[styles.saveBtn, { backgroundColor: colors.info, opacity: actionLoading ? 0.6 : 1 }]}
+            >
+              {actionLoading ? <ActivityIndicator size="small" color="#fff" /> : (
+                <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Confirmar antecipação</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Install Invoice Modal */}
+      <Modal visible={showInstallModal} transparent animationType="slide" onRequestClose={() => setShowInstallModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={[styles.modal, { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 }]}>
+            <Text style={[styles.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+              Parcelar fatura
+            </Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', marginTop: 8 }]}>
+              Número de parcelas
+            </Text>
+            <TextInput
+              testID="install-count-input"
+              style={[styles.textInput, { backgroundColor: theme.surfaceElevated, color: theme.text, borderColor: theme.border }]}
+              keyboardType="number-pad"
+              value={installCountStr}
+              onChangeText={setInstallCountStr}
+              placeholder="3"
+              placeholderTextColor={theme.textTertiary}
+            />
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', marginTop: 8 }]}>
+              Taxa total (R$)
+            </Text>
+            <TextInput
+              testID="install-fee-input"
+              style={[styles.textInput, { backgroundColor: theme.surfaceElevated, color: theme.text, borderColor: theme.border }]}
+              keyboardType="decimal-pad"
+              value={installFeeStr}
+              onChangeText={setInstallFeeStr}
+              placeholder="0.00"
+              placeholderTextColor={theme.textTertiary}
+            />
+            <Pressable
+              testID="confirm-install-invoice"
+              onPress={submitInstall}
+              disabled={actionLoading}
+              style={[styles.saveBtn, { backgroundColor: colors.warning, opacity: actionLoading ? 0.6 : 1 }]}
+            >
+              {actionLoading ? <ActivityIndicator size="small" color="#000" /> : (
+                <Text style={[styles.saveBtnText, { color: '#000', fontFamily: 'Inter_600SemiBold' }]}>Confirmar parcelamento</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
       </Modal>
     </View>

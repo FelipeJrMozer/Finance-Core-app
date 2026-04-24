@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Network from 'expo-network';
 import { useTheme } from '@/context/ThemeContext';
+import { DISABLE_BACKGROUND_TASKS } from '@/config/featureFlags';
 
 export function OfflineBanner() {
   const { theme, colors } = useTheme();
@@ -22,7 +23,9 @@ export function OfflineBanner() {
       }
     }
     check();
-    interval = setInterval(check, 8000);
+    if (!DISABLE_BACKGROUND_TASKS) {
+      interval = setInterval(check, 8000);
+    }
     return () => {
       mounted = false;
       if (interval) clearInterval(interval);

@@ -57,6 +57,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@expo-google-fonts/roboto-mono": "^0.4.1",
     "@react-native-community/datetimepicker": "^9.0.0",
     "@shopify/react-native-skia": "^2.5.1",
     "expo-camera": "~17.0.10",

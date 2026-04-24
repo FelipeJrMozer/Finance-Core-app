@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { apiPost } from '@/services/api';
+import { FeatureGate } from '@/components/FeatureGate';
 
 interface Message {
   id: string;
@@ -130,6 +131,12 @@ export default function ChatScreen() {
   ];
 
   return (
+    <FeatureGate
+      feature="ai"
+      title="Assistente Financeiro com IA"
+      icon="cpu"
+      description="Tire dúvidas, receba análises e simulações personalizadas pela nossa IA. Disponível no plano PREMIUM ou superior."
+    >
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -239,6 +246,7 @@ export default function ChatScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </FeatureGate>
   );
 }
 

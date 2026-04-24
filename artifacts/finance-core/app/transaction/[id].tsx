@@ -10,6 +10,7 @@ import { useFinance, InstallmentEntry } from '@/context/FinanceContext';
 import { Button } from '@/components/ui/Button';
 import { CategoryBadge, getCategoryInfo } from '@/components/CategoryBadge';
 import { formatBRL, formatDate } from '@/utils/formatters';
+import { TransactionSplitsModal } from '@/components/TransactionSplitsModal';
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,6 +19,7 @@ export default function TransactionDetailScreen() {
   const insets = useSafeAreaInsets();
   const [installments, setInstallments] = useState<InstallmentEntry[] | null>(null);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
+  const [splitsVisible, setSplitsVisible] = useState(false);
 
   const transaction = transactions.find((t) => t.id === id);
   const isInstallment = (transaction?.installments || 1) > 1;
@@ -246,6 +248,15 @@ export default function TransactionDetailScreen() {
           variant="secondary"
           fullWidth
         />
+        {!isTransfer && (
+          <Button
+            testID="open-splits"
+            label="Dividir transação"
+            onPress={() => setSplitsVisible(true)}
+            variant="secondary"
+            fullWidth
+          />
+        )}
         {isInstallment && (
           <Button
             label="Adiantar para este mês"
@@ -262,6 +273,13 @@ export default function TransactionDetailScreen() {
           fullWidth
         />
       </View>
+
+      <TransactionSplitsModal
+        visible={splitsVisible}
+        onClose={() => setSplitsVisible(false)}
+        transactionId={transaction.id}
+        total={Math.abs(transaction.amount)}
+      />
     </ScrollView>
   );
 }

@@ -797,9 +797,41 @@ export default function SettingsScreen() {
           />
         </View>
 
-        {/* Privacidade / LGPD */}
-        <SectionTitle title="Privacidade" />
+        {/* Automação */}
+        <SectionTitle title="Automação" />
         <View style={[styles.group, { borderColor: theme.border }]}>
+          <SettingsRow
+            icon="filter"
+            label="Regras de categorização"
+            subtitle="Categorize transações automaticamente por padrão"
+            onPress={() => router.push('/(more)/categorization-rules')}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsRow
+            icon="gift"
+            label="Indique e ganhe"
+            subtitle="Compartilhe seu código e acompanhe indicações"
+            onPress={() => router.push('/(more)/referral')}
+          />
+        </View>
+
+        {/* Privacidade / LGPD */}
+        <SectionTitle title="Privacidade e LGPD" />
+        <View style={[styles.group, { borderColor: theme.border }]}>
+          <SettingsRow
+            icon="shield"
+            label="Privacidade e LGPD"
+            subtitle="Documentos, dados, exportação e exclusão"
+            onPress={() => router.push('/(more)/lgpd')}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsRow
+            icon="monitor"
+            label="Dispositivos e sessões"
+            subtitle="Veja e encerre sessões ativas"
+            onPress={() => router.push('/(more)/sessions')}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <SettingsRow
             icon="user-x"
             label={deleteBusy ? 'Excluindo conta…' : 'Excluir minha conta'}

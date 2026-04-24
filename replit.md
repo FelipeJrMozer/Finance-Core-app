@@ -93,12 +93,25 @@ React Native + Expo (managed workflow) personal finance mobile app targeting Goo
   - `investment-report.tsx`: 3 abas — Dividendos (BarChart), Performance (benchmark vs CDI/IBOV), Histórico (LineChart patrimonial)
   - `custom-alerts.tsx`: alertas personalizados com AsyncStorage (5 tipos: gasto por categoria, saldo mínimo, fatura, meta, vencimento)
   - `pending-transactions.tsx`: filtra `transactions` onde `isPaid === false`; link para detalhe de cada transação
-  - `pj/index.tsx`: dashboard PJ/MEI com faturamento, limite anual MEI (R$81k), DAS próximo, ações rápidas
-  - `pj/receitas.tsx`: receitas PJ filtradas por `[PJ]` nas notas; MonthNavigator
-  - `pj/despesas.tsx`: despesas PJ filtradas por `[PJ]`; breakdown por categoria; MonthNavigator
+  - `pj/index.tsx`: dashboard PJ/MEI com receitas/despesas do mês via `services/pj.ts`, limite anual MEI (R$81k) com bar de progresso, próximo DAS pendente, grid 9 atalhos
+  - `pj/receitas.tsx`: lista `listPjRevenues({month})` com totais Recebido/Pendente, MonthNavigator + RefreshControl
+  - `pj/despesas.tsx`: lista `listPjExpenses({month})` com breakdown por categoria + total dedutível, MonthNavigator
   - `pj/clientes.tsx`: cadastro de clientes PJ com AsyncStorage
-  - `pj/das.tsx`: guias DAS geradas automaticamente (6% faturamento MEI), marcar como pago
+  - `pj/das.tsx`: lista `listPjDas({year})` com filtros (todos/pendente/atrasado/pago), copiar barCode, marcar como pago via `markPjDasPaid`
+  - `pj/dasn-simei.tsx`: `getDasnSimeiSummary({year})` com fallback para agregar por revenues; bar chart 12 meses; botões "Gerar planilha DASN" + "Abrir Portal DASN-SIMEI" (https://www8.receita.fazenda.gov.br/SimplesNacional/Aplicacoes/ATSPO/dasnsimei.app/); checklist em AsyncStorage
   - `pj/retiradas.tsx`: registro de pró-labore + INSS automático (11% sobre salário mínimo)
+- **Phase 4 — IRPF, DARF e MEI completo (Abr 2026)**:
+  - **services/tax.ts**: cliente completo `/api/tax/*` — `getMonthlyTaxes`, `getTaxJournal`, `getAnnualTax`, `calculateDarf`, `getDarfHistory`, `markDarfPaid`, `exportIrpfDec` (binário), `downloadIrpfDec`, `getIrpfGuide` (+ `getIrpfGuidePdf`), `runTaxOptimizer`, `getTaxCalendar`, `getAccumulatedLosses`, `listCryptoTaxTransactions`, `configureTaxAlert` + CRUD de `tax-incomes` e `tax-deductions`. Tipos TS exportados (`AnnualTaxSummary`, `MonthlyTaxSummary`, `DarfCalculation`, `TaxAlertType`, etc.).
+  - **services/pj.ts**: cliente `/api/pj/*` — accounts/tags/revenues/expenses/das (CRUD + mark-paid) + `getDasnSimeiSummary`. Tipos `PjRevenue`, `PjExpense`, `PjDas`, `DasStatus`, `DasnSimeiSummary`.
+  - **`(more)/taxes.tsx`** — Painel IRPF: hero "Precisa entregar IRPF? SIM/NÃO/Talvez" via `getAnnualTax`, próximo DARF mensal, atalhos (Calcular DARF/Histórico/Calendário/Exportar/Rendimentos/Deduções), histórico DARFs, prejuízo acumulado por tipo de ativo.
+  - **`(more)/darf.tsx`** — Lista `getDarfHistory` com filtros (todos/pendente/pago/atrasado), expand inline com linha digitável e Pix copia-e-cola (`expo-clipboard`), `markDarfPaid` otimista, share via `expo-sharing`.
+  - **`(more)/tax-calendar.tsx`** — Chips por mês a partir de `getTaxCalendar(year)`.
+  - **`(more)/irpf-export.tsx`** — Seletor de ano, baixa `.DEC` binário (fetch → Blob → base64 via FileReader → `FileSystem.writeAsStringAsync({encoding:Base64})` em `cacheDirectory` → `Sharing.shareAsync`), guia PDF, otimizador `runTaxOptimizer`. Usa `expo-file-system/legacy`.
+  - **`(more)/tax-incomes.tsx` / `tax-deductions.tsx`** — `CrudScreen` genérica reusada com filtragem por ano + modal de form.
+  - **`(more)/custom-alerts.tsx`** — Bloco "Ativar alertas fiscais" idempotente (POST `/api/tax/alerts/configure` ×3 para `mei-revenue-80`, `das-due-day-20`, `irpf-deadline`; flag `pf_tax_alerts_seeded` em AsyncStorage).
+  - **`(more)/_layout.tsx`** registra `taxes`, `darf`, `tax-calendar`, `irpf-export`, `tax-incomes`, `tax-deductions`.
+  - **`utils/icons.ts`** estendido com aliases kebab-case (`export`, `income`, `deduction`, `copy`, `share`, `check-circle`, `chevron-down`, `file-text`, `calendar`, `external`, `refresh`, `trending-down`, `trending-up`).
+  - **Backend remoto fixo** em `services/api.ts` → `https://pilar-financeiro.replit.app` (fallback)
 - **New Reusable Components**:
   - `components/SectionHeader.tsx`: header de seção com título, ícone opcional e ação
   - `components/EmptyState.tsx`: tela de estado vazio com ícone, título, descrição e botão de ação
@@ -191,3 +204,13 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+## artifacts/finance-core — Phase 3 (Investimentos avançados)
+
+Mobile features built against the remote backend `https://pilar-financeiro.replit.app`.
+
+- **Services** (in `services/`): `portfolio.ts` (twr/mwr/risk/drawdown/sortino/beta/benchmarking/correlation/sectorAnalysis/optimizer/suggestedAllocations/rebalance/xirr), `portfolios.ts` (CRUD), `dividends.ts` (calendar+dashboard+history CRUD; mutations throw on failure), `watchlist.ts`, `priceAlerts.ts` (with `checkPriceAlerts` + local notification on trigger), `stockComparator.ts`, `stockAnalysis.ts` (fundamental + scorecard), `cryptoHoldings.ts`. Read endpoints accept optional `portfolioId` query param.
+- **Tabs screen** (`app/(tabs)/investments.tsx`): refactored into 4 tabs (Carteira / Análise / Dividendos / Cripto) with portfolio selector persisted via AsyncStorage key `@finance_core/selected_portfolio_id`.
+- **Tab components** (`components/investments/`): `AnaliseTab.tsx`, `DividendosTab.tsx`, `CriptoTab.tsx` (all consume the selected `portfolioId`).
+- **More routes** (`app/(more)/`): `portfolios.tsx` (CRUD), `watchlist.tsx`, `price-alerts.tsx` (local notif), `stock-comparator.tsx` (up to 5 tickers), `stock-detail/[ticker].tsx` (hero + ScoreGauge + fundamentos + dividendos + ações “Adicionar à carteira” / watchlist / alerta).
+- `app/investment/add.tsx` aceita `useLocalSearchParams` para preencher `ticker/name/price/type` (deep-link a partir do stock-detail).

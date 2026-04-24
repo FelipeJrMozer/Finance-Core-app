@@ -1,9 +1,15 @@
 import {
+  Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import {
+  RobotoMono_400Regular,
+  RobotoMono_500Medium,
+  RobotoMono_700Bold,
+} from "@expo-google-fonts/roboto-mono";
 import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -25,8 +31,11 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useTransactionIntent } from "@/hooks/useTransactionIntent";
 import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { QuickTransactionModal } from "@/components/QuickTransactionModal";
+import { CookieBanner } from "@/components/CookieBanner";
+import { logBackgroundTasksStatus } from "@/config/featureFlags";
 
 SplashScreen.preventAutoHideAsync();
+logBackgroundTasksStatus();
 
 const queryClient = new QueryClient();
 
@@ -100,10 +109,14 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
+    Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    RobotoMono_400Regular,
+    RobotoMono_500Medium,
+    RobotoMono_700Bold,
     ...Feather.font,
     Feather: FeatherFont,
   });
@@ -129,6 +142,7 @@ export default function RootLayout() {
                       <NotificationGate />
                       <DeepLinksGate />
                       <RootLayoutNav />
+                      <CookieBanner />
                     </KeyboardProvider>
                   </GestureHandlerRootView>
                 </FinanceProvider>

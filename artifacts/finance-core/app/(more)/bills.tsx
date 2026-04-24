@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl, Switch,
@@ -6,31 +6,17 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/services/api';
+import { useFinance } from '@/context/FinanceContext';
+import { useWallet } from '@/context/WalletContext';
 import { formatBRL } from '@/utils/formatters';
-
-interface Bill {
-  id: string;
-  description: string;
-  amount: number;
-  dueDate: string;
-  isPaid: boolean;
-  category?: string;
-  isRecurring?: boolean;
-  recurrence?: string;
-  paidAt?: string;
-}
-
-function toArray<T>(data: unknown): T[] {
-  if (Array.isArray(data)) return data as T[];
-  if (data && typeof data === 'object') {
-    const obj = data as Record<string, unknown>;
-    for (const key of ['data', 'items', 'results', 'bills']) {
-      if (Array.isArray(obj[key])) return obj[key] as T[];
-    }
-  }
-  return [];
-}
+import {
+  listBills,
+  createBill,
+  updateBill,
+  payBill,
+  deleteBill as deleteBillApi,
+  type Bill,
+} from '@/services/bills';
 
 function formatDate(d?: string): string {
   if (!d) return '—';
@@ -44,78 +30,154 @@ function isOverdue(bill: Bill): boolean {
   return (bill.dueDate || '').split('T')[0] < today;
 }
 
+interface FormState {
+  description: string;
+  amount: string;
+  dueDate: string;
+  category: string;
+  isRecurring: boolean;
+  notes: string;
+}
+
+const EMPTY_FORM: FormState = {
+  description: '', amount: '', dueDate: '', category: '', isRecurring: false, notes: '',
+};
+
 export default function BillsScreen() {
-  const { theme, colors } = useTheme();
+  const { theme, colors, maskValue } = useTheme();
   const insets = useSafeAreaInsets();
+  const { accounts } = useFinance();
+  const { selectedWalletId } = useWallet();
+
   const [bills, setBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<'pending' | 'paid' | 'all'>('pending');
 
-  const [form, setForm] = useState({
-    description: '', amount: '', dueDate: '', category: '', isRecurring: false,
-  });
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payTarget, setPayTarget] = useState<Bill | null>(null);
+  const [payAccountId, setPayAccountId] = useState<string>('');
+  const [paying, setPaying] = useState(false);
+
+  const cashAccounts = useMemo(
+    () => accounts.filter((a) => a.type !== 'credit' && !a.archived),
+    [accounts]
+  );
 
   const load = useCallback(async () => {
     try {
-      const data = await apiGet<unknown>('/api/bills');
-      setBills(toArray<Bill>(data));
-    } catch (e) {
-      console.warn('[Bills] load error:', e);
+      const data = await listBills();
+      setBills(data);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, selectedWalletId]);
   const onRefresh = () => { setRefreshing(true); load(); };
 
-  const togglePaid = async (bill: Bill) => {
+  const openAdd = () => {
+    setEditingBill(null);
+    setForm(EMPTY_FORM);
+    setShowFormModal(true);
+  };
+
+  const openEdit = (bill: Bill) => {
+    setEditingBill(bill);
+    setForm({
+      description: bill.description,
+      amount: String(bill.amount),
+      dueDate: bill.dueDate,
+      category: bill.category || '',
+      isRecurring: !!bill.isRecurring,
+      notes: bill.notes || '',
+    });
+    setShowFormModal(true);
+  };
+
+  const submitForm = async () => {
+    if (!form.description || !form.amount || !form.dueDate) {
+      Alert.alert('Preencha descrição, valor e vencimento');
+      return;
+    }
+    const amount = parseFloat(form.amount.replace(',', '.'));
+    if (!isFinite(amount) || amount <= 0) {
+      Alert.alert('Valor inválido');
+      return;
+    }
+    setSaving(true);
     try {
-      await apiPatch(`/api/bills/${bill.id}`, { isPaid: !bill.isPaid });
+      const payload = {
+        description: form.description.trim(),
+        amount,
+        dueDate: form.dueDate,
+        category: form.category || undefined,
+        isRecurring: form.isRecurring,
+        notes: form.notes || undefined,
+      };
+      const result = editingBill
+        ? await updateBill(editingBill.id, payload)
+        : await createBill(payload, selectedWalletId || undefined);
+      if (!result) {
+        Alert.alert('Erro', 'Não foi possível salvar a conta.');
+        return;
+      }
+      setShowFormModal(false);
+      setForm(EMPTY_FORM);
+      setEditingBill(null);
       await load();
     } catch (e: unknown) {
-      Alert.alert('Erro', e instanceof Error ? e.message : 'Erro ao atualizar');
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Erro ao salvar');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const deleteBill = (bill: Bill) => {
+  const openPay = (bill: Bill) => {
+    if (cashAccounts.length === 0) {
+      Alert.alert('Sem contas', 'Cadastre uma conta para registrar o pagamento.');
+      return;
+    }
+    setPayTarget(bill);
+    setPayAccountId(cashAccounts[0]?.id || '');
+    setShowPayModal(true);
+  };
+
+  const confirmPay = async () => {
+    if (!payTarget || !payAccountId) return;
+    setPaying(true);
+    try {
+      const ok = await payBill(payTarget.id, { accountId: payAccountId });
+      if (!ok) {
+        Alert.alert('Erro', 'Não foi possível pagar a conta.');
+        return;
+      }
+      setShowPayModal(false);
+      setPayTarget(null);
+      await load();
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const removeBill = (bill: Bill) => {
     Alert.alert('Excluir conta', `Deseja excluir "${bill.description}"?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Excluir', style: 'destructive',
         onPress: async () => {
-          try { await apiDelete(`/api/bills/${bill.id}`); await load(); } catch {}
+          const ok = await deleteBillApi(bill.id);
+          if (!ok) Alert.alert('Erro', 'Não foi possível excluir.');
+          await load();
         },
       },
     ]);
-  };
-
-  const addBill = async () => {
-    if (!form.description || !form.amount || !form.dueDate) {
-      Alert.alert('Preencha descrição, valor e vencimento');
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiPost('/api/bills', {
-        description: form.description,
-        amount: parseFloat(form.amount.replace(',', '.')),
-        dueDate: form.dueDate,
-        category: form.category || undefined,
-        isRecurring: form.isRecurring,
-      });
-      setShowAddModal(false);
-      setForm({ description: '', amount: '', dueDate: '', category: '', isRecurring: false });
-      await load();
-    } catch (e: unknown) {
-      Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível criar a conta');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const filteredBills = bills.filter((b) => {
@@ -133,45 +195,72 @@ export default function BillsScreen() {
     const accentColor = item.isPaid ? colors.success : overdue ? colors.danger : colors.primary;
 
     return (
-      <View style={[s.billCard, { backgroundColor: theme.surface, borderColor: item.isPaid ? theme.border : overdue ? `${colors.danger}40` : theme.border, opacity: item.isPaid ? 0.7 : 1 }]}>
-        <View style={s.billRow}>
-          <View style={[s.billIcon, { backgroundColor: `${accentColor}20` }]}>
-            <Feather name={item.isPaid ? 'check-circle' : overdue ? 'alert-circle' : 'file-text'} size={18} color={accentColor} />
-          </View>
-          <View style={s.billInfo}>
-            <Text style={[s.billDesc, { color: theme.text, fontFamily: 'Inter_600SemiBold', textDecorationLine: item.isPaid ? 'line-through' : 'none' }]}>{item.description}</Text>
-            <Text style={[s.billMeta, { color: overdue ? colors.danger : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
-              {overdue ? 'Vencida — ' : ''}Venc. {formatDate(item.dueDate)}
-              {item.category ? ` • ${item.category}` : ''}
-            </Text>
-          </View>
-          <View style={{ alignItems: 'flex-end', gap: 8 }}>
-            <Text style={[s.billAmount, { color: item.isPaid ? colors.success : overdue ? colors.danger : theme.text, fontFamily: 'Inter_700Bold' }]}>
-              {formatBRL(Number(item.amount))}
-            </Text>
-            <Pressable
-              onPress={() => togglePaid(item)}
-              style={[s.payBtn, { backgroundColor: item.isPaid ? `${colors.success}15` : `${colors.primary}15` }]}
-            >
-              <Text style={[s.payBtnText, { color: item.isPaid ? colors.success : colors.primary, fontFamily: 'Inter_500Medium' }]}>
-                {item.isPaid ? 'Paga' : 'Pagar'}
+      <Pressable onLongPress={() => openEdit(item)} testID={`bill-row-${item.id}`}>
+        <View style={[s.billCard, {
+          backgroundColor: theme.surface,
+          borderColor: item.isPaid ? theme.border : overdue ? `${colors.danger}40` : theme.border,
+          opacity: item.isPaid ? 0.7 : 1,
+        }]}>
+          <View style={s.billRow}>
+            <View style={[s.billIcon, { backgroundColor: `${accentColor}20` }]}>
+              <Feather name={item.isPaid ? 'check-circle' : overdue ? 'alert-circle' : 'file-text'} size={18} color={accentColor} />
+            </View>
+            <View style={s.billInfo}>
+              <Text style={[s.billDesc, {
+                color: theme.text,
+                fontFamily: 'Inter_600SemiBold',
+                textDecorationLine: item.isPaid ? 'line-through' : 'none',
+              }]}>
+                {item.description}
               </Text>
-            </Pressable>
+              <Text style={[s.billMeta, { color: overdue ? colors.danger : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                {overdue ? 'Vencida — ' : ''}Venc. {formatDate(item.dueDate)}
+                {item.category ? ` • ${item.category}` : ''}
+                {item.isRecurring ? ' • Recorrente' : ''}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end', gap: 8 }}>
+              <Text style={[s.billAmount, { color: item.isPaid ? colors.success : overdue ? colors.danger : theme.text, fontFamily: 'Inter_700Bold' }]}>
+                {maskValue(formatBRL(Number(item.amount)))}
+              </Text>
+              {!item.isPaid && (
+                <Pressable
+                  testID={`pay-bill-${item.id}`}
+                  onPress={() => openPay(item)}
+                  style={[s.payBtn, { backgroundColor: `${colors.primary}15` }]}
+                >
+                  <Text style={[s.payBtnText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
+                    Pagar
+                  </Text>
+                </Pressable>
+              )}
+              {item.isPaid && (
+                <Text style={[s.paidLabel, { color: colors.success, fontFamily: 'Inter_500Medium' }]}>
+                  Paga {item.paidAt ? `em ${formatDate(item.paidAt)}` : ''}
+                </Text>
+              )}
+            </View>
+            <View style={{ marginLeft: 4, gap: 8 }}>
+              <Pressable testID={`edit-bill-${item.id}`} onPress={() => openEdit(item)} style={{ padding: 6 }}>
+                <Feather name="edit-2" size={15} color={theme.textTertiary} />
+              </Pressable>
+              <Pressable testID={`delete-bill-${item.id}`} onPress={() => removeBill(item)} style={{ padding: 6 }}>
+                <Feather name="trash-2" size={15} color={theme.textTertiary} />
+              </Pressable>
+            </View>
           </View>
-          <Pressable onPress={() => deleteBill(item)} style={{ padding: 6, marginLeft: 4 }}>
-            <Feather name="trash-2" size={15} color={theme.textTertiary} />
-          </Pressable>
         </View>
-      </View>
+      </Pressable>
     );
   };
 
   return (
     <View style={[s.container, { backgroundColor: theme.background }]}>
       {isLoading ? (
-        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 60 }} testID="loading-bills" />
       ) : (
         <FlatList
+          testID="bills-list"
           data={filteredBills}
           keyExtractor={(item) => item.id}
           renderItem={renderBill}
@@ -182,12 +271,12 @@ export default function BillsScreen() {
               <View style={[s.summary, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>A pagar</Text>
-                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{formatBRL(pendingTotal)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.danger, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(pendingTotal))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
                   <Text style={[s.summaryLabel, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Pago</Text>
-                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{formatBRL(paidTotal)}</Text>
+                  <Text style={[s.summaryValue, { color: colors.success, fontFamily: 'Inter_700Bold' }]}>{maskValue(formatBRL(paidTotal))}</Text>
                 </View>
                 <View style={[s.summaryDivider, { backgroundColor: theme.border }]} />
                 <View style={s.summaryItem}>
@@ -200,6 +289,7 @@ export default function BillsScreen() {
                 {(['pending', 'all', 'paid'] as const).map((f) => (
                   <Pressable
                     key={f}
+                    testID={`filter-bills-${f}`}
                     onPress={() => setFilter(f)}
                     style={[s.filterBtn, filter === f && { backgroundColor: colors.primary }]}
                   >
@@ -223,24 +313,29 @@ export default function BillsScreen() {
         />
       )}
 
-      <Pressable onPress={() => setShowAddModal(true)} style={[s.fab, { backgroundColor: colors.primary }]}>
+      <Pressable testID="add-bill" onPress={openAdd} style={[s.fab, { backgroundColor: colors.primary }]}>
         <Feather name="plus" size={24} color="#fff" />
       </Pressable>
 
-      <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
+      {/* Add / Edit Modal */}
+      <Modal visible={showFormModal} transparent animationType="slide" onRequestClose={() => setShowFormModal(false)}>
         <View style={s.modalOverlay}>
-          <ScrollView contentContainerStyle={{ justifyContent: 'flex-end', flexGrow: 1 }}>
+          <ScrollView contentContainerStyle={{ justifyContent: 'flex-end', flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={[s.modal, { backgroundColor: theme.surface }]}>
-              <Text style={[s.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>Nova Conta a Pagar</Text>
+              <Text style={[s.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+                {editingBill ? 'Editar Conta' : 'Nova Conta a Pagar'}
+              </Text>
               {([
                 { key: 'description', label: 'Descrição *', kb: 'default' },
                 { key: 'amount', label: 'Valor *', kb: 'decimal-pad' },
                 { key: 'dueDate', label: 'Vencimento (YYYY-MM-DD) *', kb: 'default' },
                 { key: 'category', label: 'Categoria', kb: 'default' },
+                { key: 'notes', label: 'Observações', kb: 'default' },
               ] as const).map(({ key, label, kb }) => (
                 <View key={key} style={{ marginBottom: 12 }}>
                   <Text style={[s.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>{label}</Text>
                   <TextInput
+                    testID={`form-bill-${key}`}
                     style={[s.input, { backgroundColor: theme.surfaceElevated, color: theme.text, borderColor: theme.border, fontFamily: 'Inter_400Regular' }]}
                     placeholder={label}
                     placeholderTextColor={theme.textTertiary}
@@ -252,20 +347,108 @@ export default function BillsScreen() {
               ))}
               <View style={[s.switchRow, { borderColor: theme.border }]}>
                 <Text style={[s.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Recorrente</Text>
-                <Switch value={form.isRecurring} onValueChange={(v) => setForm((f) => ({ ...f, isRecurring: v }))} trackColor={{ true: colors.primary }} />
+                <Switch
+                  testID="form-bill-recurring"
+                  value={form.isRecurring}
+                  onValueChange={(v) => setForm((f) => ({ ...f, isRecurring: v }))}
+                  trackColor={{ true: colors.primary, false: theme.border }}
+                />
               </View>
               <View style={s.modalBtns}>
-                <Pressable onPress={() => setShowAddModal(false)} style={[s.modalBtn, { backgroundColor: theme.surfaceElevated }]}>
+                <Pressable
+                  testID="cancel-bill"
+                  onPress={() => { setShowFormModal(false); setEditingBill(null); }}
+                  style={[s.modalBtn, { backgroundColor: theme.surfaceElevated }]}
+                >
                   <Text style={[s.modalBtnText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Cancelar</Text>
                 </Pressable>
-                <Pressable onPress={addBill} style={[s.modalBtn, { backgroundColor: colors.primary }]} disabled={saving}>
+                <Pressable
+                  testID="save-bill"
+                  onPress={submitForm}
+                  style={[s.modalBtn, { backgroundColor: colors.primary }]}
+                  disabled={saving}
+                >
                   {saving ? <ActivityIndicator size="small" color="#fff" /> : (
-                    <Text style={[s.modalBtnText, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>Criar</Text>
+                    <Text style={[s.modalBtnText, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
+                      {editingBill ? 'Salvar' : 'Criar'}
+                    </Text>
                   )}
                 </Pressable>
               </View>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Pay Modal */}
+      <Modal visible={showPayModal} transparent animationType="slide" onRequestClose={() => setShowPayModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modal, { backgroundColor: theme.surface }]}>
+            <Text style={[s.modalTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+              Pagar conta
+            </Text>
+            {payTarget && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[s.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                  {payTarget.description}
+                </Text>
+                <Text style={[s.modalBtnText, { color: theme.text, fontFamily: 'Inter_700Bold', marginTop: 4 }]}>
+                  {maskValue(formatBRL(payTarget.amount))} • Venc. {formatDate(payTarget.dueDate)}
+                </Text>
+              </View>
+            )}
+            <Text style={[s.fieldLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium', marginBottom: 8 }]}>
+              Conta de origem
+            </Text>
+            <ScrollView style={{ maxHeight: 220, marginBottom: 12 }}>
+              {cashAccounts.map((acc) => {
+                const selected = payAccountId === acc.id;
+                return (
+                  <Pressable
+                    key={acc.id}
+                    testID={`pay-source-${acc.id}`}
+                    onPress={() => setPayAccountId(acc.id)}
+                    style={[s.accountRow, {
+                      backgroundColor: selected ? `${colors.primary}15` : theme.surfaceElevated,
+                      borderColor: selected ? colors.primary : theme.border,
+                    }]}
+                  >
+                    <View style={[s.accountDot, { backgroundColor: acc.color || colors.primary }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.modalBtnText, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+                        {acc.name}
+                      </Text>
+                      <Text style={[s.fieldLabel, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                        {maskValue(formatBRL(acc.balance))}
+                      </Text>
+                    </View>
+                    {selected && <Feather name="check" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <View style={s.modalBtns}>
+              <Pressable
+                testID="cancel-pay-bill"
+                onPress={() => setShowPayModal(false)}
+                style={[s.modalBtn, { backgroundColor: theme.surfaceElevated }]}
+              >
+                <Text style={[s.modalBtnText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                testID="confirm-pay-bill"
+                onPress={confirmPay}
+                style={[s.modalBtn, { backgroundColor: colors.primary }]}
+                disabled={paying || !payAccountId}
+              >
+                {paying ? <ActivityIndicator size="small" color="#fff" /> : (
+                  <Text style={[s.modalBtnText, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
+                    Confirmar
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
@@ -291,6 +474,7 @@ const s = StyleSheet.create({
   billAmount: { fontSize: 15 },
   payBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   payBtnText: { fontSize: 12 },
+  paidLabel: { fontSize: 11 },
   empty: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   emptyTitle: { fontSize: 16 },
   fab: { position: 'absolute', right: 20, bottom: 100, width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', elevation: 4 },
@@ -303,4 +487,6 @@ const s = StyleSheet.create({
   modalBtns: { flexDirection: 'row', gap: 12, marginTop: 16 },
   modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   modalBtnText: { fontSize: 15 },
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, marginBottom: 6 },
+  accountDot: { width: 10, height: 10, borderRadius: 5 },
 });

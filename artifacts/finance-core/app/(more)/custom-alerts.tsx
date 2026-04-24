@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert
+  View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,6 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { formatBRL } from '@/utils/formatters';
 import { EmptyState } from '@/components/EmptyState';
+import { configureTaxAlert, type TaxAlertType } from '@/services/tax';
+
+const TAX_SEEDED_KEY = 'pf_tax_alerts_seeded';
+
+const TAX_ALERTS_TO_SEED: Array<{ alertType: TaxAlertType; threshold?: number; description: string }> = [
+  { alertType: 'mei-revenue-80',  threshold: 80, description: 'Faturamento MEI atingiu 80% do limite' },
+  { alertType: 'das-due-day-20',  description: 'DAS-MEI vence dia 20 do mês' },
+  { alertType: 'irpf-deadline',   description: 'Prazo final de entrega do IRPF se aproximando' },
+];
 
 type AlertType = 'category_spend' | 'account_balance' | 'card_invoice' | 'goal_pct' | 'bill_due';
 
@@ -38,6 +47,40 @@ export default function CustomAlertsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [selectedType, setSelectedType] = useState<AlertType>('category_spend');
   const [threshold, setThreshold] = useState('');
+  const [taxSeeded, setTaxSeeded] = useState<boolean>(false);
+  const [seedingTax, setSeedingTax] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(TAX_SEEDED_KEY).then((v) => setTaxSeeded(v === '1'));
+  }, []);
+
+  const seedTaxAlerts = useCallback(async () => {
+    if (taxSeeded || seedingTax) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSeedingTax(true);
+    try {
+      const results = await Promise.allSettled(
+        TAX_ALERTS_TO_SEED.map((a) =>
+          configureTaxAlert({ alertType: a.alertType, threshold: a.threshold, channel: 'push', enabled: true })
+        ),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed === results.length) {
+        Alert.alert('Erro', 'Não foi possível ativar os alertas fiscais. Verifique sua conexão.');
+        return;
+      }
+      await AsyncStorage.setItem(TAX_SEEDED_KEY, '1');
+      setTaxSeeded(true);
+      Alert.alert(
+        'Alertas fiscais ativados',
+        failed === 0
+          ? 'Você receberá avisos automáticos de DAS, IRPF e limite MEI.'
+          : `${results.length - failed} de ${results.length} alertas ativados.`,
+      );
+    } finally {
+      setSeedingTax(false);
+    }
+  }, [taxSeeded, seedingTax]);
 
   const load = useCallback(async () => {
     try {
@@ -103,6 +146,42 @@ export default function CustomAlertsScreen() {
         <Text style={[styles.offlineText, { color: colors.warning, fontFamily: 'Inter_500Medium' }]}>
           Alertas salvos neste dispositivo
         </Text>
+      </View>
+
+      {/* Seed de alertas fiscais — uma vez */}
+      <View style={[styles.taxSeed, {
+        backgroundColor: taxSeeded ? `${colors.success}10` : `${colors.info}10`,
+        borderColor: taxSeeded ? `${colors.success}30` : `${colors.info}30`,
+      }]}>
+        <View style={[styles.taxSeedIcon, { backgroundColor: `${(taxSeeded ? colors.success : colors.info)}20` }]}>
+          <Feather
+            name={taxSeeded ? 'check-circle' : 'shield'}
+            size={18}
+            color={taxSeeded ? colors.success : colors.info}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.taxSeedTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
+            {taxSeeded ? 'Alertas fiscais ativos' : 'Alertas fiscais essenciais'}
+          </Text>
+          <Text style={[styles.taxSeedDesc, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
+            {taxSeeded
+              ? 'DAS dia 20, IRPF e limite MEI 80% — você será avisado.'
+              : 'Ative DAS dia 20, IRPF e limite MEI 80% em um clique.'}
+          </Text>
+        </View>
+        {!taxSeeded && (
+          <Pressable
+            onPress={seedTaxAlerts}
+            disabled={seedingTax}
+            style={[styles.taxSeedBtn, { backgroundColor: colors.info }]}
+            testID="seed-tax-alerts"
+          >
+            {seedingTax
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={[styles.taxSeedBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Ativar</Text>}
+          </Pressable>
+        )}
       </View>
 
       <Pressable
@@ -205,4 +284,10 @@ const styles = StyleSheet.create({
   alertStatus: { fontSize: 12, marginTop: 2 },
   offlineNote: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
   offlineText: { fontSize: 12, flex: 1 },
+  taxSeed: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
+  taxSeedIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  taxSeedTitle: { fontSize: 14 },
+  taxSeedDesc: { fontSize: 12, marginTop: 2 },
+  taxSeedBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  taxSeedBtnText: { color: '#fff', fontSize: 13 },
 });
