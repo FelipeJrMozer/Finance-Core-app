@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl,
   Platform, Dimensions, Pressable
@@ -11,11 +11,37 @@ import { useTheme } from '@/context/ThemeContext';
 import { useFinance } from '@/context/FinanceContext';
 import { formatBRL, formatMonthYear, getCurrentMonth, getMonthName } from '@/utils/formatters';
 import { getCategoryInfo, CATEGORIES } from '@/components/CategoryBadge';
+import {
+  getMonthlyComparison, MonthlyComparisonResponse,
+  getCashFlow, CashFlowPoint,
+  getCashFlowProjection, CashFlowProjection,
+  getSpendingPatterns, SpendingPatternsResponse,
+  getExpenseForecast, ExpenseForecast,
+  getMarketComparison, MarketComparison,
+} from '@/services/reports';
+import {
+  getAnomalies, AnomalyItem,
+  getEmergencyFund, EmergencyFundStatus,
+  getMonthlyRecap, MonthlyRecap,
+  severityOf,
+} from '@/services/insights';
 
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
 
-type TabId = 'overview' | 'categories' | 'cashflow' | 'health';
+type TabId = 'overview' | 'cashflow' | 'categories' | 'insights';
+
+function pct(n?: number): string {
+  if (n === undefined || !Number.isFinite(n)) return '—';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)}%`;
+}
+
+function prevMonthOf(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 function SectionCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   const { theme } = useTheme();
