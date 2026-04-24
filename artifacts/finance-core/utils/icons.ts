@@ -142,6 +142,25 @@ export const ICONS = {
   export:           { lib: 'Feather', name: 'download' },
   income:           { lib: 'Feather', name: 'arrow-down-circle' },
   deduction:        { lib: 'Feather', name: 'minus-circle' },
+  // Aliases semânticos para Fase 3 — Investimentos avançados
+  star:             { lib: 'Feather', name: 'star' },
+  'star-off':       { lib: 'Feather', name: 'star' },
+  'bell-off':       { lib: 'Feather', name: 'bell-off' },
+  'eye-off':        { lib: 'Feather', name: 'eye-off' },
+  briefcase:        { lib: 'Feather', name: 'briefcase' },
+  'pie-chart':      { lib: 'Feather', name: 'pie-chart' },
+  'bar-chart':      { lib: 'Feather', name: 'bar-chart' },
+  'bar-chart-2':    { lib: 'Feather', name: 'bar-chart-2' },
+  shield:           { lib: 'Feather', name: 'shield' },
+  award:            { lib: 'Feather', name: 'award' },
+  'dollar-sign':    { lib: 'Feather', name: 'dollar-sign' },
+  layers:           { lib: 'Feather', name: 'layers' },
+  activity:         { lib: 'Feather', name: 'activity' },
+  target:           { lib: 'Feather', name: 'target' },
+  zap:              { lib: 'Feather', name: 'zap' },
+  filter:           { lib: 'Feather', name: 'filter' },
+  bitcoin:          { lib: 'MaterialCommunityIcons', name: 'bitcoin' },
+  swap:             { lib: 'Feather', name: 'shuffle' },
 } as const satisfies Record<string, IconSpec>;
 
 export type IconName = keyof typeof ICONS;

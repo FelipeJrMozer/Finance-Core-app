@@ -204,3 +204,13 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+## artifacts/finance-core — Phase 3 (Investimentos avançados)
+
+Mobile features built against the remote backend `https://pilar-financeiro.replit.app`.
+
+- **Services** (in `services/`): `portfolio.ts` (twr/mwr/risk/drawdown/sortino/beta/benchmarking/correlation/sectorAnalysis/optimizer/suggestedAllocations/rebalance/xirr), `portfolios.ts` (CRUD), `dividends.ts` (calendar+dashboard+history CRUD; mutations throw on failure), `watchlist.ts`, `priceAlerts.ts` (with `checkPriceAlerts` + local notification on trigger), `stockComparator.ts`, `stockAnalysis.ts` (fundamental + scorecard), `cryptoHoldings.ts`. Read endpoints accept optional `portfolioId` query param.
+- **Tabs screen** (`app/(tabs)/investments.tsx`): refactored into 4 tabs (Carteira / Análise / Dividendos / Cripto) with portfolio selector persisted via AsyncStorage key `@finance_core/selected_portfolio_id`.
+- **Tab components** (`components/investments/`): `AnaliseTab.tsx`, `DividendosTab.tsx`, `CriptoTab.tsx` (all consume the selected `portfolioId`).
+- **More routes** (`app/(more)/`): `portfolios.tsx` (CRUD), `watchlist.tsx`, `price-alerts.tsx` (local notif), `stock-comparator.tsx` (up to 5 tickers), `stock-detail/[ticker].tsx` (hero + ScoreGauge + fundamentos + dividendos + ações “Adicionar à carteira” / watchlist / alerta).
+- `app/investment/add.tsx` aceita `useLocalSearchParams` para preencher `ticker/name/price/type` (deep-link a partir do stock-detail).

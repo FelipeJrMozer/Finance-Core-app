@@ -53,6 +53,12 @@ export default function MoreSubLayout() {
       <Stack.Screen name="irpf-export" options={{ title: 'Exportar IRPF' }} />
       <Stack.Screen name="tax-incomes" options={{ title: 'Rendimentos' }} />
       <Stack.Screen name="tax-deductions" options={{ title: 'Deduções' }} />
+      {/* Fase 3 — Investimentos avançados */}
+      <Stack.Screen name="portfolios" options={{ title: 'Portfólios' }} />
+      <Stack.Screen name="watchlist" options={{ title: 'Watchlist' }} />
+      <Stack.Screen name="price-alerts" options={{ title: 'Alertas de preço' }} />
+      <Stack.Screen name="stock-comparator" options={{ title: 'Comparador de ativos' }} />
+      <Stack.Screen name="stock-detail/[ticker]" options={{ title: 'Ativo' }} />
     </Stack>
   );
 }
