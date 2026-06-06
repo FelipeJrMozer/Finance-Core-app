@@ -1,0 +1,2 @@
+- [Pilar Financeiro Phase Progress](pilar-phase-progress.md) — Phases 1–8 complete; Phases 9–10 pending.
+- [Pilar Persist-Client Gotcha](pilar-persist-client.md) — @tanstack/react-query-persist-client symlinks not created by pnpm in Expo; use plain QueryClientProvider + lib/queryClient.ts pattern.

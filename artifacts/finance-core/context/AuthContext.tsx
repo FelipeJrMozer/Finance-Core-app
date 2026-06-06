@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppState, AppStateStatus } from 'react-native';
 import {
   apiFetch,
+  apiGet,
   initApiSession,
   saveTokens,
   clearTokens,
@@ -12,6 +13,7 @@ import { safeGet, safeSet, safeRemove } from '@/utils/storage';
 import { logger } from '@/utils/logger';
 import { isBiometricAvailable, isBiometricEnabled, authenticateBiometric } from '@/services/biometric';
 import { trackSession } from '@/services/sessions';
+import { queryClient } from '@/lib/queryClient';
 
 export interface User {
   id: string;
@@ -195,6 +197,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await persistUser(u);
     // Registra a sessão no backend (deviceId estável)
     trackSession();
+    // Pre-fetch dados críticos para o dashboard aparecer sem spinner
+    void Promise.all([
+      queryClient.prefetchQuery({ queryKey: ['/api/accounts'], queryFn: () => apiGet('/api/accounts'), staleTime: 60_000 }),
+      queryClient.prefetchQuery({ queryKey: ['/api/transactions', null, { limit: 100, offset: 0 }], queryFn: () => apiGet('/api/transactions?limit=100&offset=0'), staleTime: 60_000 }),
+      queryClient.prefetchQuery({ queryKey: ['dashboard-summary'], queryFn: () => apiGet('/api/mobile/dashboard-summary'), staleTime: 60_000 }),
+    ]).catch(() => { /* prefetch failures are non-fatal */ });
   }, []);
 
   const register = useCallback(async (

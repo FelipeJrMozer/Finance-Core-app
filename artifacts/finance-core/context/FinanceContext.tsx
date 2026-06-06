@@ -1393,23 +1393,40 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     await Promise.all([loadAll(), refreshHealthScore()]);
   }, [loadAll, refreshHealthScore]);
 
+  const contextValue = React.useMemo(() => ({
+    transactions, accounts: computedAccounts, creditCards: computedCreditCards, investments, budgets, goals,
+    categories, tags, notifications, settings, isLoading,
+    addTransaction, updateTransaction, deleteTransaction, addTransfer,
+    addAccount, updateAccount, deleteAccount,
+    addCreditCard, updateCreditCard, deleteCreditCard,
+    addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
+    addInvestment, updateInvestment, deleteInvestment,
+    addGoal, updateGoal, deleteGoal, addContribution,
+    addBudget, updateBudget, deleteBudget,
+    addCategory, updateSettings, markNotificationRead, dismissNotification,
+    refresh, searchTransactionsRemote, getInstallments,
+    loadMoreTransactions, hasMoreTransactions, isLoadingMore,
+    serverHealthScore, isLoadingHealthScore, refreshHealthScore,
+    totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
+  }), [
+    transactions, computedAccounts, computedCreditCards, investments, budgets, goals,
+    categories, tags, notifications, settings, isLoading,
+    addTransaction, updateTransaction, deleteTransaction, addTransfer,
+    addAccount, updateAccount, deleteAccount,
+    addCreditCard, updateCreditCard, deleteCreditCard,
+    addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
+    addInvestment, updateInvestment, deleteInvestment,
+    addGoal, updateGoal, deleteGoal, addContribution,
+    addBudget, updateBudget, deleteBudget,
+    addCategory, updateSettings, markNotificationRead, dismissNotification,
+    refresh, searchTransactionsRemote, getInstallments,
+    loadMoreTransactions, hasMoreTransactions, isLoadingMore,
+    serverHealthScore, isLoadingHealthScore, refreshHealthScore,
+    totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
+  ]);
+
   return (
-    <FinanceContext.Provider value={{
-      transactions, accounts: computedAccounts, creditCards: computedCreditCards, investments, budgets, goals,
-      categories, tags, notifications, settings, isLoading,
-      addTransaction, updateTransaction, deleteTransaction, addTransfer,
-      addAccount, updateAccount, deleteAccount,
-      addCreditCard, updateCreditCard, deleteCreditCard,
-      addCardExpense, payCardInvoice, advanceInstallment, getCardTransactions,
-      addInvestment, updateInvestment, deleteInvestment,
-      addGoal, updateGoal, deleteGoal, addContribution,
-      addBudget, updateBudget, deleteBudget,
-      addCategory, updateSettings, markNotificationRead, dismissNotification,
-      refresh, searchTransactionsRemote, getInstallments,
-      loadMoreTransactions, hasMoreTransactions, isLoadingMore,
-      serverHealthScore, isLoadingHealthScore, refreshHealthScore,
-      totalBalance, cashBalance, netWorth, monthlyIncome, monthlyExpenses, prevMonthIncome, prevMonthExpenses, netResult, healthScore,
-    }}>
+    <FinanceContext.Provider value={contextValue}>
       {children}
     </FinanceContext.Provider>
   );

@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, Pressable, Modal,
+  View, Text, StyleSheet, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl, Switch,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -259,10 +260,11 @@ export default function BillsScreen() {
       {isLoading ? (
         <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 60 }} testID="loading-bills" />
       ) : (
-        <FlatList
+        <FlashList
           testID="bills-list"
           data={filteredBills}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={110}
           renderItem={renderBill}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
           contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}

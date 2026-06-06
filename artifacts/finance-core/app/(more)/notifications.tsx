@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -103,14 +104,14 @@ export default function NotificationsScreen() {
         </View>
       )}
 
-      <FlatList
+      <FlashList
         data={notifications}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + 24 },
-          notifications.length === 0 && styles.emptyList,
-        ]}
+        estimatedItemSize={90}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: insets.bottom + 24,
+        }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -121,6 +122,7 @@ export default function NotificationsScreen() {
             onDismiss={() => dismissNotification(item.id)}
           />
         )}
+        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <View style={[styles.emptyIcon, { backgroundColor: `${colors.primary}15` }]}>

@@ -14,7 +14,7 @@ import { useFonts } from "expo-font";
 import { Feather } from "@expo/vector-icons";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const FeatherFont = require("../assets/fonts/Feather.ttf");
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
@@ -22,6 +22,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { queryClient } from "@/lib/queryClient";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -37,7 +38,6 @@ import { logBackgroundTasksStatus } from "@/config/featureFlags";
 SplashScreen.preventAutoHideAsync();
 logBackgroundTasksStatus();
 
-const queryClient = new QueryClient();
 
 function NotificationGate() {
   useNotifications();
