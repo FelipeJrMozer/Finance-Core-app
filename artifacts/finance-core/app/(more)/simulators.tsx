@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  Platform, KeyboardAvoidingView
+  Platform, KeyboardAvoidingView, Share, Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -9,56 +9,86 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { formatBRL } from '@/utils/formatters';
 import { useBenchmarks } from '@/services/benchmarks';
+import { apiPost } from '@/services/api';
 
-const SIM_GROUPS = [
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+type SimId =
+  | 'compound' | 'savings' | 'monthly_contributions' | 'fixed_income' | 'emergency'
+  | 'loan' | 'mortgage' | 'vehicle' | 'card_cost' | 'portability'
+  | 'ir' | 'pension' | 'fgts' | 'salary_13' | 'retirement' | 'fire'
+  | 'inflation' | 'dividend_yield'
+  | 'rent_vs_buy' | 'financial_goal';
+
+type SimProps = {
+  onResult: (value: number, label: string, period: string, deadline?: Date) => void;
+};
+
+type SimDef = { id: SimId; icon: string; label: string; subtitle: string; color: string };
+type SimGroup = { label: string; icon: string; sims: SimDef[] };
+
+const SAVE_AS_GOAL_SIMS: SimId[] = [
+  'compound', 'savings', 'monthly_contributions', 'fire', 'pension', 'retirement', 'financial_goal',
+];
+
+// ─── Simulator groups (spec order) ──────────────────────────────────────────
+
+const SIM_GROUPS: SimGroup[] = [
   {
-    label: 'Juros & Rentabilidade',
+    label: 'RENDA FIXA & POUPANÇA',
     icon: 'trending-up',
     sims: [
-      { id: 'compound',     icon: 'trending-up',  label: 'Juros Compostos',           color: '#10B981' },
-      { id: 'fixed_income', icon: 'percent',      label: 'Renda Fixa (CDB/LCI/LCA)',  color: '#3B82F6' },
-      { id: 'inflation',    icon: 'bar-chart-2',  label: 'IPCA vs. CDI',               color: '#009688' },
-      { id: 'dividend_yield', icon: 'dollar-sign', label: 'Dividend Yield',            color: '#F59E0B' },
+      { id: 'compound',              icon: 'trending-up', label: 'Juros Compostos',         subtitle: 'Simule o poder dos juros compostos no longo prazo',        color: '#10B981' },
+      { id: 'savings',               icon: 'target',      label: 'Meta de Poupança',         subtitle: 'Calcule quanto tempo leva para atingir sua meta',           color: '#0096C7' },
+      { id: 'monthly_contributions', icon: 'calendar',    label: 'Aportes Mensais',          subtitle: 'Veja quanto acumula com aportes mensais fixos',             color: '#3B82F6' },
+      { id: 'fixed_income',          icon: 'percent',     label: 'Renda Fixa (CDB/LCI/LCA)', subtitle: 'Compare o rendimento líquido de diferentes ativos',         color: '#6366F1' },
+      { id: 'emergency',             icon: 'shield',      label: 'Reserva de Emergência',    subtitle: 'Descubra quanto você precisa guardar para imprevistos',     color: '#EF4444' },
     ],
   },
   {
-    label: 'Crédito & Financiamentos',
+    label: 'CRÉDITO & DÍVIDA',
     icon: 'credit-card',
     sims: [
-      { id: 'loan',         icon: 'dollar-sign',  label: 'Simulador de Empréstimo',    color: '#F59E0B' },
-      { id: 'mortgage',     icon: 'home',         label: 'Financiamento Imóvel',       color: '#7B39ED' },
-      { id: 'vehicle',      icon: 'truck',        label: 'Financiamento Veículo',      color: '#FF9800' },
-      { id: 'card_cost',    icon: 'credit-card',  label: 'Custo Real do Cartão',       color: '#E91E63' },
-      { id: 'portability',  icon: 'refresh-cw',   label: 'Portabilidade de Crédito',   color: '#795548' },
-      { id: 'rent_vs_buy',  icon: 'home',         label: 'Aluguel vs Compra',          color: '#0096C7' },
+      { id: 'loan',        icon: 'dollar-sign', label: 'Empréstimo (PRICE/SAC)',  subtitle: 'Calcule parcelas e custo total do crédito',                   color: '#F59E0B' },
+      { id: 'mortgage',    icon: 'home',        label: 'Financiamento Imóvel',    subtitle: 'Compare sistemas PRICE e SAC para o seu imóvel',              color: '#7B39ED' },
+      { id: 'vehicle',     icon: 'truck',       label: 'Financiamento Veículo',   subtitle: 'Simule o custo total do seu próximo carro',                   color: '#FF9800' },
+      { id: 'card_cost',   icon: 'credit-card', label: 'Custo Real do Cartão',    subtitle: 'Descubra o custo real do rotativo do cartão de crédito',      color: '#E91E63' },
+      { id: 'portability', icon: 'refresh-cw',  label: 'Portabilidade de Crédito',subtitle: 'Compare a economia ao transferir seu crédito para outro banco',color: '#795548' },
     ],
   },
   {
-    label: 'Planejamento Pessoal',
-    icon: 'target',
+    label: 'IMPOSTOS & APOSENTADORIA',
+    icon: 'file-text',
     sims: [
-      { id: 'savings',      icon: 'target',       label: 'Meta de Poupança',           color: '#0096C7' },
-      { id: 'financial_goal', icon: 'star',       label: 'Meta Financeira',            color: '#4CAF50' },
-      { id: 'emergency',    icon: 'shield',       label: 'Reserva de Emergência',      color: '#EF4444' },
-      { id: 'salary_13',    icon: 'gift',         label: '13º Salário',                color: '#FF9800' },
-      { id: 'fgts',         icon: 'briefcase',    label: 'Projeção FGTS',              color: '#795548' },
+      { id: 'ir',         icon: 'file-text', label: 'Imposto de Renda',         subtitle: 'Calcule o IR anual e estimativa de restituição',             color: '#F44336' },
+      { id: 'pension',    icon: 'umbrella',  label: 'Previdência Privada',      subtitle: 'Compare PGBL e VGBL para sua aposentadoria',                 color: '#7B39ED' },
+      { id: 'fgts',       icon: 'briefcase', label: 'Projeção FGTS',            subtitle: 'Simule o crescimento do seu FGTS com TR + 3% a.a.',          color: '#795548' },
+      { id: 'salary_13',  icon: 'gift',      label: '13º Salário',              subtitle: 'Calcule o valor líquido do décimo terceiro',                 color: '#FF9800' },
+      { id: 'retirement', icon: 'sun',       label: 'Aposentadoria',            subtitle: 'Quanto precisa acumular para se aposentar com conforto',     color: '#9C27B0' },
+      { id: 'fire',       icon: 'target',    label: 'Independência Financeira', subtitle: 'Calcule quando pode parar de trabalhar pela regra dos 4%',   color: '#2196F3' },
     ],
   },
   {
-    label: 'Longo Prazo',
-    icon: 'clock',
+    label: 'INVESTIMENTOS',
+    icon: 'bar-chart-2',
     sims: [
-      { id: 'fire',         icon: 'target',       label: 'Independência Financeira',   color: '#2196F3' },
-      { id: 'retirement',   icon: 'sun',          label: 'Aposentadoria',              color: '#9C27B0' },
-      { id: 'pension',      icon: 'umbrella',     label: 'Previdência Privada',        color: '#7B39ED' },
-      { id: 'ir',           icon: 'file-text',    label: 'Imposto de Renda',           color: '#F44336' },
+      { id: 'inflation',     icon: 'bar-chart-2',  label: 'Inflação vs CDI',  subtitle: 'Compare investimentos descontando a inflação real',             color: '#009688' },
+      { id: 'dividend_yield',icon: 'dollar-sign',  label: 'Dividend Yield',   subtitle: 'Simule renda passiva com dividendos de FIIs e ações',          color: '#F59E0B' },
     ],
   },
-] as const;
+  {
+    label: 'DECISÕES',
+    icon: 'help-circle',
+    sims: [
+      { id: 'rent_vs_buy',   icon: 'home', label: 'Aluguel vs Compra',  subtitle: 'Descubra o que é mais vantajoso para o seu perfil',                color: '#0096C7' },
+      { id: 'financial_goal',icon: 'star', label: 'Meta Financeira',    subtitle: 'Calcule o aporte necessário para realizar o seu objetivo',         color: '#4CAF50' },
+    ],
+  },
+];
 
-const SIMULATORS = SIM_GROUPS.flatMap((g) => g.sims);
+const ALL_SIMS = SIM_GROUPS.flatMap((g) => g.sims);
 
-type SimId = typeof SIMULATORS[number]['id'];
+// ─── Helper components ───────────────────────────────────────────────────────
 
 function NumInput({ label, value, onChangeText, prefix = 'R$', suffix = '' }: {
   label: string; value: string; onChangeText: (v: string) => void; prefix?: string; suffix?: string;
@@ -126,9 +156,9 @@ const st = StyleSheet.create({
   optText: { fontSize: 13 },
 });
 
-// ─── SIMULATORS ────────────────────────────────────────────────────────────────
+// ─── Simulators ─────────────────────────────────────────────────────────────
 
-function CompoundSim() {
+function CompoundSim({ onResult }: SimProps) {
   const [principal, setPrincipal] = useState('1000');
   const [monthly, setMonthly] = useState('200');
   const [rate, setRate] = useState('12');
@@ -138,11 +168,14 @@ function CompoundSim() {
   const m = parseFloat(monthly) || 0;
   const r = (parseFloat(rate) || 0) / 100 / 12;
   const n = parseInt(months) || 1;
-  const futureValue = r > 0
-    ? p * Math.pow(1 + r, n) + m * ((Math.pow(1 + r, n) - 1) / r)
-    : p + m * n;
+  const futureValue = r > 0 ? p * Math.pow(1 + r, n) + m * ((Math.pow(1 + r, n) - 1) / r) : p + m * n;
   const invested = p + m * n;
   const gain = futureValue - invested;
+
+  useEffect(() => {
+    const deadline = new Date(Date.now() + n * 30.5 * 86400000);
+    onResult(futureValue, 'Valor final acumulado', `em ${n} meses · taxa ${rate}% a.a.`, deadline);
+  }, [futureValue, n, rate, onResult]);
 
   return (
     <>
@@ -159,7 +192,7 @@ function CompoundSim() {
   );
 }
 
-function SavingsSim() {
+function SavingsSim({ onResult }: SimProps) {
   const [goal, setGoal] = useState('10000');
   const [monthly, setMonthly] = useState('500');
   const [rate, setRate] = useState('8');
@@ -172,6 +205,11 @@ function SavingsSim() {
     : Math.ceil(g / Math.max(m, 1));
   const totalInvested = m * months;
   const gains = g - totalInvested;
+
+  useEffect(() => {
+    const deadline = new Date(Date.now() + months * 30.5 * 86400000);
+    onResult(g, 'Valor da meta', `atingível em ${months} meses`, deadline);
+  }, [g, months, onResult]);
 
   return (
     <>
@@ -187,33 +225,78 @@ function SavingsSim() {
   );
 }
 
-function LoanSim() {
-  const [amount, setAmount] = useState('20000');
-  const [rate, setRate] = useState('2.5');
-  const [months, setMonths] = useState('36');
+function MonthlyContribSim({ onResult }: SimProps) {
+  const [monthly, setMonthly] = useState('500');
+  const [rate, setRate] = useState('12');
+  const [years, setYears] = useState('10');
 
-  const p = parseFloat(amount) || 0;
-  const r = (parseFloat(rate) || 0) / 100;
-  const n = parseInt(months) || 1;
-  const installment = r > 0 ? (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : p / n;
-  const total = installment * n;
-  const totalInterest = total - p;
+  const m = parseFloat(monthly) || 0;
+  const i = (parseFloat(rate) || 0) / 100 / 12;
+  const n = (parseFloat(years) || 1) * 12;
+  const fv = i > 0 ? m * ((Math.pow(1 + i, n) - 1) / i) : m * n;
+  const invested = m * n;
+  const gain = fv - invested;
+
+  useEffect(() => {
+    const deadline = new Date(Date.now() + n * 30.5 * 86400000);
+    onResult(fv, 'Total acumulado', `em ${Math.round(n / 12)} anos aportando ${formatBRL(m)}/mês`, deadline);
+  }, [fv, n, m, onResult]);
 
   return (
     <>
-      <NumInput label="Valor do empréstimo" value={amount} onChangeText={setAmount} />
-      <NumInput label="Taxa mensal (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.m." />
-      <NumInput label="Prazo (meses)" value={months} onChangeText={setMonths} prefix="" suffix="meses" />
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Taxa anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Período (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
       <View style={{ marginTop: 4 }}>
-        <ResultRow label="Parcela mensal" value={formatBRL(installment)} highlight />
-        <ResultRow label="Total pago" value={formatBRL(total)} />
-        <ResultRow label="Total de juros" value={formatBRL(totalInterest)} />
+        <ResultRow label="Total investido" value={formatBRL(invested)} />
+        <ResultRow label="Rendimentos" value={formatBRL(gain)} />
+        <ResultRow label="Total acumulado" value={formatBRL(fv)} highlight />
       </View>
     </>
   );
 }
 
-function EmergencySim() {
+function FixedIncomeSim({ onResult }: SimProps) {
+  const [amount, setAmount] = useState('10000');
+  const [rate, setRate] = useState('12');
+  const [months, setMonths] = useState('12');
+  const [type, setType] = useState('CDB');
+  const [ir, setIr] = useState('22.5');
+
+  const p = parseFloat(amount) || 0;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const n = parseInt(months) || 1;
+  const gross = r > 0 ? p * (Math.pow(1 + r, n) - 1) : p * (parseFloat(rate) || 0) / 100;
+  const isIrExempt = type === 'LCI' || type === 'LCA';
+  const irRate = isIrExempt ? 0 : (parseFloat(ir) || 0) / 100;
+  const netGain = gross * (1 - irRate);
+  const netValue = p + netGain;
+  const netAnnual = p > 0 ? (Math.pow(netValue / p, 12 / n) - 1) * 100 : 0;
+
+  useEffect(() => {
+    onResult(netValue, 'Valor líquido final', `em ${n} meses · ${type}${isIrExempt ? ' (isento de IR)' : ''}`);
+  }, [netValue, n, type, isIrExempt, onResult]);
+
+  return (
+    <>
+      <NumInput label="Capital investido" value={amount} onChangeText={setAmount} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Prazo (meses)" value={months} onChangeText={setMonths} prefix="" suffix="meses" />
+      <SelectToggle options={[{ id: 'CDB', label: 'CDB' }, { id: 'LCI', label: 'LCI' }, { id: 'LCA', label: 'LCA' }, { id: 'TESOURO', label: 'Tesouro' }]} value={type} onChange={setType} />
+      {!isIrExempt && <NumInput label="Alíquota IR (%)" value={ir} onChangeText={setIr} prefix="" suffix="%" />}
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Rendimento bruto" value={formatBRL(gross)} />
+        {!isIrExempt && <ResultRow label="IR sobre rendimento" value={formatBRL(gross * irRate)} />}
+        <ResultRow label="Rendimento líquido" value={formatBRL(netGain)} highlight />
+        <ResultRow label="Valor final líquido" value={formatBRL(netValue)} />
+        <ResultRow label="Rentabilidade líquida a.a." value={`${netAnnual.toFixed(2)}% a.a.`} />
+        {isIrExempt && <ResultRow label="Tipo" value="✅ Isento de IR" />}
+      </View>
+    </>
+  );
+}
+
+function EmergencySim({ onResult }: SimProps) {
   const [monthly, setMonthly] = useState('3000');
   const [months, setMonths] = useState('6');
   const [saved, setSaved] = useState('5000');
@@ -222,6 +305,10 @@ function EmergencySim() {
   const current = parseFloat(saved) || 0;
   const remaining = Math.max(0, goal - current);
   const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
+
+  useEffect(() => {
+    onResult(goal, 'Meta de reserva', `${months} meses de despesas`);
+  }, [goal, months, onResult]);
 
   return (
     <>
@@ -238,7 +325,37 @@ function EmergencySim() {
   );
 }
 
-function MortgageSim() {
+function LoanSim({ onResult }: SimProps) {
+  const [amount, setAmount] = useState('20000');
+  const [rate, setRate] = useState('2.5');
+  const [months, setMonths] = useState('36');
+
+  const p = parseFloat(amount) || 0;
+  const r = (parseFloat(rate) || 0) / 100;
+  const n = parseInt(months) || 1;
+  const installment = r > 0 ? (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : p / n;
+  const total = installment * n;
+  const totalInterest = total - p;
+
+  useEffect(() => {
+    onResult(installment, 'Parcela mensal', `total ${formatBRL(total)} em ${n} meses`);
+  }, [installment, total, n, onResult]);
+
+  return (
+    <>
+      <NumInput label="Valor do empréstimo" value={amount} onChangeText={setAmount} />
+      <NumInput label="Taxa mensal (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.m." />
+      <NumInput label="Prazo (meses)" value={months} onChangeText={setMonths} prefix="" suffix="meses" />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Parcela mensal" value={formatBRL(installment)} highlight />
+        <ResultRow label="Total pago" value={formatBRL(total)} />
+        <ResultRow label="Total de juros" value={formatBRL(totalInterest)} />
+      </View>
+    </>
+  );
+}
+
+function MortgageSim({ onResult }: SimProps) {
   const [value, setValue] = useState('300000');
   const [entry, setEntry] = useState('60000');
   const [months, setMonths] = useState('360');
@@ -263,6 +380,10 @@ function MortgageSim() {
   }
   const totalInterest = totalPaid - loanAmount;
 
+  useEffect(() => {
+    onResult(firstInstallment, 'Primeira parcela', `sistema ${system} · ${n} meses`);
+  }, [firstInstallment, system, n, onResult]);
+
   return (
     <>
       <NumInput label="Valor do imóvel" value={value} onChangeText={setValue} />
@@ -281,7 +402,7 @@ function MortgageSim() {
   );
 }
 
-function VehicleSim() {
+function VehicleSim({ onResult }: SimProps) {
   const [value, setValue] = useState('50000');
   const [entry, setEntry] = useState('10000');
   const [months, setMonths] = useState('48');
@@ -295,6 +416,10 @@ function VehicleSim() {
   const interest = total - loan;
   const annualRate = Math.pow(1 + r, 12) - 1;
   const cet = annualRate * 100;
+
+  useEffect(() => {
+    onResult(installment, 'Parcela mensal', `CET ${cet.toFixed(1)}% a.a. · ${n} meses`);
+  }, [installment, cet, n, onResult]);
 
   return (
     <>
@@ -312,181 +437,16 @@ function VehicleSim() {
   );
 }
 
-function InflationSim() {
-  const { theme } = useTheme();
-  const { data: bench, isStale, source } = useBenchmarks();
-  const [initial, setInitial] = useState('10000');
-  const [years, setYears] = useState('5');
-  const [ipca, setIpca] = useState<string | null>(null);
-  const [cdi, setCdi] = useState<string | null>(null);
-
-  // Default IPCA/CDI values come from real API; user can override.
-  const ipcaInput = ipca ?? (bench ? String(bench.ipca) : '');
-  const cdiInput = cdi ?? (bench ? String(bench.cdi) : '');
-
-  const p = parseFloat(initial) || 0;
-  const y = parseFloat(years) || 1;
-  const ipcaRate = (parseFloat(ipcaInput) || 0) / 100;
-  const cdiRate = (parseFloat(cdiInput) || 0) / 100;
-
-  const ipcaValue = p * Math.pow(1 + ipcaRate, y);
-  const cdiValue = p * Math.pow(1 + cdiRate, y);
-  const powerMaintained = cdiValue >= ipcaValue;
-
-  return (
-    <>
-      <NumInput label="Valor inicial" value={initial} onChangeText={setInitial} />
-      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
-      <NumInput label="IPCA médio (%)" value={ipcaInput} onChangeText={setIpca} prefix="" suffix="% a.a." />
-      <NumInput label="CDI (%)" value={cdiInput} onChangeText={setCdi} prefix="" suffix="% a.a." />
-      {source === 'none' && (
-        <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-          Não foi possível carregar índices atuais — informe os valores manualmente.
-        </Text>
-      )}
-      {isStale && (
-        <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
-          Não foi possível carregar índices atuais. Usando últimos valores conhecidos.
-        </Text>
-      )}
-      <View style={{ marginTop: 4 }}>
-        <ResultRow label="Valor corrigido (IPCA)" value={formatBRL(ipcaValue)} />
-        <ResultRow label="Valor com CDI" value={formatBRL(cdiValue)} highlight />
-        <ResultRow label="Ganho real vs. IPCA" value={formatBRL(cdiValue - ipcaValue)} />
-        <ResultRow label="Poder de compra" value={powerMaintained ? '✅ Mantido' : '⚠️ Perdido'} />
-      </View>
-    </>
-  );
-}
-
-function IrSim() {
-  const [gross, setGross] = useState('80000');
-  const [dependents, setDependents] = useState('1');
-  const [health, setHealth] = useState('5000');
-  const [education, setEducation] = useState('3500');
-  const [type, setType] = useState('completo');
-
-  const g = parseFloat(gross) || 0;
-  const dep = (parseInt(dependents) || 0) * 2275.08;
-  const ded = type === 'completo'
-    ? dep + (parseFloat(health) || 0) + Math.min(parseFloat(education) || 0, 3561.50)
-    : g * 0.2;
-  const base = Math.max(0, g - ded - 4950.72 /* INSS estimado */);
-
-  let ir = 0;
-  const brackets = [
-    { limit: 24511.92, rate: 0, deduction: 0 },
-    { limit: 33919.80, rate: 0.075, deduction: 1838.39 },
-    { limit: 45012.60, rate: 0.15, deduction: 4382.38 },
-    { limit: 55976.16, rate: 0.225, deduction: 7765.08 },
-    { limit: Infinity, rate: 0.275, deduction: 10557.00 },
-  ];
-  for (const b of brackets) {
-    if (base <= b.limit) { ir = base * b.rate - b.deduction; break; }
-  }
-  ir = Math.max(0, ir);
-  const efectiveRate = g > 0 ? (ir / g) * 100 : 0;
-  const irWithhold = g * 0.15; // simplified estimate withheld
-  const difference = irWithhold - ir;
-
-  return (
-    <>
-      <NumInput label="Rendimento bruto anual" value={gross} onChangeText={setGross} />
-      <NumInput label="Dependentes" value={dependents} onChangeText={setDependents} prefix="" suffix="pessoa(s)" />
-      <NumInput label="Gastos com saúde" value={health} onChangeText={setHealth} />
-      <NumInput label="Gastos com educação" value={education} onChangeText={setEducation} />
-      <SelectToggle options={[{ id: 'completo', label: 'Completo' }, { id: 'simples', label: 'Simplificado' }]} value={type} onChange={setType} />
-      <View style={{ marginTop: 4 }}>
-        <ResultRow label="Base de cálculo" value={formatBRL(base)} />
-        <ResultRow label="IR devido" value={formatBRL(ir)} highlight />
-        <ResultRow label="Alíquota efetiva" value={`${efectiveRate.toFixed(2)}%`} />
-        <ResultRow label="Estimativa restituição/complemento" value={`${difference >= 0 ? '+ ' : '– '}${formatBRL(Math.abs(difference))}`} />
-      </View>
-    </>
-  );
-}
-
-function FireSim() {
-  const [patrimony, setPatrimony] = useState('50000');
-  const [monthly, setMonthly] = useState('2000');
-  const [rate, setRate] = useState('10');
-  const [expense, setExpense] = useState('5000');
-
-  const p = parseFloat(patrimony) || 0;
-  const m = parseFloat(monthly) || 0;
-  const r = (parseFloat(rate) || 0) / 100 / 12;
-  const monthlyExpense = parseFloat(expense) || 0;
-  const target = monthlyExpense * 12 * 25; // 4% rule
-  const months = r > 0
-    ? Math.ceil(Math.log((target - p) * r / m + 1) / Math.log(1 + r))
-    : Math.ceil((target - p) / Math.max(m, 1));
-  const validMonths = isFinite(months) && months > 0 ? months : null;
-  const years = validMonths ? Math.floor(validMonths / 12) : null;
-  const targetDate = validMonths ? new Date(Date.now() + validMonths * 30.5 * 24 * 3600 * 1000) : null;
-
-  return (
-    <>
-      <NumInput label="Patrimônio atual" value={patrimony} onChangeText={setPatrimony} />
-      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
-      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
-      <NumInput label="Despesa mensal desejada" value={expense} onChangeText={setExpense} />
-      <View style={{ marginTop: 4 }}>
-        <ResultRow label="Patrimônio necessário (4%)" value={formatBRL(target)} />
-        <ResultRow label="Tempo para atingir" value={validMonths ? `${years} anos e ${validMonths % 12} meses` : 'Aporte insuficiente'} highlight />
-        <ResultRow label="Data estimada" value={targetDate ? targetDate.getFullYear().toString() : '—'} />
-      </View>
-    </>
-  );
-}
-
-function PensionSim() {
-  const [monthly, setMonthly] = useState('500');
-  const [years, setYears] = useState('30');
-  const [rate, setRate] = useState('8');
-  const [type, setType] = useState('VGBL');
-  const [irRate, setIrRate] = useState('15');
-
-  const m = parseFloat(monthly) || 0;
-  const y = parseFloat(years) || 1;
-  const r = (parseFloat(rate) || 0) / 100 / 12;
-  const n = y * 12;
-  const accumulated = r > 0 ? m * ((Math.pow(1 + r, n) - 1) / r) : m * n;
-  const totalInvested = m * n;
-  const annualContrib = m * 12;
-  const irBenefit = type === 'PGBL' ? annualContrib * ((parseFloat(irRate) || 0) / 100) : 0;
-  const monthlyIncome = accumulated * 0.004; // ~0.4% per month withdrawal
-
-  return (
-    <>
-      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
-      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
-      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
-      <SelectToggle options={[{ id: 'PGBL', label: 'PGBL' }, { id: 'VGBL', label: 'VGBL' }]} value={type} onChange={setType} />
-      {type === 'PGBL' && (
-        <NumInput label="Alíquota IR (%)" value={irRate} onChangeText={setIrRate} prefix="" suffix="%" />
-      )}
-      <View style={{ marginTop: 4 }}>
-        <ResultRow label="Total acumulado" value={formatBRL(accumulated)} highlight />
-        <ResultRow label="Total investido" value={formatBRL(totalInvested)} />
-        {type === 'PGBL' && <ResultRow label="Benefício fiscal anual" value={formatBRL(irBenefit)} />}
-        <ResultRow label="Renda mensal estimada" value={formatBRL(monthlyIncome)} />
-      </View>
-    </>
-  );
-}
-
-function CardCostSim() {
-  // Simulação de saldo no rotativo do cartão. Juros incidem mensalmente
-  // sobre o saldo remanescente (juros compostos) — NÃO é PRICE de parcela fixa.
+function CardCostSim({ onResult }: SimProps) {
   const [debt, setDebt] = useState('1000');
-  const [annualRate, setAnnualRate] = useState('400'); // CDI rotativo médio ~ 400% a.a. no Brasil
+  const [annualRate, setAnnualRate] = useState('400');
   const [mode, setMode] = useState<'min' | 'fixed'>('min');
   const [minPct, setMinPct] = useState('15');
   const [fixedPay, setFixedPay] = useState('150');
 
   const initialBalance = parseFloat(debt) || 0;
   const annual = (parseFloat(annualRate) || 0) / 100;
-  const monthlyRate = annual > 0 ? Math.pow(1 + annual, 1 / 12) - 1 : 0; // capitalização efetiva
+  const monthlyRate = annual > 0 ? Math.pow(1 + annual, 1 / 12) - 1 : 0;
   const minPctNum = (parseFloat(minPct) || 0) / 100;
   const fixedPayNum = parseFloat(fixedPay) || 0;
 
@@ -497,47 +457,29 @@ function CardCostSim() {
   let nuncaQuita = false;
 
   while (saldo > 0.01 && meses < MAX_MONTHS) {
-    const pagamento = mode === 'min'
-      ? Math.max(saldo * minPctNum, 1) // mínimo nunca pode ser zero, ou nunca quita
-      : fixedPayNum;
+    const pagamento = mode === 'min' ? Math.max(saldo * minPctNum, 1) : fixedPayNum;
     if (pagamento <= 0) { nuncaQuita = true; break; }
-    if (pagamento >= saldo) {
-      // último pagamento quita o saldo
-      totalPago += saldo;
-      saldo = 0;
-      meses += 1;
-      break;
-    }
-    // o pagamento é cobrado primeiro, juros compostos sobre o saldo remanescente
+    if (pagamento >= saldo) { totalPago += saldo; saldo = 0; meses += 1; break; }
     saldo = (saldo - pagamento) * (1 + monthlyRate);
     totalPago += pagamento;
     meses += 1;
-    // se o pagamento não cobre os juros, a dívida cresce indefinidamente
-    if (mode === 'fixed' && fixedPayNum < initialBalance * monthlyRate) {
-      nuncaQuita = true;
-      break;
-    }
+    if (mode === 'fixed' && fixedPayNum < initialBalance * monthlyRate) { nuncaQuita = true; break; }
   }
-
   const totalJuros = totalPago - initialBalance;
   const quitouNoLimite = meses >= MAX_MONTHS && saldo > 0.01;
+
+  useEffect(() => {
+    onResult(totalPago, nuncaQuita || quitouNoLimite ? 'Total pago (sem quitar)' : 'Total a pagar', nuncaQuita || quitouNoLimite ? 'dívida não quitada em 10 anos ⚠️' : `em ${meses} meses`);
+  }, [totalPago, nuncaQuita, quitouNoLimite, meses, onResult]);
 
   return (
     <>
       <NumInput label="Saldo da fatura no rotativo" value={debt} onChangeText={setDebt} />
       <NumInput label="Juros do rotativo (% a.a.)" value={annualRate} onChangeText={setAnnualRate} prefix="" suffix="% a.a." />
-      <SelectToggle
-        options={[
-          { id: 'min', label: 'Pago só o mínimo' },
-          { id: 'fixed', label: 'Valor fixo mensal' },
-        ]}
-        value={mode}
-        onChange={(v) => setMode(v as 'min' | 'fixed')}
-      />
+      <SelectToggle options={[{ id: 'min', label: 'Pago só o mínimo' }, { id: 'fixed', label: 'Valor fixo mensal' }]} value={mode} onChange={(v) => setMode(v as 'min' | 'fixed')} />
       {mode === 'min'
         ? <NumInput label="% mínimo da fatura" value={minPct} onChangeText={setMinPct} prefix="" suffix="%" />
-        : <NumInput label="Pagamento mensal" value={fixedPay} onChangeText={setFixedPay} />
-      }
+        : <NumInput label="Pagamento mensal" value={fixedPay} onChangeText={setFixedPay} />}
       <View style={{ marginTop: 4 }}>
         {nuncaQuita || quitouNoLimite ? (
           <>
@@ -557,7 +499,7 @@ function CardCostSim() {
   );
 }
 
-function PortabilitySim() {
+function PortabilitySim({ onResult }: SimProps) {
   const [debt, setDebt] = useState('20000');
   const [remainingMonths, setRemainingMonths] = useState('24');
   const [currentRate, setCurrentRate] = useState('3.5');
@@ -567,14 +509,16 @@ function PortabilitySim() {
   const n = parseInt(remainingMonths) || 1;
   const rCurrent = (parseFloat(currentRate) || 0) / 100;
   const rNew = (parseFloat(newRate) || 0) / 100;
-
   const calcInstallment = (principal: number, rate: number, periods: number) =>
     rate > 0 ? (principal * rate * Math.pow(1 + rate, periods)) / (Math.pow(1 + rate, periods) - 1) : principal / periods;
-
   const currentInst = calcInstallment(d, rCurrent, n);
   const newInst = calcInstallment(d, rNew, n);
   const monthlySavings = currentInst - newInst;
   const totalSavings = monthlySavings * n;
+
+  useEffect(() => {
+    onResult(totalSavings, 'Economia total', `${formatBRL(monthlySavings)}/mês · ${n} meses`);
+  }, [totalSavings, monthlySavings, n, onResult]);
 
   return (
     <>
@@ -592,43 +536,92 @@ function PortabilitySim() {
   );
 }
 
-function FixedIncomeSim() {
-  const [amount, setAmount] = useState('10000');
-  const [rate, setRate] = useState('12');
-  const [months, setMonths] = useState('12');
-  const [type, setType] = useState('CDB');
-  const [ir, setIr] = useState('22.5');
+function IrSim({ onResult }: SimProps) {
+  const [gross, setGross] = useState('80000');
+  const [dependents, setDependents] = useState('1');
+  const [health, setHealth] = useState('5000');
+  const [education, setEducation] = useState('3500');
+  const [type, setType] = useState('completo');
 
-  const p = parseFloat(amount) || 0;
-  const r = (parseFloat(rate) || 0) / 100 / 12;
-  const n = parseInt(months) || 1;
-  const gross = r > 0 ? p * (Math.pow(1 + r, n) - 1) : p * (parseFloat(rate) || 0) / 100;
-  const isIrExempt = type === 'LCI' || type === 'LCA';
-  const irRate = isIrExempt ? 0 : (parseFloat(ir) || 0) / 100;
-  const netGain = gross * (1 - irRate);
-  const netValue = p + netGain;
-  const netAnnual = (Math.pow(netValue / p, 12 / n) - 1) * 100;
+  const g = parseFloat(gross) || 0;
+  const dep = (parseInt(dependents) || 0) * 2275.08;
+  const ded = type === 'completo' ? dep + (parseFloat(health) || 0) + Math.min(parseFloat(education) || 0, 3561.50) : g * 0.2;
+  const base = Math.max(0, g - ded - 4950.72);
+  let ir = 0;
+  const brackets = [
+    { limit: 24511.92, rate: 0, deduction: 0 },
+    { limit: 33919.80, rate: 0.075, deduction: 1838.39 },
+    { limit: 45012.60, rate: 0.15, deduction: 4382.38 },
+    { limit: 55976.16, rate: 0.225, deduction: 7765.08 },
+    { limit: Infinity,  rate: 0.275, deduction: 10557.00 },
+  ];
+  for (const b of brackets) { if (base <= b.limit) { ir = base * b.rate - b.deduction; break; } }
+  ir = Math.max(0, ir);
+  const efectiveRate = g > 0 ? (ir / g) * 100 : 0;
+  const irWithhold = g * 0.15;
+  const difference = irWithhold - ir;
+
+  useEffect(() => {
+    onResult(ir, 'IR devido', `alíquota efetiva ${efectiveRate.toFixed(1)}% · modelo ${type}`);
+  }, [ir, efectiveRate, type, onResult]);
 
   return (
     <>
-      <NumInput label="Capital investido" value={amount} onChangeText={setAmount} />
-      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
-      <NumInput label="Prazo (meses)" value={months} onChangeText={setMonths} prefix="" suffix="meses" />
-      <SelectToggle options={[{ id: 'CDB', label: 'CDB' }, { id: 'LCI', label: 'LCI' }, { id: 'LCA', label: 'LCA' }, { id: 'TESOURO', label: 'Tesouro' }]} value={type} onChange={setType} />
-      {!isIrExempt && <NumInput label="Alíquota IR (%)" value={ir} onChangeText={setIr} prefix="" suffix="%" />}
+      <NumInput label="Rendimento bruto anual" value={gross} onChangeText={setGross} />
+      <NumInput label="Dependentes" value={dependents} onChangeText={setDependents} prefix="" suffix="pessoa(s)" />
+      <NumInput label="Gastos com saúde" value={health} onChangeText={setHealth} />
+      <NumInput label="Gastos com educação" value={education} onChangeText={setEducation} />
+      <SelectToggle options={[{ id: 'completo', label: 'Completo' }, { id: 'simples', label: 'Simplificado' }]} value={type} onChange={setType} />
       <View style={{ marginTop: 4 }}>
-        <ResultRow label="Rendimento bruto" value={formatBRL(gross)} />
-        {!isIrExempt && <ResultRow label="IR sobre rendimento" value={formatBRL(gross * irRate)} />}
-        <ResultRow label="Rendimento líquido" value={formatBRL(netGain)} highlight />
-        <ResultRow label="Valor final líquido" value={formatBRL(netValue)} />
-        <ResultRow label="Rentabilidade líquida a.a." value={`${netAnnual.toFixed(2)}% a.a.`} />
-        {isIrExempt && <ResultRow label="Tipo" value="✅ Isento de IR" />}
+        <ResultRow label="Base de cálculo" value={formatBRL(base)} />
+        <ResultRow label="IR devido" value={formatBRL(ir)} highlight />
+        <ResultRow label="Alíquota efetiva" value={`${efectiveRate.toFixed(2)}%`} />
+        <ResultRow label="Estimativa restituição/complemento" value={`${difference >= 0 ? '+ ' : '– '}${formatBRL(Math.abs(difference))}`} />
       </View>
     </>
   );
 }
 
-function FgtsSim() {
+function PensionSim({ onResult }: SimProps) {
+  const [monthly, setMonthly] = useState('500');
+  const [years, setYears] = useState('30');
+  const [rate, setRate] = useState('8');
+  const [type, setType] = useState('VGBL');
+  const [irRate, setIrRate] = useState('15');
+
+  const m = parseFloat(monthly) || 0;
+  const y = parseFloat(years) || 1;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const n = y * 12;
+  const accumulated = r > 0 ? m * ((Math.pow(1 + r, n) - 1) / r) : m * n;
+  const totalInvested = m * n;
+  const annualContrib = m * 12;
+  const irBenefit = type === 'PGBL' ? annualContrib * ((parseFloat(irRate) || 0) / 100) : 0;
+  const monthlyIncome = accumulated * 0.004;
+
+  useEffect(() => {
+    const deadline = new Date(Date.now() + n * 30.5 * 86400000);
+    onResult(accumulated, 'Total acumulado', `em ${y} anos · ${type}`, deadline);
+  }, [accumulated, y, type, n, onResult]);
+
+  return (
+    <>
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <SelectToggle options={[{ id: 'PGBL', label: 'PGBL' }, { id: 'VGBL', label: 'VGBL' }]} value={type} onChange={setType} />
+      {type === 'PGBL' && <NumInput label="Alíquota IR (%)" value={irRate} onChangeText={setIrRate} prefix="" suffix="%" />}
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Total acumulado" value={formatBRL(accumulated)} highlight />
+        <ResultRow label="Total investido" value={formatBRL(totalInvested)} />
+        {type === 'PGBL' && <ResultRow label="Benefício fiscal anual" value={formatBRL(irBenefit)} />}
+        <ResultRow label="Renda mensal estimada" value={formatBRL(monthlyIncome)} />
+      </View>
+    </>
+  );
+}
+
+function FgtsSim({ onResult }: SimProps) {
   const [salary, setSalary] = useState('3000');
   const [years, setYears] = useState('5');
   const [current, setCurrent] = useState('0');
@@ -638,13 +631,17 @@ function FgtsSim() {
   const existing = parseFloat(current) || 0;
   const monthlyDeposit = s * 0.08;
   const annual = monthlyDeposit * 12;
-  const fgtsRate = 0.03; // FGTS annual yield: TR + 3%
+  const fgtsRate = 0.03;
   const r = fgtsRate / 12;
   const n = y * 12;
   const accumulated = r > 0
     ? existing * Math.pow(1 + r, n) + monthlyDeposit * ((Math.pow(1 + r, n) - 1) / r)
     : existing + monthlyDeposit * n;
   const totalDeposited = existing + annual * y;
+
+  useEffect(() => {
+    onResult(accumulated, 'Saldo acumulado FGTS', `em ${y} anos com TR + 3% a.a.`);
+  }, [accumulated, y, onResult]);
 
   return (
     <>
@@ -662,7 +659,7 @@ function FgtsSim() {
   );
 }
 
-function Salary13Sim() {
+function Salary13Sim({ onResult }: SimProps) {
   const [salary, setSalary] = useState('3000');
   const [monthsWorked, setMonthsWorked] = useState('12');
   const [inss, setInss] = useState('11');
@@ -678,6 +675,10 @@ function Salary13Sim() {
   const net = gross - inssValue - irValue;
   const firstPart = gross / 2;
   const secondPart = net - firstPart;
+
+  useEffect(() => {
+    onResult(net, '13º líquido total', `referente a ${m} meses trabalhados`);
+  }, [net, m, onResult]);
 
   return (
     <>
@@ -697,48 +698,131 @@ function Salary13Sim() {
   );
 }
 
-function RentVsBuySim() {
-  const [propertyValue, setPropertyValue] = useState('400000');
-  const [entry, setEntry] = useState('80000');
-  const [monthlyRent, setMonthlyRent] = useState('1800');
-  const [mortgageRate, setMortgageRate] = useState('0.7');
-  const [years, setYears] = useState('20');
-  const [appreciation, setAppreciation] = useState('5');
+function RetirementSim({ onResult }: SimProps) {
+  const [age, setAge] = useState('30');
+  const [retirementAge, setRetirementAge] = useState('65');
+  const [monthly, setMonthly] = useState('1000');
+  const [current, setCurrent] = useState('20000');
+  const [rate, setRate] = useState('10');
+  const [desiredIncome, setDesiredIncome] = useState('5000');
 
-  const pv = parseFloat(propertyValue) || 0;
-  const e = parseFloat(entry) || 0;
-  const rent = parseFloat(monthlyRent) || 0;
-  const r = (parseFloat(mortgageRate) || 0) / 100;
-  const n = (parseFloat(years) || 1) * 12;
-  const appRate = (parseFloat(appreciation) || 0) / 100;
-  const loan = pv - e;
-  const installment = r > 0 ? (loan * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : loan / n;
-  const totalFinancingCost = installment * n + e;
-  const totalRentCost = rent * n;
-  const futurePropertyValue = pv * Math.pow(1 + appRate, parseFloat(years) || 1);
-  const netCostBuy = totalFinancingCost - futurePropertyValue;
-  const netCostRent = totalRentCost;
+  const currentAge = parseInt(age) || 30;
+  const retAge = parseInt(retirementAge) || 65;
+  const years = Math.max(0, retAge - currentAge);
+  const n = years * 12;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const m = parseFloat(monthly) || 0;
+  const p = parseFloat(current) || 0;
+  const accumulated = r > 0 ? p * Math.pow(1 + r, n) + m * ((Math.pow(1 + r, n) - 1) / r) : p + m * n;
+  const target = (parseFloat(desiredIncome) || 0) * 12 * 25;
+  const monthlyFromAccumulated = accumulated * 0.004;
+  const ok = accumulated >= target;
+
+  useEffect(() => {
+    const deadline = new Date(Date.now() + n * 30.5 * 86400000);
+    onResult(accumulated, 'Patrimônio acumulado', `em ${years} anos · meta: ${formatBRL(target)}`, deadline);
+  }, [accumulated, years, n, target, onResult]);
 
   return (
     <>
-      <NumInput label="Valor do imóvel" value={propertyValue} onChangeText={setPropertyValue} />
-      <NumInput label="Entrada" value={entry} onChangeText={setEntry} />
-      <NumInput label="Aluguel mensal equivalente" value={monthlyRent} onChangeText={setMonthlyRent} />
-      <NumInput label="Taxa financiamento (% a.m.)" value={mortgageRate} onChangeText={setMortgageRate} prefix="" suffix="% a.m." />
-      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
-      <NumInput label="Valorização anual do imóvel (%)" value={appreciation} onChangeText={setAppreciation} prefix="" suffix="% a.a." />
+      <NumInput label="Idade atual" value={age} onChangeText={setAge} prefix="" suffix="anos" />
+      <NumInput label="Idade de aposentadoria" value={retirementAge} onChangeText={setRetirementAge} prefix="" suffix="anos" />
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Patrimônio atual" value={current} onChangeText={setCurrent} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Renda desejada/mês" value={desiredIncome} onChangeText={setDesiredIncome} />
       <View style={{ marginTop: 4 }}>
-        <ResultRow label="Parcela mensal (financiamento)" value={formatBRL(installment)} />
-        <ResultRow label="Custo total de comprar" value={formatBRL(totalFinancingCost)} />
-        <ResultRow label="Custo total de alugar" value={formatBRL(totalRentCost)} />
-        <ResultRow label="Valor futuro do imóvel" value={formatBRL(futurePropertyValue)} />
-        <ResultRow label={netCostBuy < netCostRent ? '✅ Comprar vantagem' : '✅ Alugar vantagem'} value={`Diferença: ${formatBRL(Math.abs(totalFinancingCost - totalRentCost - (futurePropertyValue - pv)))}`} highlight />
+        <ResultRow label="Anos até aposentadoria" value={`${years} anos`} />
+        <ResultRow label="Patrimônio acumulado" value={formatBRL(accumulated)} highlight />
+        <ResultRow label="Meta (regra 4%)" value={formatBRL(target)} />
+        <ResultRow label="Renda mensal possível" value={formatBRL(monthlyFromAccumulated)} />
+        <ResultRow label={ok ? '✅ Meta atingida!' : `⚠️ Falta investir mais`} value={ok ? 'Parabéns!' : `Acumule ${formatBRL(target - accumulated)} a mais`} />
       </View>
     </>
   );
 }
 
-function DividendYieldSim() {
+function FireSim({ onResult }: SimProps) {
+  const [patrimony, setPatrimony] = useState('50000');
+  const [monthly, setMonthly] = useState('2000');
+  const [rate, setRate] = useState('10');
+  const [expense, setExpense] = useState('5000');
+
+  const p = parseFloat(patrimony) || 0;
+  const m = parseFloat(monthly) || 0;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const monthlyExpense = parseFloat(expense) || 0;
+  const target = monthlyExpense * 12 * 25;
+  const months = r > 0 && m > 0 && target > p
+    ? Math.ceil(Math.log((target - p) * r / m + 1) / Math.log(1 + r))
+    : target <= p ? 0 : Math.ceil((target - p) / Math.max(m, 1));
+  const validMonths = isFinite(months) && months >= 0 ? months : null;
+  const years = validMonths !== null ? Math.floor(validMonths / 12) : null;
+  const targetDate = validMonths !== null ? new Date(Date.now() + validMonths * 30.5 * 24 * 3600 * 1000) : null;
+
+  useEffect(() => {
+    onResult(target, 'Patrimônio necessário (4%)', validMonths !== null ? (validMonths === 0 ? 'meta já atingida! 🎉' : `atingível em ${years} anos`) : 'aporte insuficiente', targetDate ?? undefined);
+  }, [target, validMonths, years, onResult]);
+
+  return (
+    <>
+      <NumInput label="Patrimônio atual" value={patrimony} onChangeText={setPatrimony} />
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Despesa mensal desejada" value={expense} onChangeText={setExpense} />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Patrimônio necessário (4%)" value={formatBRL(target)} />
+        <ResultRow label="Tempo para atingir" value={validMonths !== null ? (validMonths === 0 ? '🎉 Já atingido!' : `${years} anos e ${validMonths % 12} meses`) : 'Aporte insuficiente'} highlight />
+        <ResultRow label="Data estimada" value={targetDate ? targetDate.getFullYear().toString() : '—'} />
+      </View>
+    </>
+  );
+}
+
+function InflationSim({ onResult }: SimProps) {
+  const { theme } = useTheme();
+  const { data: bench, isStale, source } = useBenchmarks();
+  const [initial, setInitial] = useState('10000');
+  const [years, setYears] = useState('5');
+  const [ipca, setIpca] = useState<string | null>(null);
+  const [cdi, setCdi] = useState<string | null>(null);
+
+  const ipcaInput = ipca ?? (bench ? String(bench.ipca) : '');
+  const cdiInput = cdi ?? (bench ? String(bench.cdi) : '');
+  const p = parseFloat(initial) || 0;
+  const y = parseFloat(years) || 1;
+  const ipcaRate = (parseFloat(ipcaInput) || 0) / 100;
+  const cdiRate = (parseFloat(cdiInput) || 0) / 100;
+  const ipcaValue = p * Math.pow(1 + ipcaRate, y);
+  const cdiValue = p * Math.pow(1 + cdiRate, y);
+  const powerMaintained = cdiValue >= ipcaValue;
+
+  useEffect(() => {
+    onResult(cdiValue, 'Valor com CDI', `em ${y} anos · ganho real vs IPCA: ${formatBRL(cdiValue - ipcaValue)}`);
+  }, [cdiValue, y, ipcaValue, onResult]);
+
+  return (
+    <>
+      <NumInput label="Valor inicial" value={initial} onChangeText={setInitial} />
+      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
+      <NumInput label="IPCA médio (%)" value={ipcaInput} onChangeText={setIpca} prefix="" suffix="% a.a." />
+      <NumInput label="CDI (%)" value={cdiInput} onChangeText={setCdi} prefix="" suffix="% a.a." />
+      {(source === 'none' || isStale) && (
+        <Text style={{ color: theme.textTertiary, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+          {source === 'none' ? 'Informe os valores manualmente.' : 'Usando últimos valores conhecidos.'}
+        </Text>
+      )}
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Valor corrigido (IPCA)" value={formatBRL(ipcaValue)} />
+        <ResultRow label="Valor com CDI" value={formatBRL(cdiValue)} highlight />
+        <ResultRow label="Ganho real vs. IPCA" value={formatBRL(cdiValue - ipcaValue)} />
+        <ResultRow label="Poder de compra" value={powerMaintained ? '✅ Mantido' : '⚠️ Perdido'} />
+      </View>
+    </>
+  );
+}
+
+function DividendYieldSim({ onResult }: SimProps) {
   const [investment, setInvestment] = useState('50000');
   const [dy, setDy] = useState('8');
   const [reinvest, setReinvest] = useState('sim');
@@ -747,12 +831,12 @@ function DividendYieldSim() {
   const dyRate = (parseFloat(dy) || 0) / 100;
   const monthlyDividend = capital * dyRate / 12;
   const annualDividend = capital * dyRate;
-  const years5 = reinvest === 'sim'
-    ? capital * Math.pow(1 + dyRate, 5)
-    : capital + annualDividend * 5;
-  const years10 = reinvest === 'sim'
-    ? capital * Math.pow(1 + dyRate, 10)
-    : capital + annualDividend * 10;
+  const years5 = reinvest === 'sim' ? capital * Math.pow(1 + dyRate, 5) : capital + annualDividend * 5;
+  const years10 = reinvest === 'sim' ? capital * Math.pow(1 + dyRate, 10) : capital + annualDividend * 10;
+
+  useEffect(() => {
+    onResult(monthlyDividend, 'Dividendo mensal', `DY ${dy}% a.a. sobre ${formatBRL(capital)}`);
+  }, [monthlyDividend, dy, capital, onResult]);
 
   return (
     <>
@@ -770,49 +854,53 @@ function DividendYieldSim() {
   );
 }
 
-function RetirementSim() {
-  const [age, setAge] = useState('30');
-  const [retirementAge, setRetirementAge] = useState('65');
-  const [monthly, setMonthly] = useState('1000');
-  const [current, setCurrent] = useState('20000');
-  const [rate, setRate] = useState('10');
-  const [desiredIncome, setDesiredIncome] = useState('5000');
+function RentVsBuySim({ onResult }: SimProps) {
+  const [propertyValue, setPropertyValue] = useState('400000');
+  const [entry, setEntry] = useState('80000');
+  const [monthlyRent, setMonthlyRent] = useState('1800');
+  const [mortgageRate, setMortgageRate] = useState('0.7');
+  const [years, setYears] = useState('20');
+  const [appreciation, setAppreciation] = useState('5');
 
-  const currentAge = parseInt(age) || 30;
-  const retAge = parseInt(retirementAge) || 65;
-  const years = Math.max(0, retAge - currentAge);
-  const n = years * 12;
-  const r = (parseFloat(rate) || 0) / 100 / 12;
-  const m = parseFloat(monthly) || 0;
-  const p = parseFloat(current) || 0;
-  const accumulated = r > 0
-    ? p * Math.pow(1 + r, n) + m * ((Math.pow(1 + r, n) - 1) / r)
-    : p + m * n;
-  const target = (parseFloat(desiredIncome) || 0) * 12 * 25; // regra dos 4%
-  const monthlyFromAccumulated = accumulated * 0.004;
-  const gapMonthly = Math.max(0, (parseFloat(desiredIncome) || 0) - monthlyFromAccumulated);
-  const ok = accumulated >= target;
+  const pv = parseFloat(propertyValue) || 0;
+  const e = parseFloat(entry) || 0;
+  const rent = parseFloat(monthlyRent) || 0;
+  const r = (parseFloat(mortgageRate) || 0) / 100;
+  const y = parseFloat(years) || 1;
+  const n = y * 12;
+  const appRate = (parseFloat(appreciation) || 0) / 100;
+  const loan = pv - e;
+  const installment = r > 0 ? (loan * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : loan / n;
+  const totalFinancingCost = installment * n + e;
+  const totalRentCost = rent * n;
+  const futurePropertyValue = pv * Math.pow(1 + appRate, y);
+  const netCostBuy = totalFinancingCost - futurePropertyValue;
+  const buyIsWin = netCostBuy < totalRentCost;
+
+  useEffect(() => {
+    onResult(futurePropertyValue, 'Valor futuro do imóvel', `em ${y} anos com ${appreciation}% a.a. de valorização`);
+  }, [futurePropertyValue, y, appreciation, onResult]);
 
   return (
     <>
-      <NumInput label="Idade atual" value={age} onChangeText={setAge} prefix="" suffix="anos" />
-      <NumInput label="Idade de aposentadoria" value={retirementAge} onChangeText={setRetirementAge} prefix="" suffix="anos" />
-      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
-      <NumInput label="Patrimônio atual" value={current} onChangeText={setCurrent} />
-      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
-      <NumInput label="Renda desejada/mês" value={desiredIncome} onChangeText={setDesiredIncome} />
+      <NumInput label="Valor do imóvel" value={propertyValue} onChangeText={setPropertyValue} />
+      <NumInput label="Entrada" value={entry} onChangeText={setEntry} />
+      <NumInput label="Aluguel mensal equivalente" value={monthlyRent} onChangeText={setMonthlyRent} />
+      <NumInput label="Taxa financiamento (% a.m.)" value={mortgageRate} onChangeText={setMortgageRate} prefix="" suffix="% a.m." />
+      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
+      <NumInput label="Valorização anual do imóvel (%)" value={appreciation} onChangeText={setAppreciation} prefix="" suffix="% a.a." />
       <View style={{ marginTop: 4 }}>
-        <ResultRow label="Anos até aposentadoria" value={`${years} anos`} />
-        <ResultRow label="Patrimônio acumulado" value={formatBRL(accumulated)} highlight />
-        <ResultRow label="Meta (regra 4%)" value={formatBRL(target)} />
-        <ResultRow label="Renda mensal possível" value={formatBRL(monthlyFromAccumulated)} />
-        <ResultRow label={ok ? '✅ Meta atingida!' : `⚠️ Falta ${formatBRL(gapMonthly)}/mês`} value={ok ? 'Parabéns!' : `Aporte sugerido: ${formatBRL(m + gapMonthly * 12 * 25 * 0.004)}`} />
+        <ResultRow label="Parcela mensal (financiamento)" value={formatBRL(installment)} />
+        <ResultRow label="Custo total de comprar" value={formatBRL(totalFinancingCost)} />
+        <ResultRow label="Custo total de alugar" value={formatBRL(totalRentCost)} />
+        <ResultRow label="Valor futuro do imóvel" value={formatBRL(futurePropertyValue)} />
+        <ResultRow label={buyIsWin ? '✅ Comprar é vantagem' : '✅ Alugar é vantagem'} value={`Diferença: ${formatBRL(Math.abs(netCostBuy - totalRentCost))}`} highlight />
       </View>
     </>
   );
 }
 
-function FinancialGoalSim() {
+function FinancialGoalSim({ onResult }: SimProps) {
   const [goal, setGoal] = useState('30000');
   const [current, setCurrent] = useState('5000');
   const [monthly, setMonthly] = useState('800');
@@ -832,6 +920,10 @@ function FinancialGoalSim() {
   const targetDate = validMonths ? new Date(Date.now() + validMonths * 30.5 * 86400000) : null;
   const progress = g > 0 ? Math.min(100, (p / g) * 100) : 0;
 
+  useEffect(() => {
+    onResult(g, 'Meta financeira', validMonths ? `atingível em ${years}a ${rem}m aportando ${formatBRL(m)}/mês` : 'aporte insuficiente', targetDate ?? undefined);
+  }, [g, validMonths, years, rem, m, onResult]);
+
   return (
     <>
       <NumInput label="Valor da meta" value={goal} onChangeText={setGoal} />
@@ -848,85 +940,189 @@ function FinancialGoalSim() {
   );
 }
 
-const SIM_COMPONENTS: Record<SimId, React.ComponentType> = {
-  compound: CompoundSim,
-  savings: SavingsSim,
-  loan: LoanSim,
-  emergency: EmergencySim,
-  mortgage: MortgageSim,
-  vehicle: VehicleSim,
-  inflation: InflationSim,
-  ir: IrSim,
-  fire: FireSim,
-  pension: PensionSim,
-  card_cost: CardCostSim,
-  portability: PortabilitySim,
-  fixed_income: FixedIncomeSim,
-  fgts: FgtsSim,
-  salary_13: Salary13Sim,
-  rent_vs_buy: RentVsBuySim,
-  dividend_yield: DividendYieldSim,
-  retirement: RetirementSim,
-  financial_goal: FinancialGoalSim,
+// ─── Sim registry ────────────────────────────────────────────────────────────
+
+const SIM_COMPONENTS: Record<SimId, React.ComponentType<SimProps>> = {
+  compound:              CompoundSim,
+  savings:               SavingsSim,
+  monthly_contributions: MonthlyContribSim,
+  fixed_income:          FixedIncomeSim,
+  emergency:             EmergencySim,
+  loan:                  LoanSim,
+  mortgage:              MortgageSim,
+  vehicle:               VehicleSim,
+  card_cost:             CardCostSim,
+  portability:           PortabilitySim,
+  ir:                    IrSim,
+  pension:               PensionSim,
+  fgts:                  FgtsSim,
+  salary_13:             Salary13Sim,
+  retirement:            RetirementSim,
+  fire:                  FireSim,
+  inflation:             InflationSim,
+  dividend_yield:        DividendYieldSim,
+  rent_vs_buy:           RentVsBuySim,
+  financial_goal:        FinancialGoalSim,
 };
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function SimulatorsScreen() {
   const { theme, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<SimId | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const selectedSim = SIMULATORS.find((s) => s.id === selected);
+  // Hero result state updated by each sim via onResult callback
+  const [heroValue, setHeroValue] = useState(0);
+  const [heroLabel, setHeroLabel] = useState('');
+  const [heroPeriod, setHeroPeriod] = useState('');
+  const [heroDeadline, setHeroDeadline] = useState<Date | undefined>(undefined);
+
+  const handleResult = useCallback((value: number, label: string, period: string, deadline?: Date) => {
+    setHeroValue(value);
+    setHeroLabel(label);
+    setHeroPeriod(period);
+    setHeroDeadline(deadline);
+  }, []);
+
+  // Reset hero when switching simulator
+  const handleSelect = (id: SimId) => {
+    Haptics.selectionAsync();
+    setHeroValue(0);
+    setHeroLabel('');
+    setHeroPeriod('');
+    setHeroDeadline(undefined);
+    setSelected(id);
+  };
+
+  const handleBack = () => {
+    Haptics.selectionAsync();
+    setSelected(null);
+  };
+
+  const handleShare = async () => {
+    if (!selectedSim) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await Share.share({
+        title: selectedSim.label,
+        message: `📊 ${selectedSim.label}\n${heroLabel}: ${formatBRL(heroValue)}\n${heroPeriod}\n\nSimulado no Pilar Financeiro`,
+      });
+    } catch {/* swallow cancel */}
+  };
+
+  const handleSaveAsGoal = async () => {
+    if (!selectedSim || heroValue <= 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSaving(true);
+    try {
+      await apiPost('/api/goals', {
+        name: selectedSim.label,
+        targetAmount: heroValue,
+        deadline: (heroDeadline ?? new Date(Date.now() + 365 * 86400000)).toISOString().split('T')[0],
+        description: `Simulado: ${heroLabel} · ${heroPeriod}`,
+        currentAmount: 0,
+        color: selectedSim.color,
+      });
+      Alert.alert('Meta salva!', `"${selectedSim.label}" adicionada às suas metas com valor alvo de ${formatBRL(heroValue)}.`);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a meta. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedSim = ALL_SIMS.find((s) => s.id === selected);
   const SimComponent = selected ? SIM_COMPONENTS[selected] : null;
+  const canSaveAsGoal = selected ? SAVE_AS_GOAL_SIMS.includes(selected) : false;
 
-  if (selected && SimComponent) {
+  if (selected && SimComponent && selectedSim) {
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1, backgroundColor: theme.background }}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           keyboardShouldPersistTaps="handled"
         >
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); setSelected(null); }}
-            style={[styles.backBtn, { borderColor: theme.border }]}
-          >
-            <Feather name="arrow-left" size={16} color={theme.textSecondary} />
-            <Text style={[styles.backText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-              Simuladores
-            </Text>
-          </Pressable>
-
-          <View style={[styles.simHeader, { backgroundColor: `${selectedSim!.color}15` }]}>
-            <View style={[styles.simHeaderIcon, { backgroundColor: selectedSim!.color }]}>
-              <Feather name={selectedSim!.icon as any} size={22} color="#fff" />
-            </View>
-            <Text style={[styles.simHeaderTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-              {selectedSim!.label}
-            </Text>
+          {/* Back button */}
+          <View style={{ padding: 16, paddingBottom: 0 }}>
+            <Pressable onPress={handleBack} style={[styles.backBtn, { borderColor: theme.border }]}>
+              <Feather name="arrow-left" size={16} color={theme.textSecondary} />
+              <Text style={[styles.backText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                Simuladores
+              </Text>
+            </Pressable>
           </View>
 
-          <View style={[styles.simCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SimComponent />
+          {/* Hero result card */}
+          <View style={[styles.heroCard, { backgroundColor: selectedSim.color }]}>
+            <View style={[styles.heroIconWrap, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+              <Feather name={selectedSim.icon as any} size={24} color="#fff" />
+            </View>
+            <Text style={[styles.heroSimLabel, { fontFamily: 'Inter_500Medium' }]}>{selectedSim.label}</Text>
+            <Text style={[styles.heroValue, { fontFamily: 'Inter_700Bold' }]}>
+              {heroValue > 0 ? formatBRL(heroValue) : '—'}
+            </Text>
+            <Text style={[styles.heroResultLabel, { fontFamily: 'Inter_400Regular' }]}>{heroLabel || selectedSim.subtitle}</Text>
+            {heroPeriod ? (
+              <View style={styles.heroBadge}>
+                <Text style={[styles.heroBadgeText, { fontFamily: 'Inter_500Medium' }]}>{heroPeriod}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Simulator inputs + results */}
+          <View style={{ padding: 16, gap: 12 }}>
+            <View style={[styles.simCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <SimComponent onResult={handleResult} />
+            </View>
+
+            {/* Action buttons */}
+            <View style={styles.actions}>
+              <Pressable
+                onPress={handleShare}
+                style={[styles.actionBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
+              >
+                <Feather name="share-2" size={16} color={theme.textSecondary} />
+                <Text style={[styles.actionBtnText, { color: theme.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>
+                  Compartilhar
+                </Text>
+              </Pressable>
+              {canSaveAsGoal && (
+                <Pressable
+                  onPress={handleSaveAsGoal}
+                  disabled={saving || heroValue <= 0}
+                  style={[styles.actionBtn, { backgroundColor: saving || heroValue <= 0 ? `${colors.primary}80` : colors.primary }]}
+                >
+                  <Feather name="target" size={16} color="#fff" />
+                  <Text style={[styles.actionBtnText, { color: '#fff', fontFamily: 'Inter_600SemiBold' }]}>
+                    {saving ? 'Salvando…' : 'Salvar como meta'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
     );
   }
 
+  // ─── Grid view ──────────────────────────────────────────────────────────────
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 32 }}
     >
       <Text style={[styles.headline, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
-        Escolha um simulador para começar
+        20 simuladores · escolha um para começar
       </Text>
       {SIM_GROUPS.map((group) => (
         <View key={group.label} style={{ gap: 8 }}>
           <View style={styles.groupHeader}>
-            <Feather name={group.icon as any} size={14} color={theme.textTertiary} />
+            <Feather name={group.icon as any} size={13} color={theme.textTertiary} />
             <Text style={[styles.groupLabel, { color: theme.textTertiary, fontFamily: 'Inter_600SemiBold' }]}>
               {group.label}
             </Text>
@@ -935,7 +1131,7 @@ export default function SimulatorsScreen() {
             {group.sims.map((sim) => (
               <Pressable
                 key={sim.id}
-                onPress={() => { Haptics.selectionAsync(); setSelected(sim.id as SimId); }}
+                onPress={() => handleSelect(sim.id)}
                 style={({ pressed }) => [
                   styles.tile,
                   { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
@@ -946,6 +1142,9 @@ export default function SimulatorsScreen() {
                 </View>
                 <Text style={[styles.tileLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
                   {sim.label}
+                </Text>
+                <Text style={[styles.tileSubtitle, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                  {sim.subtitle}
                 </Text>
               </Pressable>
             ))}
@@ -959,29 +1158,56 @@ export default function SimulatorsScreen() {
 const styles = StyleSheet.create({
   headline: { fontSize: 14, marginBottom: 4 },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  groupLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  groupLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: {
     width: '47%',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    gap: 10,
+    gap: 8,
     alignItems: 'flex-start',
   },
   tileIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   tileLabel: { fontSize: 13, lineHeight: 18 },
+  tileSubtitle: { fontSize: 11, lineHeight: 15 },
   backBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14,
     alignSelf: 'flex-start',
   },
   backText: { fontSize: 14 },
-  simHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderRadius: 14, padding: 14,
+  // Hero card
+  heroCard: {
+    margin: 16,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    gap: 6,
   },
-  simHeaderIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  simHeaderTitle: { fontSize: 20, flex: 1 },
+  heroIconWrap: {
+    width: 48, height: 48, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 4,
+  },
+  heroSimLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  heroValue: { fontSize: 36, color: '#fff', letterSpacing: -0.5 },
+  heroResultLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
+  heroBadge: {
+    marginTop: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  heroBadgeText: { fontSize: 12, color: '#fff' },
+  // Sim card
   simCard: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 14 },
+  // Actions
+  actions: { flexDirection: 'row', gap: 10 },
+  actionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1,
+  },
+  actionBtnText: { fontSize: 14 },
 });
