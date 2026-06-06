@@ -155,6 +155,7 @@ export default function MoreScreen() {
         <View style={styles.menuGroup}>
           <MenuItem testID="menu-accounts" icon="briefcase" label="Contas Bancárias" subtitle="Saldos, corrente, poupança e carteiras" onPress={() => router.push('/(more)/accounts')} />
           <MenuItem testID="menu-cards" icon="credit-card" label="Cartões de Crédito" subtitle="Faturas, limites e vencimentos" onPress={() => router.push('/(more)/cards')} />
+          <MenuItem testID="menu-categories" icon="tag" label="Categorias" subtitle="Gerencie categorias de receitas e despesas" onPress={() => router.push('/(more)/categories')} />
           <MenuItem testID="menu-budgets" icon="pie-chart" label="Orçamentos" subtitle="Limites de gastos por categoria" onPress={() => router.push('/(more)/budgets')} />
           <MenuItem
             testID="menu-goals"
@@ -173,6 +174,7 @@ export default function MoreScreen() {
         {/* ── CONTROLE PESSOAL ── */}
         <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>CONTROLE PESSOAL</Text>
         <View style={styles.menuGroup}>
+          <MenuItem testID="menu-net-worth" icon="layers" label="Patrimônio Líquido" subtitle="Contas, investimentos e dívidas consolidados" onPress={() => router.push('/(more)/net-worth')} />
           <MenuItem testID="menu-health" icon="activity" label="Saúde Financeira" subtitle="Pontuação e recomendações para seu bolso" onPress={() => router.push('/(more)/health-score')} />
           <MenuItem testID="menu-rules" icon="filter" label="Regras de Categorização" subtitle="Categorize lançamentos automaticamente" onPress={() => router.push('/(more)/categorization-rules')} />
           {settings?.sinkingFundsEnabled !== false && (
@@ -182,6 +184,7 @@ export default function MoreScreen() {
           <MenuItem testID="menu-familia" icon="users" label="Família" subtitle="Membros, despesas compartilhadas e caixinha" onPress={() => router.push('/(more)/familia')} />
           <MenuItem testID="menu-pending" icon="clock" label="Lançamentos Pendentes" subtitle="Pagamentos e recebimentos não confirmados" onPress={() => router.push('/(more)/pending-transactions')} />
           <MenuItem testID="menu-captura" icon="zap" label="Captura Automática" subtitle={Platform.OS === 'ios' ? 'WhatsApp e fluxo manual' : 'Notificações de bancos'} onPress={() => router.push('/(more)/captura-bancaria')} />
+          <MenuItem testID="menu-archived" icon="archive" label="Itens Arquivados" subtitle="Metas, contas e recorrências arquivadas" onPress={() => router.push('/(more)/archived')} />
         </View>
 
         {/* ── INVESTIMENTOS ── */}
@@ -194,6 +197,8 @@ export default function MoreScreen() {
               <MenuItem testID="menu-price-alerts" icon="bell" label="Alertas de Preço" subtitle="Notificação quando ativo atingir alvo" onPress={() => router.push('/(more)/price-alerts')} />
               <MenuItem testID="menu-stock-comparator" icon="git-merge" label="Comparador de Ações" subtitle="Compare fundamentos de até 5 ativos" onPress={() => router.push('/(more)/stock-comparator')} />
               <MenuItem testID="menu-portfolios" icon="layers" label="Portfólios" subtitle="Múltiplas carteiras (aposentadoria, especulação…)" onPress={() => router.push('/(more)/portfolios')} />
+              <MenuItem testID="menu-market" icon="globe" label="Mercado" subtitle="CDI, Selic, IPCA, IBOV e câmbio em tempo real" onPress={() => router.push('/(more)/market')} />
+              <MenuItem testID="menu-brokerage-import" icon="upload" label="Importar Corretora" subtitle="Importar notas de corretagem e extratos OFX" onPress={() => router.push('/(more)/brokerage-import')} />
             </View>
           </>
         )}
@@ -247,6 +252,11 @@ export default function MoreScreen() {
           <MenuItem testID="menu-ai" icon="cpu" label="IA Pilar" subtitle="Conselhos financeiros personalizados" onPress={() => router.push('/chat')} />
           <MenuItem testID="menu-simulators" icon="sliders" label="Simuladores" subtitle="Juros compostos, FIRE, imóvel, aposentadoria…" onPress={() => router.push('/(more)/simulators')} />
           <MenuItem testID="menu-alerts" icon="bell" label="Alertas Personalizados" subtitle="Configure limites e notificações automáticas" onPress={() => router.push('/(more)/custom-alerts')} />
+          <MenuItem testID="menu-hidden-fees" icon="eye-off" label="Taxas Ocultas" subtitle="Identifique cobranças escondidas e tarifas" onPress={() => router.push('/(more)/hidden-fees')} />
+          <MenuItem testID="menu-monthly-comparison" icon="bar-chart" label="Comparativo Mensal" subtitle="Compare receitas e despesas mês a mês" onPress={() => router.push('/(more)/monthly-comparison')} />
+          <MenuItem testID="menu-dre" icon="file-minus" label="DRE — Demonstrativo" subtitle="Resultados de receitas e despesas detalhado" onPress={() => router.push('/(more)/dre')} />
+          <MenuItem testID="menu-financial-calendar" icon="calendar" label="Calendário Financeiro" subtitle="Eventos, vencimentos e compromissos futuros" onPress={() => router.push('/(more)/financial-calendar')} />
+          <MenuItem testID="menu-education" icon="book-open" label="Educação Financeira" subtitle="Artigos, conceitos e dicas práticas" onPress={() => router.push('/(more)/education')} />
           <MenuItem testID="menu-sms" icon="message-square" label="Importar SMS" subtitle="Extrair lançamentos de SMS bancários" onPress={() => router.push('/(more)/sms-import-help')} />
         </View>
 
@@ -275,6 +285,7 @@ export default function MoreScreen() {
             onPress={() => router.push('/(more)/subscriptions')}
           />
           <MenuItem icon="monitor" label="Sessões Ativas" subtitle="Web e dispositivos conectados" onPress={() => router.push('/(more)/sessions')} />
+          <MenuItem icon="database" label="Backup & Exportação" subtitle="Exporte seus dados em JSON ou PDF" onPress={() => router.push('/(more)/backup')} />
           <MenuItem icon="gift" label="Indicação" subtitle="Convide amigos e ganhe benefícios" onPress={() => router.push('/(more)/referral')} />
           <MenuItem icon="shield" label="Privacidade & LGPD" subtitle="Seus dados, consentimentos e exclusão de conta" onPress={() => router.push('/(more)/lgpd')} />
         </View>

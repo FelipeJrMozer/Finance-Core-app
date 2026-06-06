@@ -3,15 +3,13 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { formatBRL } from '@/utils/formatters';
 import { EmptyState } from '@/components/EmptyState';
 import { configureTaxAlert, type TaxAlertType } from '@/services/tax';
-
-const TAX_SEEDED_KEY = 'pf_tax_alerts_seeded';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/services/api';
 
 const TAX_ALERTS_TO_SEED: Array<{ alertType: TaxAlertType; threshold?: number; description: string }> = [
   { alertType: 'mei-revenue-80',  threshold: 80, description: 'Faturamento MEI atingiu 80% do limite' },
@@ -21,7 +19,7 @@ const TAX_ALERTS_TO_SEED: Array<{ alertType: TaxAlertType; threshold?: number; d
 
 type AlertType = 'category_spend' | 'account_balance' | 'card_invoice' | 'goal_pct' | 'bill_due';
 
-interface CustomAlert {
+interface AlertRule {
   id: string;
   type: AlertType;
   description: string;
@@ -38,21 +36,39 @@ const ALERT_TYPES: { id: AlertType; label: string; icon: keyof typeof Feather.gl
   { id: 'bill_due', label: 'Conta vencendo em', icon: 'calendar', color: '#0096C7', placeholder: 'Dias de antecedência' },
 ];
 
-const STORAGE_KEY = 'pf_custom_alerts';
-
 export default function CustomAlertsScreen() {
   const { theme, colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [alerts, setAlerts] = useState<CustomAlert[]>([]);
+  const [alerts, setAlerts] = useState<AlertRule[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedType, setSelectedType] = useState<AlertType>('category_spend');
   const [threshold, setThreshold] = useState('');
-  const [taxSeeded, setTaxSeeded] = useState<boolean>(false);
+  const [saving, setSaving] = useState(false);
+  const [taxSeeded, setTaxSeeded] = useState(false);
   const [seedingTax, setSeedingTax] = useState(false);
 
-  useEffect(() => {
-    AsyncStorage.getItem(TAX_SEEDED_KEY).then((v) => setTaxSeeded(v === '1'));
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiGet<AlertRule[] | { rules?: AlertRule[]; data?: AlertRule[] }>('/api/alert-rules');
+      if (Array.isArray(data)) {
+        setAlerts(data);
+        if (data.some((r) => r.type === 'mei-revenue-80' || r.type === ('das-due-day-20' as AlertType))) {
+          setTaxSeeded(true);
+        }
+      } else {
+        const list = (data as any)?.rules ?? (data as any)?.data ?? [];
+        setAlerts(Array.isArray(list) ? list : []);
+      }
+    } catch {
+      setAlerts([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const seedTaxAlerts = useCallback(async () => {
     if (taxSeeded || seedingTax) return;
@@ -69,8 +85,8 @@ export default function CustomAlertsScreen() {
         Alert.alert('Erro', 'Não foi possível ativar os alertas fiscais. Verifique sua conexão.');
         return;
       }
-      await AsyncStorage.setItem(TAX_SEEDED_KEY, '1');
       setTaxSeeded(true);
+      await load();
       Alert.alert(
         'Alertas fiscais ativados',
         failed === 0
@@ -80,16 +96,7 @@ export default function CustomAlertsScreen() {
     } finally {
       setSeedingTax(false);
     }
-  }, [taxSeeded, seedingTax]);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY);
-      if (data) setAlerts(JSON.parse(data));
-    } catch {}
-  }, []);
-
-  React.useEffect(() => { load(); }, [load]);
+  }, [taxSeeded, seedingTax, load]);
 
   const saveAlert = async () => {
     if (!threshold || parseFloat(threshold) <= 0) {
@@ -98,18 +105,23 @@ export default function CustomAlertsScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const typeInfo = ALERT_TYPES.find((t) => t.id === selectedType)!;
-    const newAlert: CustomAlert = {
-      id: Date.now().toString(),
-      type: selectedType,
-      description: `${typeInfo.label} ${selectedType === 'goal_pct' ? threshold + '%' : selectedType === 'bill_due' ? threshold + ' dias' : formatBRL(parseFloat(threshold))}`,
-      threshold: parseFloat(threshold),
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [newAlert, ...alerts];
-    setAlerts(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setThreshold(''); setShowForm(false);
+    const description = `${typeInfo.label} ${selectedType === 'goal_pct' ? threshold + '%' : selectedType === 'bill_due' ? threshold + ' dias' : formatBRL(parseFloat(threshold))}`;
+    try {
+      setSaving(true);
+      const created = await apiPost<AlertRule>('/api/alert-rules', {
+        type: selectedType,
+        description,
+        threshold: parseFloat(threshold),
+        active: true,
+      });
+      setAlerts((prev) => [created, ...prev]);
+      setThreshold('');
+      setShowForm(false);
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message ?? 'Não foi possível criar o alerta.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const deleteAlert = (id: string) => {
@@ -117,20 +129,29 @@ export default function CustomAlertsScreen() {
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Remover', style: 'destructive', onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          const updated = alerts.filter((a) => a.id !== id);
-          setAlerts(updated);
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            await apiDelete(`/api/alert-rules/${id}`);
+            setAlerts((prev) => prev.filter((a) => a.id !== id));
+          } catch (e: any) {
+            Alert.alert('Erro', e?.message ?? 'Não foi possível remover.');
+          }
         }
       }
     ]);
   };
 
   const toggleAlert = async (id: string) => {
+    const alert = alerts.find((a) => a.id === id);
+    if (!alert) return;
     Haptics.selectionAsync();
-    const updated = alerts.map((a) => a.id === id ? { ...a, active: !a.active } : a);
-    setAlerts(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    const nextActive = !alert.active;
+    setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, active: nextActive } : a));
+    try {
+      await apiPatch<AlertRule>(`/api/alert-rules/${id}`, { active: nextActive });
+    } catch {
+      setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, active: alert.active } : a));
+    }
   };
 
   const selectedTypeInfo = ALERT_TYPES.find((t) => t.id === selectedType)!;
@@ -141,24 +162,13 @@ export default function CustomAlertsScreen() {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: insets.bottom + 32 }}
     >
-      <View style={[styles.offlineNote, { backgroundColor: `${colors.warning}12`, borderColor: `${colors.warning}25` }]}>
-        <Feather name="info" size={13} color={colors.warning} />
-        <Text style={[styles.offlineText, { color: colors.warning, fontFamily: 'Inter_500Medium' }]}>
-          Alertas salvos neste dispositivo
-        </Text>
-      </View>
-
       {/* Seed de alertas fiscais — uma vez */}
       <View style={[styles.taxSeed, {
-        backgroundColor: taxSeeded ? `${colors.success}10` : `${colors.info}10`,
-        borderColor: taxSeeded ? `${colors.success}30` : `${colors.info}30`,
+        backgroundColor: taxSeeded ? `${colors.primary}10` : `${colors.primary}10`,
+        borderColor: taxSeeded ? `${colors.primary}30` : `${colors.primary}30`,
       }]}>
-        <View style={[styles.taxSeedIcon, { backgroundColor: `${(taxSeeded ? colors.success : colors.info)}20` }]}>
-          <Feather
-            name={taxSeeded ? 'check-circle' : 'shield'}
-            size={18}
-            color={taxSeeded ? colors.success : colors.info}
-          />
+        <View style={[styles.taxSeedIcon, { backgroundColor: `${colors.primary}20` }]}>
+          <Feather name={taxSeeded ? 'check-circle' : 'shield'} size={18} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.taxSeedTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
@@ -174,7 +184,7 @@ export default function CustomAlertsScreen() {
           <Pressable
             onPress={seedTaxAlerts}
             disabled={seedingTax}
-            style={[styles.taxSeedBtn, { backgroundColor: colors.info }]}
+            style={[styles.taxSeedBtn, { backgroundColor: colors.primary }]}
             testID="seed-tax-alerts"
           >
             {seedingTax
@@ -226,13 +236,23 @@ export default function CustomAlertsScreen() {
               style={[styles.fieldInput, { backgroundColor: theme.surfaceElevated, borderColor: theme.border, color: theme.text, fontFamily: 'Inter_500Medium' }]}
             />
           </View>
-          <Pressable onPress={saveAlert} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
-            <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Criar Alerta</Text>
+          <Pressable
+            onPress={saveAlert}
+            disabled={saving}
+            style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
+          >
+            {saving ? <ActivityIndicator color="#fff" size="small" /> : (
+              <Text style={[styles.saveBtnText, { fontFamily: 'Inter_600SemiBold' }]}>Criar Alerta</Text>
+            )}
           </Pressable>
         </View>
       )}
 
-      {alerts.length === 0 ? (
+      {loading ? (
+        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : alerts.length === 0 ? (
         <EmptyState
           icon="bell"
           title="Nenhum alerta configurado"
@@ -240,15 +260,15 @@ export default function CustomAlertsScreen() {
         />
       ) : (
         alerts.map((a) => {
-          const typeInfo = ALERT_TYPES.find((t) => t.id === a.type)!;
+          const typeInfo = ALERT_TYPES.find((t) => t.id === a.type) ?? ALERT_TYPES[0];
           return (
-            <View key={a.id} style={[styles.alertCard, { backgroundColor: theme.surface, borderColor: theme.border, opacity: a.active ? 1 : 0.5 }]}>
+            <View key={a.id} style={[styles.alertCard, { backgroundColor: theme.surface, borderColor: theme.border, opacity: a.active ? 1 : 0.55 }]}>
               <View style={[styles.alertIcon, { backgroundColor: `${typeInfo.color}15` }]}>
                 <Feather name={typeInfo.icon} size={18} color={typeInfo.color} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.alertDesc, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>{a.description}</Text>
-                <Text style={[styles.alertStatus, { color: a.active ? colors.success : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                <Text style={[styles.alertStatus, { color: a.active ? colors.primary : theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
                   {a.active ? 'Ativo' : 'Inativo'}
                 </Text>
               </View>
@@ -282,8 +302,6 @@ const styles = StyleSheet.create({
   alertIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   alertDesc: { fontSize: 14 },
   alertStatus: { fontSize: 12, marginTop: 2 },
-  offlineNote: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 10, borderWidth: 1 },
-  offlineText: { fontSize: 12, flex: 1 },
   taxSeed: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1 },
   taxSeedIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   taxSeedTitle: { fontSize: 14 },

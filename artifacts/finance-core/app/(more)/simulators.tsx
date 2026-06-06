@@ -10,20 +10,53 @@ import { useTheme } from '@/context/ThemeContext';
 import { formatBRL } from '@/utils/formatters';
 import { useBenchmarks } from '@/services/benchmarks';
 
-const SIMULATORS = [
-  { id: 'compound',   icon: 'trending-up',  label: 'Juros Compostos',           color: '#10B981' },
-  { id: 'savings',    icon: 'target',       label: 'Meta de Poupança',           color: '#0096C7' },
-  { id: 'loan',       icon: 'dollar-sign',  label: 'Simulador de Empréstimo',    color: '#F59E0B' },
-  { id: 'emergency',  icon: 'shield',       label: 'Reserva de Emergência',      color: '#EF4444' },
-  { id: 'mortgage',   icon: 'home',         label: 'Financiamento Imóvel',       color: '#7B39ED' },
-  { id: 'vehicle',    icon: 'truck',        label: 'Financiamento Veículo',      color: '#FF9800' },
-  { id: 'inflation',  icon: 'percent',      label: 'IPCA vs. CDI',               color: '#009688' },
-  { id: 'ir',         icon: 'file-text',    label: 'Imposto de Renda',           color: '#F44336' },
-  { id: 'fire',       icon: 'target',       label: 'Independência Financeira',   color: '#2196F3' },
-  { id: 'pension',    icon: 'umbrella',     label: 'Previdência Privada',        color: '#9C27B0' },
-  { id: 'card_cost',  icon: 'credit-card',  label: 'Custo Real do Cartão',       color: '#E91E63' },
-  { id: 'portability',icon: 'refresh-cw',   label: 'Portabilidade de Crédito',   color: '#795548' },
+const SIM_GROUPS = [
+  {
+    label: 'Juros & Rentabilidade',
+    icon: 'trending-up',
+    sims: [
+      { id: 'compound',     icon: 'trending-up',  label: 'Juros Compostos',           color: '#10B981' },
+      { id: 'fixed_income', icon: 'percent',      label: 'Renda Fixa (CDB/LCI/LCA)',  color: '#3B82F6' },
+      { id: 'inflation',    icon: 'bar-chart-2',  label: 'IPCA vs. CDI',               color: '#009688' },
+      { id: 'dividend_yield', icon: 'dollar-sign', label: 'Dividend Yield',            color: '#F59E0B' },
+    ],
+  },
+  {
+    label: 'Crédito & Financiamentos',
+    icon: 'credit-card',
+    sims: [
+      { id: 'loan',         icon: 'dollar-sign',  label: 'Simulador de Empréstimo',    color: '#F59E0B' },
+      { id: 'mortgage',     icon: 'home',         label: 'Financiamento Imóvel',       color: '#7B39ED' },
+      { id: 'vehicle',      icon: 'truck',        label: 'Financiamento Veículo',      color: '#FF9800' },
+      { id: 'card_cost',    icon: 'credit-card',  label: 'Custo Real do Cartão',       color: '#E91E63' },
+      { id: 'portability',  icon: 'refresh-cw',   label: 'Portabilidade de Crédito',   color: '#795548' },
+      { id: 'rent_vs_buy',  icon: 'home',         label: 'Aluguel vs Compra',          color: '#0096C7' },
+    ],
+  },
+  {
+    label: 'Planejamento Pessoal',
+    icon: 'target',
+    sims: [
+      { id: 'savings',      icon: 'target',       label: 'Meta de Poupança',           color: '#0096C7' },
+      { id: 'financial_goal', icon: 'star',       label: 'Meta Financeira',            color: '#4CAF50' },
+      { id: 'emergency',    icon: 'shield',       label: 'Reserva de Emergência',      color: '#EF4444' },
+      { id: 'salary_13',    icon: 'gift',         label: '13º Salário',                color: '#FF9800' },
+      { id: 'fgts',         icon: 'briefcase',    label: 'Projeção FGTS',              color: '#795548' },
+    ],
+  },
+  {
+    label: 'Longo Prazo',
+    icon: 'clock',
+    sims: [
+      { id: 'fire',         icon: 'target',       label: 'Independência Financeira',   color: '#2196F3' },
+      { id: 'retirement',   icon: 'sun',          label: 'Aposentadoria',              color: '#9C27B0' },
+      { id: 'pension',      icon: 'umbrella',     label: 'Previdência Privada',        color: '#7B39ED' },
+      { id: 'ir',           icon: 'file-text',    label: 'Imposto de Renda',           color: '#F44336' },
+    ],
+  },
 ] as const;
+
+const SIMULATORS = SIM_GROUPS.flatMap((g) => g.sims);
 
 type SimId = typeof SIMULATORS[number]['id'];
 
@@ -559,6 +592,262 @@ function PortabilitySim() {
   );
 }
 
+function FixedIncomeSim() {
+  const [amount, setAmount] = useState('10000');
+  const [rate, setRate] = useState('12');
+  const [months, setMonths] = useState('12');
+  const [type, setType] = useState('CDB');
+  const [ir, setIr] = useState('22.5');
+
+  const p = parseFloat(amount) || 0;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const n = parseInt(months) || 1;
+  const gross = r > 0 ? p * (Math.pow(1 + r, n) - 1) : p * (parseFloat(rate) || 0) / 100;
+  const isIrExempt = type === 'LCI' || type === 'LCA';
+  const irRate = isIrExempt ? 0 : (parseFloat(ir) || 0) / 100;
+  const netGain = gross * (1 - irRate);
+  const netValue = p + netGain;
+  const netAnnual = (Math.pow(netValue / p, 12 / n) - 1) * 100;
+
+  return (
+    <>
+      <NumInput label="Capital investido" value={amount} onChangeText={setAmount} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Prazo (meses)" value={months} onChangeText={setMonths} prefix="" suffix="meses" />
+      <SelectToggle options={[{ id: 'CDB', label: 'CDB' }, { id: 'LCI', label: 'LCI' }, { id: 'LCA', label: 'LCA' }, { id: 'TESOURO', label: 'Tesouro' }]} value={type} onChange={setType} />
+      {!isIrExempt && <NumInput label="Alíquota IR (%)" value={ir} onChangeText={setIr} prefix="" suffix="%" />}
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Rendimento bruto" value={formatBRL(gross)} />
+        {!isIrExempt && <ResultRow label="IR sobre rendimento" value={formatBRL(gross * irRate)} />}
+        <ResultRow label="Rendimento líquido" value={formatBRL(netGain)} highlight />
+        <ResultRow label="Valor final líquido" value={formatBRL(netValue)} />
+        <ResultRow label="Rentabilidade líquida a.a." value={`${netAnnual.toFixed(2)}% a.a.`} />
+        {isIrExempt && <ResultRow label="Tipo" value="✅ Isento de IR" />}
+      </View>
+    </>
+  );
+}
+
+function FgtsSim() {
+  const [salary, setSalary] = useState('3000');
+  const [years, setYears] = useState('5');
+  const [current, setCurrent] = useState('0');
+
+  const s = parseFloat(salary) || 0;
+  const y = parseFloat(years) || 1;
+  const existing = parseFloat(current) || 0;
+  const monthlyDeposit = s * 0.08;
+  const annual = monthlyDeposit * 12;
+  const fgtsRate = 0.03; // FGTS annual yield: TR + 3%
+  const r = fgtsRate / 12;
+  const n = y * 12;
+  const accumulated = r > 0
+    ? existing * Math.pow(1 + r, n) + monthlyDeposit * ((Math.pow(1 + r, n) - 1) / r)
+    : existing + monthlyDeposit * n;
+  const totalDeposited = existing + annual * y;
+
+  return (
+    <>
+      <NumInput label="Salário bruto" value={salary} onChangeText={setSalary} />
+      <NumInput label="Anos de trabalho" value={years} onChangeText={setYears} prefix="" suffix="anos" />
+      <NumInput label="FGTS atual (saldo)" value={current} onChangeText={setCurrent} />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Depósito mensal (8%)" value={formatBRL(monthlyDeposit)} />
+        <ResultRow label="Depósito anual" value={formatBRL(annual)} />
+        <ResultRow label="Total depositado" value={formatBRL(totalDeposited)} />
+        <ResultRow label="Saldo acumulado (TR + 3%)" value={formatBRL(accumulated)} highlight />
+        <ResultRow label="Rendimento sobre depósitos" value={formatBRL(accumulated - totalDeposited)} />
+      </View>
+    </>
+  );
+}
+
+function Salary13Sim() {
+  const [salary, setSalary] = useState('3000');
+  const [monthsWorked, setMonthsWorked] = useState('12');
+  const [inss, setInss] = useState('11');
+  const [irRate, setIrRate] = useState('7.5');
+
+  const s = parseFloat(salary) || 0;
+  const m = Math.min(parseInt(monthsWorked) || 0, 12);
+  const gross = s * (m / 12);
+  const inssRate = (parseFloat(inss) || 0) / 100;
+  const inssValue = gross * inssRate;
+  const irBase = gross - inssValue;
+  const irValue = irBase * ((parseFloat(irRate) || 0) / 100);
+  const net = gross - inssValue - irValue;
+  const firstPart = gross / 2;
+  const secondPart = net - firstPart;
+
+  return (
+    <>
+      <NumInput label="Salário bruto" value={salary} onChangeText={setSalary} />
+      <NumInput label="Meses trabalhados no ano" value={monthsWorked} onChangeText={setMonthsWorked} prefix="" suffix="meses" />
+      <NumInput label="Alíquota INSS (%)" value={inss} onChangeText={setInss} prefix="" suffix="%" />
+      <NumInput label="Alíquota IR (%)" value={irRate} onChangeText={setIrRate} prefix="" suffix="%" />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="13º bruto" value={formatBRL(gross)} />
+        <ResultRow label="Desconto INSS" value={`– ${formatBRL(inssValue)}`} />
+        <ResultRow label="Desconto IR" value={`– ${formatBRL(irValue)}`} />
+        <ResultRow label="1ª parcela (adiantamento)" value={formatBRL(firstPart)} />
+        <ResultRow label="2ª parcela (líquida c/ descontos)" value={formatBRL(Math.max(0, secondPart))} highlight />
+        <ResultRow label="13º líquido total" value={formatBRL(net)} />
+      </View>
+    </>
+  );
+}
+
+function RentVsBuySim() {
+  const [propertyValue, setPropertyValue] = useState('400000');
+  const [entry, setEntry] = useState('80000');
+  const [monthlyRent, setMonthlyRent] = useState('1800');
+  const [mortgageRate, setMortgageRate] = useState('0.7');
+  const [years, setYears] = useState('20');
+  const [appreciation, setAppreciation] = useState('5');
+
+  const pv = parseFloat(propertyValue) || 0;
+  const e = parseFloat(entry) || 0;
+  const rent = parseFloat(monthlyRent) || 0;
+  const r = (parseFloat(mortgageRate) || 0) / 100;
+  const n = (parseFloat(years) || 1) * 12;
+  const appRate = (parseFloat(appreciation) || 0) / 100;
+  const loan = pv - e;
+  const installment = r > 0 ? (loan * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1) : loan / n;
+  const totalFinancingCost = installment * n + e;
+  const totalRentCost = rent * n;
+  const futurePropertyValue = pv * Math.pow(1 + appRate, parseFloat(years) || 1);
+  const netCostBuy = totalFinancingCost - futurePropertyValue;
+  const netCostRent = totalRentCost;
+
+  return (
+    <>
+      <NumInput label="Valor do imóvel" value={propertyValue} onChangeText={setPropertyValue} />
+      <NumInput label="Entrada" value={entry} onChangeText={setEntry} />
+      <NumInput label="Aluguel mensal equivalente" value={monthlyRent} onChangeText={setMonthlyRent} />
+      <NumInput label="Taxa financiamento (% a.m.)" value={mortgageRate} onChangeText={setMortgageRate} prefix="" suffix="% a.m." />
+      <NumInput label="Prazo (anos)" value={years} onChangeText={setYears} prefix="" suffix="anos" />
+      <NumInput label="Valorização anual do imóvel (%)" value={appreciation} onChangeText={setAppreciation} prefix="" suffix="% a.a." />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Parcela mensal (financiamento)" value={formatBRL(installment)} />
+        <ResultRow label="Custo total de comprar" value={formatBRL(totalFinancingCost)} />
+        <ResultRow label="Custo total de alugar" value={formatBRL(totalRentCost)} />
+        <ResultRow label="Valor futuro do imóvel" value={formatBRL(futurePropertyValue)} />
+        <ResultRow label={netCostBuy < netCostRent ? '✅ Comprar vantagem' : '✅ Alugar vantagem'} value={`Diferença: ${formatBRL(Math.abs(totalFinancingCost - totalRentCost - (futurePropertyValue - pv)))}`} highlight />
+      </View>
+    </>
+  );
+}
+
+function DividendYieldSim() {
+  const [investment, setInvestment] = useState('50000');
+  const [dy, setDy] = useState('8');
+  const [reinvest, setReinvest] = useState('sim');
+
+  const capital = parseFloat(investment) || 0;
+  const dyRate = (parseFloat(dy) || 0) / 100;
+  const monthlyDividend = capital * dyRate / 12;
+  const annualDividend = capital * dyRate;
+  const years5 = reinvest === 'sim'
+    ? capital * Math.pow(1 + dyRate, 5)
+    : capital + annualDividend * 5;
+  const years10 = reinvest === 'sim'
+    ? capital * Math.pow(1 + dyRate, 10)
+    : capital + annualDividend * 10;
+
+  return (
+    <>
+      <NumInput label="Capital investido" value={investment} onChangeText={setInvestment} />
+      <NumInput label="Dividend Yield anual (%)" value={dy} onChangeText={setDy} prefix="" suffix="% a.a." />
+      <SelectToggle options={[{ id: 'sim', label: 'Reinveste' }, { id: 'nao', label: 'Não reinveste' }]} value={reinvest} onChange={setReinvest} />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Dividendo mensal" value={formatBRL(monthlyDividend)} highlight />
+        <ResultRow label="Dividendo anual" value={formatBRL(annualDividend)} />
+        <ResultRow label="Patrimônio em 5 anos" value={formatBRL(years5)} />
+        <ResultRow label="Patrimônio em 10 anos" value={formatBRL(years10)} />
+        <ResultRow label="Renda passiva/mês em 10 anos" value={formatBRL(years10 * dyRate / 12)} />
+      </View>
+    </>
+  );
+}
+
+function RetirementSim() {
+  const [age, setAge] = useState('30');
+  const [retirementAge, setRetirementAge] = useState('65');
+  const [monthly, setMonthly] = useState('1000');
+  const [current, setCurrent] = useState('20000');
+  const [rate, setRate] = useState('10');
+  const [desiredIncome, setDesiredIncome] = useState('5000');
+
+  const currentAge = parseInt(age) || 30;
+  const retAge = parseInt(retirementAge) || 65;
+  const years = Math.max(0, retAge - currentAge);
+  const n = years * 12;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const m = parseFloat(monthly) || 0;
+  const p = parseFloat(current) || 0;
+  const accumulated = r > 0
+    ? p * Math.pow(1 + r, n) + m * ((Math.pow(1 + r, n) - 1) / r)
+    : p + m * n;
+  const target = (parseFloat(desiredIncome) || 0) * 12 * 25; // regra dos 4%
+  const monthlyFromAccumulated = accumulated * 0.004;
+  const gapMonthly = Math.max(0, (parseFloat(desiredIncome) || 0) - monthlyFromAccumulated);
+  const ok = accumulated >= target;
+
+  return (
+    <>
+      <NumInput label="Idade atual" value={age} onChangeText={setAge} prefix="" suffix="anos" />
+      <NumInput label="Idade de aposentadoria" value={retirementAge} onChangeText={setRetirementAge} prefix="" suffix="anos" />
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Patrimônio atual" value={current} onChangeText={setCurrent} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <NumInput label="Renda desejada/mês" value={desiredIncome} onChangeText={setDesiredIncome} />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Anos até aposentadoria" value={`${years} anos`} />
+        <ResultRow label="Patrimônio acumulado" value={formatBRL(accumulated)} highlight />
+        <ResultRow label="Meta (regra 4%)" value={formatBRL(target)} />
+        <ResultRow label="Renda mensal possível" value={formatBRL(monthlyFromAccumulated)} />
+        <ResultRow label={ok ? '✅ Meta atingida!' : `⚠️ Falta ${formatBRL(gapMonthly)}/mês`} value={ok ? 'Parabéns!' : `Aporte sugerido: ${formatBRL(m + gapMonthly * 12 * 25 * 0.004)}`} />
+      </View>
+    </>
+  );
+}
+
+function FinancialGoalSim() {
+  const [goal, setGoal] = useState('30000');
+  const [current, setCurrent] = useState('5000');
+  const [monthly, setMonthly] = useState('800');
+  const [rate, setRate] = useState('9');
+
+  const g = parseFloat(goal) || 0;
+  const p = parseFloat(current) || 0;
+  const m = parseFloat(monthly) || 0;
+  const r = (parseFloat(rate) || 0) / 100 / 12;
+  const remaining = Math.max(0, g - p);
+  const months = r > 0 && m > 0
+    ? Math.ceil(Math.log((remaining * r / m) + 1) / Math.log(1 + r))
+    : m > 0 ? Math.ceil(remaining / m) : Infinity;
+  const validMonths = isFinite(months) && months > 0 ? months : null;
+  const years = validMonths ? Math.floor(validMonths / 12) : null;
+  const rem = validMonths ? validMonths % 12 : null;
+  const targetDate = validMonths ? new Date(Date.now() + validMonths * 30.5 * 86400000) : null;
+  const progress = g > 0 ? Math.min(100, (p / g) * 100) : 0;
+
+  return (
+    <>
+      <NumInput label="Valor da meta" value={goal} onChangeText={setGoal} />
+      <NumInput label="Já guardei" value={current} onChangeText={setCurrent} />
+      <NumInput label="Aporte mensal" value={monthly} onChangeText={setMonthly} />
+      <NumInput label="Rentabilidade anual (%)" value={rate} onChangeText={setRate} prefix="" suffix="% a.a." />
+      <View style={{ marginTop: 4 }}>
+        <ResultRow label="Progresso" value={`${progress.toFixed(1)}%`} />
+        <ResultRow label="Falta guardar" value={formatBRL(remaining)} />
+        <ResultRow label="Tempo estimado" value={validMonths ? `${years}a ${rem}m` : 'Aporte insuficiente'} highlight />
+        <ResultRow label="Data prevista" value={targetDate ? targetDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : '—'} />
+      </View>
+    </>
+  );
+}
+
 const SIM_COMPONENTS: Record<SimId, React.ComponentType> = {
   compound: CompoundSim,
   savings: SavingsSim,
@@ -572,6 +861,13 @@ const SIM_COMPONENTS: Record<SimId, React.ComponentType> = {
   pension: PensionSim,
   card_cost: CardCostSim,
   portability: PortabilitySim,
+  fixed_income: FixedIncomeSim,
+  fgts: FgtsSim,
+  salary_13: Salary13Sim,
+  rent_vs_buy: RentVsBuySim,
+  dividend_yield: DividendYieldSim,
+  retirement: RetirementSim,
+  financial_goal: FinancialGoalSim,
 };
 
 export default function SimulatorsScreen() {
@@ -622,36 +918,48 @@ export default function SimulatorsScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
-      contentContainerStyle={{ padding: 16, gap: 8, paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 32 }}
     >
       <Text style={[styles.headline, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>
         Escolha um simulador para começar
       </Text>
-      <View style={styles.grid}>
-        {SIMULATORS.map((sim) => (
-          <Pressable
-            key={sim.id}
-            onPress={() => { Haptics.selectionAsync(); setSelected(sim.id); }}
-            style={({ pressed }) => [
-              styles.tile,
-              { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
-            ]}
-          >
-            <View style={[styles.tileIcon, { backgroundColor: `${sim.color}20` }]}>
-              <Feather name={sim.icon as any} size={20} color={sim.color} />
-            </View>
-            <Text style={[styles.tileLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
-              {sim.label}
+      {SIM_GROUPS.map((group) => (
+        <View key={group.label} style={{ gap: 8 }}>
+          <View style={styles.groupHeader}>
+            <Feather name={group.icon as any} size={14} color={theme.textTertiary} />
+            <Text style={[styles.groupLabel, { color: theme.textTertiary, fontFamily: 'Inter_600SemiBold' }]}>
+              {group.label}
             </Text>
-          </Pressable>
-        ))}
-      </View>
+          </View>
+          <View style={styles.grid}>
+            {group.sims.map((sim) => (
+              <Pressable
+                key={sim.id}
+                onPress={() => { Haptics.selectionAsync(); setSelected(sim.id as SimId); }}
+                style={({ pressed }) => [
+                  styles.tile,
+                  { backgroundColor: theme.surface, borderColor: theme.border, opacity: pressed ? 0.8 : 1 }
+                ]}
+              >
+                <View style={[styles.tileIcon, { backgroundColor: `${sim.color}20` }]}>
+                  <Feather name={sim.icon as any} size={20} color={sim.color} />
+                </View>
+                <Text style={[styles.tileLabel, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>
+                  {sim.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   headline: { fontSize: 14, marginBottom: 4 },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  groupLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: {
     width: '47%',

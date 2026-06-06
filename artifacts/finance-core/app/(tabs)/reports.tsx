@@ -184,6 +184,11 @@ export default function ReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
+  const [anomalies, setAnomalies] = useState<AnomalyItem[]>([]);
+  const [monthlyRecap, setMonthlyRecap] = useState<MonthlyRecap | null>(null);
+  const [emergencyFund, setEmergencyFund] = useState<EmergencyFundStatus | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsLoaded, setInsightsLoaded] = useState(false);
   const topPad = Platform.OS === 'web' ? Math.max(insets.top, 67) : insets.top;
 
   const currentMonth = getCurrentMonth();
@@ -356,10 +361,31 @@ export default function ReportsScreen() {
     { id: 'overview', label: 'Visão Geral', icon: 'layout' },
     { id: 'cashflow', label: 'Fluxo', icon: 'bar-chart-2' },
     { id: 'categories', label: 'Categorias', icon: 'pie-chart' },
+    { id: 'insights', label: 'Insights', icon: 'zap' },
     { id: 'health', label: 'Saúde', icon: 'activity' },
   ];
 
-  const onRefresh = () => { setRefreshing(true); setTimeout(() => setRefreshing(false), 800); };
+  useEffect(() => {
+    if (activeTab === 'insights' && !insightsLoaded) {
+      setInsightsLoading(true);
+      Promise.all([
+        getAnomalies(3).catch(() => [] as AnomalyItem[]),
+        getMonthlyRecap().catch(() => null),
+        getEmergencyFund().catch(() => null),
+      ]).then(([a, r, e]) => {
+        setAnomalies(a);
+        setMonthlyRecap(r);
+        setEmergencyFund(e);
+        setInsightsLoaded(true);
+      }).finally(() => setInsightsLoading(false));
+    }
+  }, [activeTab, insightsLoaded]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    if (activeTab === 'insights') { setInsightsLoaded(false); }
+    setTimeout(() => setRefreshing(false), 800);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
@@ -832,6 +858,117 @@ export default function ReportsScreen() {
                     />
                   </View>
                 </SectionCard>
+              )}
+            </>
+          )}
+
+          {/* ── INSIGHTS TAB ── */}
+          {activeTab === 'insights' && (
+            <>
+              {insightsLoading ? (
+                <View style={{ paddingVertical: 60, alignItems: 'center' }}>
+                  <Feather name="zap" size={24} color={theme.textTertiary} />
+                  <Text style={[{ color: theme.textTertiary, fontSize: 14, fontFamily: 'Inter_400Regular', marginTop: 8 }]}>Analisando seus dados…</Text>
+                </View>
+              ) : (
+                <>
+                  {monthlyRecap && (
+                    <SectionCard title="Resumo do Mês" icon="calendar">
+                      {[
+                        { label: 'Receita total', value: monthlyRecap.income, color: colors.primary },
+                        { label: 'Despesa total', value: monthlyRecap.expense, color: colors.danger },
+                        { label: 'Resultado', value: monthlyRecap.net, color: monthlyRecap.net >= 0 ? colors.primary : colors.danger },
+                      ].map((r) => (
+                        <View key={r.label} style={dre.row}>
+                          <Text style={[dre.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>{r.label}</Text>
+                          <Text style={[dre.value, { color: r.color, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(r.value))}</Text>
+                        </View>
+                      ))}
+                      {monthlyRecap.highlights?.map((h: string, i: number) => (
+                        <View key={i} style={[dre.insight, { backgroundColor: `${colors.primary}12` }]}>
+                          <Feather name="info" size={13} color={colors.primary} />
+                          <Text style={[dre.insightText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>{h}</Text>
+                        </View>
+                      ))}
+                    </SectionCard>
+                  )}
+
+                  {emergencyFund && (
+                    <SectionCard title="Reserva de Emergência" icon="shield">
+                      <GaugeBar
+                        label="Cobertura atual"
+                        value={emergencyFund.currentMonths}
+                        max={6}
+                        color={emergencyFund.currentMonths >= 6 ? colors.primary : emergencyFund.currentMonths >= 3 ? colors.warning : colors.danger}
+                        sublabel={`${emergencyFund.currentMonths.toFixed(1)} meses — Meta: 6 meses`}
+                      />
+                      <View style={dre.row}>
+                        <Text style={[dre.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Valor atual</Text>
+                        <Text style={[dre.value, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(emergencyFund.currentAmount))}</Text>
+                      </View>
+                      <View style={dre.row}>
+                        <Text style={[dre.label, { color: theme.textSecondary, fontFamily: 'Inter_400Regular' }]}>Valor ideal</Text>
+                        <Text style={[dre.value, { color: colors.primary, fontFamily: 'Inter_600SemiBold' }]}>{maskValue(formatBRL(emergencyFund.targetAmount))}</Text>
+                      </View>
+                      {emergencyFund.gap > 0 && (
+                        <View style={[dre.insight, { backgroundColor: `${colors.warning}15` }]}>
+                          <Feather name="alert-triangle" size={13} color={colors.warning} />
+                          <Text style={[dre.insightText, { color: colors.warning, fontFamily: 'Inter_500Medium' }]}>
+                            Faltam {maskValue(formatBRL(emergencyFund.gap))} para atingir 6 meses de reserva.
+                          </Text>
+                        </View>
+                      )}
+                    </SectionCard>
+                  )}
+
+                  {anomalies.length > 0 && (
+                    <SectionCard title={`Anomalias Detectadas (${anomalies.length})`} icon="alert-circle">
+                      {anomalies.map((a) => {
+                        const sev = severityOf(a.increasePct);
+                        const color = sev === 'high' ? colors.danger : sev === 'medium' ? colors.warning : colors.primary;
+                        return (
+                          <View key={a.id ?? a.category} style={[top.row, { gap: 10 }]}>
+                            <View style={[top.rankBadge, { backgroundColor: `${color}15` }]}>
+                              <Feather name={sev === 'high' ? 'alert-circle' : 'trending-up'} size={14} color={color} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[top.desc, { color: theme.text, fontFamily: 'Inter_500Medium' }]}>{a.category}</Text>
+                              <Text style={[top.cat, { color: theme.textTertiary, fontFamily: 'Inter_400Regular' }]}>
+                                {a.increasePct != null ? `+${a.increasePct.toFixed(0)}% vs. média` : 'Gasto incomum detectado'}
+                              </Text>
+                            </View>
+                            <Text style={[top.amount, { color, fontFamily: 'Inter_600SemiBold' }]}>
+                              {maskValue(formatBRL(a.amount))}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </SectionCard>
+                  )}
+
+                  {anomalies.length === 0 && !insightsLoading && (
+                    <SectionCard title="Gastos dentro do padrão" icon="check-circle">
+                      <View style={{ alignItems: 'center', paddingVertical: 12, gap: 8 }}>
+                        <Feather name="check-circle" size={32} color={colors.primary} />
+                        <Text style={[{ color: theme.textSecondary, fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center' }]}>
+                          Nenhuma anomalia de gastos detectada nos últimos 3 meses. Continue assim!
+                        </Text>
+                      </View>
+                    </SectionCard>
+                  )}
+
+                  {!monthlyRecap && !emergencyFund && !insightsLoading && (
+                    <View style={styles.emptyState}>
+                      <Feather name="zap" size={40} color={theme.textTertiary} />
+                      <Text style={[styles.emptyText, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
+                        Sem insights disponíveis
+                      </Text>
+                      <Text style={[{ color: theme.textTertiary, fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' }]}>
+                        Insights precisam de histórico de transações para análise.
+                      </Text>
+                    </View>
+                  )}
+                </>
               )}
             </>
           )}

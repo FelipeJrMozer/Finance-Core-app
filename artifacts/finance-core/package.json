@@ -64,6 +64,7 @@
     "expo-clipboard": "^8.0.8",
     "expo-dev-client": "~6.0.20",
     "expo-device": "^8.0.10",
+    "expo-document-picker": "^56.0.4",
     "expo-file-system": "^55.0.16",
     "expo-intent-launcher": "^55.0.12",
     "expo-local-authentication": "~17.0.8",
