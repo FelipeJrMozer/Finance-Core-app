@@ -41,10 +41,10 @@ function formatDate(d?: string): string {
   return `${day}/${m}/${y}`;
 }
 
-function statusColor(status: string, colors: Record<string, string>): string {
-  if (status === 'paid') return colors.success;
-  if (status === 'overdue') return colors.danger;
-  return colors.primary;
+function statusColor(status: string, colors: Record<string, unknown>): string {
+  if (status === 'paid') return colors.success as string;
+  if (status === 'overdue') return colors.danger as string;
+  return colors.primary as string;
 }
 
 function statusLabel(status: string): string {

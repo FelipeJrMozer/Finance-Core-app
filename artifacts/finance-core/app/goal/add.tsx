@@ -62,7 +62,7 @@ export default function AddGoalScreen() {
                   }
                 ]}
               >
-                <Feather name={ic} size={20} color={icon === ic ? color : theme.textTertiary} />
+                <Feather name={ic as any} size={20} color={icon === ic ? color : theme.textTertiary} />
               </Pressable>
             ))}
           </View>

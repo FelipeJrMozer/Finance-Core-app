@@ -628,6 +628,22 @@ export default function SettingsScreen() {
             value={settings?.sinkingFundsEnabled !== false}
             onChange={(v) => updateSettings({ sinkingFundsEnabled: v })}
           />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="trending-up"
+            label="Investimentos"
+            subtitle="Carteira, watchlist, alertas de preço e benchmarks"
+            value={settings?.investmentsEnabled !== false}
+            onChange={(v) => updateSettings({ investmentsEnabled: v })}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="briefcase"
+            label="Módulo PJ / MEI"
+            subtitle="Faturamento, DAS, clientes e retiradas"
+            value={settings?.pjEnabled === true}
+            onChange={(v) => updateSettings({ pjEnabled: v })}
+          />
         </View>
 
         {/* Privacy */}
@@ -700,6 +716,22 @@ export default function SettingsScreen() {
 
         <View style={[styles.group, { borderColor: theme.border }]}>
           <ToggleRow
+            icon="mail"
+            label="Notificações por e-mail"
+            subtitle="Avisos importantes enviados para seu e-mail"
+            value={settings?.emailNotifications !== false}
+            onChange={(v) => updateSettings({ emailNotifications: v })}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="file-text"
+            label="Relatórios mensais"
+            subtitle="Resumo financeiro do mês no e-mail"
+            value={settings?.monthlyReports !== false}
+            onChange={(v) => updateSettings({ monthlyReports: v })}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
             icon="bell"
             label="Alertas de Contas e Vencimentos"
             subtitle="Lembrete 7 e 3 dias antes do vencimento de faturas"
@@ -713,6 +745,14 @@ export default function SettingsScreen() {
             subtitle="Avisa ao atingir 80% e 100% do limite mensal"
             value={notifyBudget}
             onChange={(v) => handleNotifToggle('notifyBudget', v)}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="percent"
+            label="Alertas de DARF"
+            subtitle="Aviso quando o DARF de IR vencer em 5 dias"
+            value={settings?.darfAlerts !== false}
+            onChange={(v) => updateSettings({ darfAlerts: v })}
           />
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <ToggleRow

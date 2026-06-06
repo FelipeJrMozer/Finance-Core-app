@@ -71,7 +71,7 @@ export default function BillsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await listBills();
+      const data = await listBills({ walletId: selectedWalletId || undefined });
       setBills(data);
     } finally {
       setIsLoading(false);

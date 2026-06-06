@@ -53,19 +53,24 @@ export default function AddCardScreen() {
       return;
     }
     setLoading(true);
-    const data = {
+    const dueDayNum = Math.min(Math.max(parseInt(dueDay) || 10, 1), 28);
+    const closingDayNum = Math.min(Math.max(parseInt(closingDay) || 3, 1), 28);
+    const baseData = {
       name: name.trim(),
       institution: institution.trim(),
+      brand: existing?.brand || '',
+      accountId: existing?.accountId || '',
       limit: limitNum,
-      used: existing?.used || 0,
       dueDate: buildDate(dueDay),
       closingDate: buildDate(closingDay),
+      dueDay: dueDayNum,
+      closingDay: closingDayNum,
       color,
     };
     if (isEdit && id) {
-      updateCreditCard(id, data);
+      updateCreditCard(id, baseData);
     } else {
-      addCreditCard(data);
+      addCreditCard(baseData);
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();

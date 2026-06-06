@@ -29,7 +29,7 @@ import {
 const { width } = Dimensions.get('window');
 const CHART_WIDTH = width - 64;
 
-type TabId = 'overview' | 'cashflow' | 'categories' | 'insights';
+type TabId = 'overview' | 'cashflow' | 'categories' | 'insights' | 'health';
 
 function pct(n?: number): string {
   if (n === undefined || !Number.isFinite(n)) return '—';

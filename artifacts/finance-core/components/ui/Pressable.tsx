@@ -10,9 +10,11 @@ import { useTheme } from '@/context/ThemeContext';
 
 export type HapticIntensity = 'light' | 'medium' | 'heavy' | 'selection' | 'none';
 
+type StyleFn = (state: { pressed: boolean }) => StyleProp<ViewStyle>;
+type PressableStyle = StyleProp<ViewStyle> | StyleFn;
+
 export interface PressableBaseProps extends Omit<RNPressableProps, 'style'> {
-  style?: StyleProp<ViewStyle>;
-  /** Intensidade do feedback tátil ao tocar (default: 'none'). */
+  style?: PressableStyle;
   haptic?: HapticIntensity;
 }
 
@@ -30,17 +32,16 @@ function triggerHaptic(intensity: HapticIntensity) {
   Haptics.impactAsync(map[intensity]);
 }
 
+function resolveStyle(style: PressableStyle | undefined, pressed: boolean): StyleProp<ViewStyle> {
+  if (typeof style === 'function') return (style as StyleFn)({ pressed });
+  return style;
+}
+
 export interface PressableScaleProps extends PressableBaseProps {
-  /** Escala aplicada no estado pressionado (default 0.96 — equiv. `.button-press` do web). */
   scale?: number;
-  /** Opacidade aplicada no press (default 0.92). */
   pressedOpacity?: number;
 }
 
-/**
- * Botão/CTA: aplica `scale` no press para feedback tátil visual.
- * Equivalente ao `.button-press` (scale: 0.95) do web.
- */
 export function PressableScale({
   style,
   scale = 0.96,
@@ -58,23 +59,17 @@ export function PressableScale({
       }}
       style={({ pressed }) => [
         { transform: [{ scale: pressed ? scale : 1 }], opacity: pressed ? pressedOpacity : 1 },
-        typeof style === 'function' ? style({ pressed, hovered: false }) : style,
+        resolveStyle(style, pressed),
       ]}
     />
   );
 }
 
 export interface PressableElevateProps extends PressableBaseProps {
-  /** Cor de fundo no estado pressionado (default: theme.surfaceElevated). */
   elevatedColor?: string;
-  /** Raio interno do efeito (deve casar com o do filho). */
   borderRadius?: number;
 }
 
-/**
- * Item de lista clicável: ao pressionar, troca o background para
- * `surfaceElevated`. Equivalente ao `.hover-elevate` do web.
- */
 export function PressableElevate({
   style,
   elevatedColor,
@@ -94,16 +89,12 @@ export function PressableElevate({
       }}
       style={({ pressed }) => [
         pressed ? { backgroundColor: elev, borderRadius } : null,
-        typeof style === 'function' ? style({ pressed, hovered: false }) : style,
+        resolveStyle(style, pressed),
       ]}
     />
   );
 }
 
-/**
- * Combinação: scale + elevate. Usado em cards de estatística no dashboard
- * (equiv. `.card-hover-lift` + `.button-press` do web).
- */
 export interface PressableScaleElevateProps extends PressableScaleProps, PressableElevateProps {}
 
 export function PressableScaleElevate({
@@ -131,7 +122,7 @@ export function PressableScaleElevate({
           opacity: pressed ? pressedOpacity : 1,
         },
         pressed ? { backgroundColor: elev, borderRadius } : null,
-        typeof style === 'function' ? style({ pressed, hovered: false }) : style,
+        resolveStyle(style, pressed),
       ]}
     />
   );

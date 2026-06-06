@@ -123,8 +123,8 @@ export function QuickTransactionModal({ intent, onDismiss }: Props) {
         description: description.trim(),
         category,
         date: new Date().toISOString().split('T')[0],
-        accountId: targetType === 'account' ? targetId : undefined,
-        creditCardId: targetType === 'card' ? targetId : undefined,
+        accountId: targetType === 'account' ? (targetId as string) : '',
+        creditCardId: targetType === 'card' ? (targetId as string) : undefined,
         notes: `Capturado automaticamente via ${sourceInfo.label}: ${intent.rawText.slice(0, 100)}`,
       });
       // Remember last account used for next quick-add (and Pix/SMS imports)
@@ -185,10 +185,10 @@ export function QuickTransactionModal({ intent, onDismiss }: Props) {
                 key={t}
                 style={[styles.typeBtn, {
                   backgroundColor: type === t
-                    ? (t === 'income' ? `${colors.success}18` : `${colors.error}18`)
+                    ? (t === 'income' ? `${colors.success}18` : `${colors.danger}18`)
                     : theme.surface,
                   borderColor: type === t
-                    ? (t === 'income' ? colors.success : colors.error)
+                    ? (t === 'income' ? colors.success : colors.danger)
                     : theme.border,
                 }]}
                 onPress={() => setType(t)}
@@ -196,10 +196,10 @@ export function QuickTransactionModal({ intent, onDismiss }: Props) {
                 <Feather
                   name={t === 'income' ? 'arrow-down-left' : 'arrow-up-right'}
                   size={14}
-                  color={type === t ? (t === 'income' ? colors.success : colors.error) : theme.textSecondary}
+                  color={type === t ? (t === 'income' ? colors.success : colors.danger) : theme.textSecondary}
                 />
                 <Text style={[styles.typeBtnText, {
-                  color: type === t ? (t === 'income' ? colors.success : colors.error) : theme.textSecondary,
+                  color: type === t ? (t === 'income' ? colors.success : colors.danger) : theme.textSecondary,
                   fontFamily: 'Inter_600SemiBold',
                 }]}>
                   {t === 'income' ? 'Receita' : 'Despesa'}

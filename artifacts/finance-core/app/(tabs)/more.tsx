@@ -149,196 +149,137 @@ export default function MoreScreen() {
       </LinearGradient>
 
       <View style={styles.content}>
-        {/* Ferramentas */}
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-          FERRAMENTAS
-        </Text>
-        <View style={styles.menuGroup}>
-          <MenuItem
-            testID="menu-health"
-            icon="activity"
-            label="Saúde Financeira"
-            subtitle="Pontuação e recomendações para seu bolso"
-            onPress={() => router.push('/(more)/health-score')}
-          />
-          <MenuItem
-            testID="menu-simulators"
-            icon="sliders"
-            label="Simuladores"
-            subtitle="12 simuladores: juros, imóvel, FIRE e mais"
-            badge="12"
-            onPress={() => router.push('/(more)/simulators')}
-          />
-          <MenuItem
-            testID="menu-invest-report"
-            icon="bar-chart-2"
-            label="Relatório de Investimentos"
-            subtitle="Dividendos, performance e benchmark"
-            onPress={() => router.push('/(more)/investment-report')}
-          />
-          <MenuItem
-            testID="menu-familia"
-            icon="users"
-            label="Família"
-            subtitle="Membros, despesas compartilhadas e caixinha"
-            badge="Novo"
-            badgeColor="#7C3AED"
-            onPress={() => router.push('/(more)/familia')}
-          />
-          <MenuItem
-            testID="menu-pj"
-            icon="briefcase"
-            label="Módulo PJ / MEI"
-            subtitle="Faturamento, DAS, clientes e retiradas"
-            badge="Novo"
-            badgeColor={colors.success}
-            onPress={() => router.push('/(more)/pj')}
-          />
-          <MenuItem
-            testID="menu-ai"
-            icon="cpu"
-            label="Assistente IA"
-            subtitle="Conselhos financeiros personalizados"
-            onPress={() => router.push('/chat')}
-          />
-        </View>
 
-        {/* Gestão */}
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-          GESTÃO
-        </Text>
+        {/* ── PRINCIPAL ── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>PRINCIPAL</Text>
         <View style={styles.menuGroup}>
+          <MenuItem testID="menu-accounts" icon="briefcase" label="Contas Bancárias" subtitle="Saldos, corrente, poupança e carteiras" onPress={() => router.push('/(more)/accounts')} />
+          <MenuItem testID="menu-cards" icon="credit-card" label="Cartões de Crédito" subtitle="Faturas, limites e vencimentos" onPress={() => router.push('/(more)/cards')} />
+          <MenuItem testID="menu-budgets" icon="pie-chart" label="Orçamentos" subtitle="Limites de gastos por categoria" onPress={() => router.push('/(more)/budgets')} />
           <MenuItem
             testID="menu-goals"
             icon="target"
             label="Metas Financeiras"
             subtitle={`${pendingGoals.length} meta${pendingGoals.length !== 1 ? 's' : ''} em andamento`}
-            badge={pendingGoals.length > 0 ? `${pendingGoals.length}` : undefined}
+            badge={pendingGoals.length > 0 ? String(pendingGoals.length) : undefined}
             onPress={() => router.push('/(more)/goals')}
           />
-          <MenuItem
-            testID="menu-accounts"
-            icon="briefcase"
-            label="Contas Bancárias"
-            subtitle="Saldos, contas correntes e poupanças"
-            onPress={() => router.push('/(more)/accounts')}
-          />
-          <MenuItem
-            testID="menu-cards"
-            icon="credit-card"
-            label="Cartões de Crédito"
-            subtitle="Faturas, limites e vencimentos"
-            onPress={() => router.push('/(more)/cards')}
-          />
-          <MenuItem
-            testID="menu-pending"
-            icon="clock"
-            label="Lançamentos Pendentes"
-            subtitle="Pagamentos e recebimentos não confirmados"
-            onPress={() => router.push('/(more)/pending-transactions')}
-          />
-          <MenuItem
-            testID="menu-captura"
-            icon="zap"
-            label="Captura automática"
-            subtitle={Platform.OS === 'ios' ? 'WhatsApp e fluxo manual' : 'Notificações de bancos'}
-            onPress={() => router.push('/(more)/captura-bancaria')}
-          />
-          <MenuItem
-            testID="menu-debts"
-            icon="trending-down"
-            label="Dívidas"
-            subtitle="Gerencie empréstimos e parcelamentos"
-            onPress={() => router.push('/(more)/debts')}
-          />
           {settings?.billsEnabled !== false && (
-            <MenuItem
-              testID="menu-bills"
-              icon="file-text"
-              label="Contas a Pagar"
-              subtitle="Controle seus vencimentos e boletos"
-              onPress={() => router.push('/(more)/bills')}
-            />
+            <MenuItem testID="menu-bills" icon="file-text" label="Contas a Pagar" subtitle="Controle seus vencimentos e boletos" onPress={() => router.push('/(more)/bills')} />
           )}
-          {settings?.sinkingFundsEnabled !== false && (
-            <MenuItem
-              testID="menu-sinking"
-              icon="archive"
-              label="Reservas Programadas"
-              subtitle="Poupe para objetivos específicos"
-              onPress={() => router.push('/(more)/sinking-funds')}
-            />
-          )}
-          <MenuItem
-            testID="menu-alerts"
-            icon="bell"
-            label="Alertas Personalizados"
-            subtitle="Configure limites e notificações automáticas"
-            onPress={() => router.push('/(more)/custom-alerts')}
-          />
-          <MenuItem
-            testID="menu-subscriptions"
-            icon="award"
-            label="Planos e Assinaturas"
-            subtitle={user?.plan && user.plan !== 'Free' ? `Plano ${user.plan} ativo` : 'Ver planos disponíveis'}
-            onPress={() => router.push('/(more)/subscriptions')}
-          />
+          <MenuItem testID="menu-recurring" icon="repeat" label="Recorrências" subtitle="Receitas e despesas fixas mensais" onPress={() => router.push('/(more)/recurring')} />
         </View>
 
-        {/* Orçamentos */}
+        {/* ── CONTROLE PESSOAL ── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>CONTROLE PESSOAL</Text>
+        <View style={styles.menuGroup}>
+          <MenuItem testID="menu-health" icon="activity" label="Saúde Financeira" subtitle="Pontuação e recomendações para seu bolso" onPress={() => router.push('/(more)/health-score')} />
+          <MenuItem testID="menu-rules" icon="filter" label="Regras de Categorização" subtitle="Categorize lançamentos automaticamente" onPress={() => router.push('/(more)/categorization-rules')} />
+          {settings?.sinkingFundsEnabled !== false && (
+            <MenuItem testID="menu-sinking" icon="archive" label="Reservas Programadas" subtitle="Poupe para objetivos específicos" onPress={() => router.push('/(more)/sinking-funds')} />
+          )}
+          <MenuItem testID="menu-debts" icon="trending-down" label="Dívidas" subtitle="Empréstimos e parcelamentos — método avalanche" onPress={() => router.push('/(more)/debts')} />
+          <MenuItem testID="menu-familia" icon="users" label="Família" subtitle="Membros, despesas compartilhadas e caixinha" onPress={() => router.push('/(more)/familia')} />
+          <MenuItem testID="menu-pending" icon="clock" label="Lançamentos Pendentes" subtitle="Pagamentos e recebimentos não confirmados" onPress={() => router.push('/(more)/pending-transactions')} />
+          <MenuItem testID="menu-captura" icon="zap" label="Captura Automática" subtitle={Platform.OS === 'ios' ? 'WhatsApp e fluxo manual' : 'Notificações de bancos'} onPress={() => router.push('/(more)/captura-bancaria')} />
+        </View>
+
+        {/* ── INVESTIMENTOS ── */}
+        {settings?.investmentsEnabled !== false && (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>INVESTIMENTOS</Text>
+            <View style={styles.menuGroup}>
+              <MenuItem testID="menu-invest-report" icon="bar-chart-2" label="Relatório de Investimentos" subtitle="Dividendos, performance e benchmark" onPress={() => router.push('/(more)/investment-report')} />
+              <MenuItem testID="menu-watchlist" icon="star" label="Watchlist" subtitle="Acompanhe ativos sem precisar comprar" onPress={() => router.push('/(more)/watchlist')} />
+              <MenuItem testID="menu-price-alerts" icon="bell" label="Alertas de Preço" subtitle="Notificação quando ativo atingir alvo" onPress={() => router.push('/(more)/price-alerts')} />
+              <MenuItem testID="menu-stock-comparator" icon="git-merge" label="Comparador de Ações" subtitle="Compare fundamentos de até 5 ativos" onPress={() => router.push('/(more)/stock-comparator')} />
+              <MenuItem testID="menu-portfolios" icon="layers" label="Portfólios" subtitle="Múltiplas carteiras (aposentadoria, especulação…)" onPress={() => router.push('/(more)/portfolios')} />
+            </View>
+          </>
+        )}
+
+        {/* ── IMPOSTO DE RENDA ── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>IMPOSTO DE RENDA</Text>
+        <View style={styles.menuGroup}>
+          <MenuItem testID="menu-taxes" icon="percent" label="Painel IRPF" subtitle="Status de obrigação, DARFs e acumulado" onPress={() => router.push('/(more)/taxes')} />
+          <MenuItem testID="menu-darf" icon="file-minus" label="DARF" subtitle="Histórico, valores e marcar como pago" onPress={() => router.push('/(more)/darf')} />
+          <MenuItem testID="menu-tax-calendar" icon="calendar" label="Calendário Fiscal" subtitle="Todas as datas de obrigações do ano" onPress={() => router.push('/(more)/tax-calendar')} />
+          <MenuItem testID="menu-irpf-export" icon="download" label="Exportar IRPF" subtitle="Gerar arquivo .DEC e guia passo a passo" onPress={() => router.push('/(more)/irpf-export')} />
+        </View>
+
+        {/* ── MEI / ME / FREELANCER ── */}
+        {settings?.pjEnabled === true && (
+          <>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>MEI / ME / FREELANCER</Text>
+            <View style={styles.menuGroup}>
+              <MenuItem testID="menu-pj" icon="briefcase" label="Dashboard PJ" subtitle="Faturamento, limite MEI e saúde do negócio" onPress={() => router.push('/(more)/pj')} />
+              <MenuItem testID="menu-pj-receitas" icon="trending-up" label="Receitas PJ" subtitle="Entradas e faturamento do negócio" onPress={() => router.push('/(more)/pj/receitas')} />
+              <MenuItem testID="menu-pj-despesas" icon="trending-down" label="Despesas PJ" subtitle="Custos operacionais e deduções" onPress={() => router.push('/(more)/pj/despesas')} />
+              <MenuItem testID="menu-pj-clientes" icon="users" label="Clientes" subtitle="Cadastro de clientes e histórico" onPress={() => router.push('/(more)/pj/clientes')} />
+              <MenuItem testID="menu-pj-das" icon="file-text" label="DAS MEI" subtitle="Guias pagas e próximo vencimento" onPress={() => router.push('/(more)/pj/das')} />
+              <MenuItem testID="menu-pj-dasn" icon="clipboard" label="DASN-SIMEI" subtitle="Declaração anual de faturamento" onPress={() => router.push('/(more)/pj/dasn-simei')} />
+              <MenuItem testID="menu-pj-retiradas" icon="dollar-sign" label="Pró-labore / Retiradas" subtitle="Remuneração e distribuição de lucros" onPress={() => router.push('/(more)/pj/retiradas')} />
+              <MenuItem testID="menu-pj-notas" icon="file" label="Notas Fiscais" subtitle="NFSe emitidas e recebidas" onPress={() => router.push('/(more)/pj/notas-fiscais')} />
+              <MenuItem testID="menu-pj-fluxo" icon="bar-chart" label="Fluxo de Caixa PJ" subtitle="Entradas e saídas do negócio no tempo" onPress={() => router.push('/(more)/pj/fluxo-caixa')} />
+              <MenuItem testID="menu-pj-saude" icon="heart" label="Saúde do Negócio" subtitle="Indicadores e análise da empresa" onPress={() => router.push('/(more)/pj/saude-negocio')} />
+            </View>
+          </>
+        )}
+
+        {/* ── ORÇAMENTOS DO MÊS (widget) ── */}
         {budgets.filter((b) => b.month === currentMonth).length > 0 && (
           <>
-            <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-              ORÇAMENTOS DO MÊS
-            </Text>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>ORÇAMENTOS DO MÊS</Text>
             <View style={[styles.budgetsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {budgets.filter((b) => b.month === currentMonth).slice(0, 4).map((b) => (
-                <BudgetProgress
-                  key={b.id}
-                  category={b.category}
-                  limit={b.limit}
-                  spent={getBudgetSpent(b)}
-                />
+                <BudgetProgress key={b.id} category={b.category} limit={b.limit} spent={getBudgetSpent(b)} />
               ))}
-              <Pressable
-                onPress={() => router.push('/(more)/budgets')}
-                style={[styles.viewMore, { borderColor: colors.primary }]}
-              >
-                <Text style={[styles.viewMoreText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>
-                  Gerenciar Orçamentos
-                </Text>
+              <Pressable onPress={() => router.push('/(more)/budgets')} style={[styles.viewMore, { borderColor: colors.primary }]}>
+                <Text style={[styles.viewMoreText, { color: colors.primary, fontFamily: 'Inter_500Medium' }]}>Gerenciar Orçamentos</Text>
               </Pressable>
             </View>
           </>
         )}
 
-        {/* Configurações */}
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-          CONFIGURAÇÕES
-        </Text>
+        {/* ── FERRAMENTAS ── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>FERRAMENTAS</Text>
         <View style={styles.menuGroup}>
+          <MenuItem testID="menu-ai" icon="cpu" label="IA Pilar" subtitle="Conselhos financeiros personalizados" onPress={() => router.push('/chat')} />
+          <MenuItem testID="menu-simulators" icon="sliders" label="Simuladores" subtitle="Juros compostos, FIRE, imóvel, aposentadoria…" onPress={() => router.push('/(more)/simulators')} />
+          <MenuItem testID="menu-alerts" icon="bell" label="Alertas Personalizados" subtitle="Configure limites e notificações automáticas" onPress={() => router.push('/(more)/custom-alerts')} />
+          <MenuItem testID="menu-sms" icon="message-square" label="Importar SMS" subtitle="Extrair lançamentos de SMS bancários" onPress={() => router.push('/(more)/sms-import-help')} />
+        </View>
+
+        {/* ── CONFIGURAÇÕES ── */}
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>CONFIGURAÇÕES</Text>
+        <View style={styles.menuGroup}>
+          <MenuItem
+            icon="settings"
+            label="Configurações"
+            subtitle={`Tema, cor, módulos • Cor: ${currentPreset.label}`}
+            right={<View style={[styles.colorDot, { backgroundColor: currentPreset.primary }]} />}
+            onPress={() => router.push('/(more)/settings')}
+          />
           <MenuItem
             icon="bell"
             label="Notificações"
             subtitle="Alertas de orçamento, metas e relatórios"
-            badge={unreadNotifs > 0 ? `${unreadNotifs}` : undefined}
+            badge={unreadNotifs > 0 ? String(unreadNotifs) : undefined}
             badgeColor={colors.danger}
             onPress={() => router.push('/(more)/notifications')}
           />
           <MenuItem
-            icon="settings"
-            label="Configurações do App"
-            subtitle={`Tema, cor, biometria • Cor: ${currentPreset.label}`}
-            right={
-              <View style={[styles.colorDot, { backgroundColor: currentPreset.primary }]} />
-            }
-            onPress={() => router.push('/(more)/settings')}
+            icon="award"
+            label="Planos e Assinaturas"
+            subtitle={user?.plan && user.plan !== 'Free' ? `Plano ${user.plan} ativo` : 'Ver planos disponíveis'}
+            onPress={() => router.push('/(more)/subscriptions')}
           />
+          <MenuItem icon="monitor" label="Sessões Ativas" subtitle="Web e dispositivos conectados" onPress={() => router.push('/(more)/sessions')} />
+          <MenuItem icon="gift" label="Indicação" subtitle="Convide amigos e ganhe benefícios" onPress={() => router.push('/(more)/referral')} />
+          <MenuItem icon="shield" label="Privacidade & LGPD" subtitle="Seus dados, consentimentos e exclusão de conta" onPress={() => router.push('/(more)/lgpd')} />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>
-          CONTA
-        </Text>
+        <Text style={[styles.sectionLabel, { color: theme.textSecondary, fontFamily: 'Inter_500Medium' }]}>CONTA</Text>
         <View style={styles.menuGroup}>
           {!showLogoutModal ? (
             <Pressable

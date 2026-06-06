@@ -31,7 +31,7 @@ export default function AddAccountScreen() {
   const [name, setName] = useState(existing?.name || '');
   const [institution, setInstitution] = useState(existing?.institution || '');
   const [balance, setBalance] = useState(existing ? String(existing.balance) : '');
-  const [type, setType] = useState<typeof TYPES[number]>(existing?.type || 'checking');
+  const [type, setType] = useState<typeof TYPES[number]>((existing?.type as typeof TYPES[number]) || 'checking');
   const [color, setColor] = useState(existing?.color || COLORS[0]);
   const [loading, setLoading] = useState(false);
 

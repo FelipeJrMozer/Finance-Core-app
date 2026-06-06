@@ -24,7 +24,7 @@ export function HealthScore({ score, size = 'md' }: HealthScoreProps) {
   const barColor =
     score < 30 ? colors.danger :
     score < 50 ? colors.warning :
-    score < 70 ? colors.accentWarm :
+    score < 70 ? colors.warning :
     colors.primary;
 
   useEffect(() => {

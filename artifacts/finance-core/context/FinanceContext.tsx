@@ -138,6 +138,14 @@ export interface AppSettings {
   budgetAlerts: boolean;
   billsEnabled?: boolean;
   sinkingFundsEnabled?: boolean;
+  investmentsEnabled?: boolean;
+  pjEnabled?: boolean;
+  taxAlerts?: boolean;
+  weeklyDigest?: boolean;
+  darfAlerts?: boolean;
+  hideValuesOnSplash?: boolean;
+  firstDayOfWeek?: 0 | 1;
+  dateFormat?: string;
 }
 
 export interface AppNotification {
@@ -463,6 +471,14 @@ function transformSettings(raw: Record<string, unknown>): AppSettings {
     budgetAlerts: (raw.budgetAlerts as boolean) ?? true,
     billsEnabled: (raw.billsEnabled as boolean) ?? false,
     sinkingFundsEnabled: (raw.sinkingFundsEnabled as boolean) ?? false,
+    investmentsEnabled: raw.investmentsEnabled != null ? (raw.investmentsEnabled as boolean) : true,
+    pjEnabled: raw.pjEnabled != null ? (raw.pjEnabled as boolean) : false,
+    taxAlerts: (raw.taxAlerts as boolean) ?? true,
+    weeklyDigest: (raw.weeklyDigest as boolean) ?? false,
+    darfAlerts: (raw.darfAlerts as boolean) ?? true,
+    hideValuesOnSplash: (raw.hideValuesOnSplash as boolean) ?? false,
+    firstDayOfWeek: ((raw.firstDayOfWeek as number) === 1 ? 1 : 0),
+    dateFormat: (raw.dateFormat as string) || 'DD/MM/YYYY',
   };
 }
 
