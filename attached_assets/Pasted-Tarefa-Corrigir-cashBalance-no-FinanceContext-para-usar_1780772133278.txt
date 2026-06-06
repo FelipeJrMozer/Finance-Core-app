@@ -1,0 +1,41 @@
+Tarefa: Corrigir cashBalance no FinanceContext para usar saldo do período (igual ao Mobills)
+Contexto
+O backend já foi corrigido: /api/mobile/dashboard-summary agora retorna cashBalance = soma de transações pagas no mês atual (não histórico acumulado). A tela inicial já usa esse valor via dashboardSummary?.cashBalance como prioridade.
+
+Porém o cashBalance local do FinanceContext.tsx (usado como fallback offline e em eventuais displays por conta) ainda calcula a partir de account.balance que é o acumulado histórico.
+
+Mudança necessária
+Arquivo: artifacts/finance-core/context/FinanceContext.tsx
+
+Localize o trecho que calcula cashBalance (comentário diz "saldo líquido das contas"):
+
+// cashBalance = saldo líquido das contas (não inclui crédito nem arquivadas).
+const cashBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+const totalBalance = cashBalance;
+
+Substitua por:
+
+// cashBalance = saldo do período: transações pagas no mês atual em contas reais.
+// Segue o mesmo critério do Mobills e do backend /api/mobile/dashboard-summary.
+const realAccountIds = new Set(
+  computedAccounts
+    .filter((a) => !a.archived && a.type !== 'credit')
+    .map((a) => a.id)
+);
+const cashBalance = monthlyTx
+  .filter((t) => t.isPaid && !t.creditCardId && realAccountIds.has(t.accountId))
+  .reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+const totalBalance = cashBalance;
+
+Importante: Verifique o nome exato da variável que contém as transações do mês atual nesse arquivo — pode ser monthlyTx, currentMonthTransactions, ou similar. Procure por .filter(t => t.type === 'income') para encontrar o bloco correto. Use o nome que já existe no arquivo.
+
+Por que apenas isso?
+A tela principal (index.tsx) já prioriza dashboardSummary?.cashBalance da API, que está correto
+Este cashBalance do FinanceContext só é usado como fallback (offline) e eventualmente em displays por conta
+O transformAccount que mapeia computedBalance → account.balance não precisa mudar — a lógica de cálculo fica aqui no derivado
+Resultado esperado
+Com a API já corrigida + essa mudança no FinanceContext:
+
+Online: tela usa dashboardSummary.cashBalance (período) ✓
+Offline/fallback: usa cashBalance do FinanceContext (período) ✓
+Itaú: R$ 5.898,89 | Conta BB Daiane: R$ 3.100,00 | Total: R$ 8.998,89 ✓

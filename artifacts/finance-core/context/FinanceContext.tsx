@@ -787,9 +787,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     });
   }, [creditCards, transactions]);
 
-  // cashBalance = saldo líquido das contas (não inclui crédito nem arquivadas).
+  // cashBalance = saldo do período: transações pagas no mês atual em contas reais.
+  // Segue o mesmo critério do Mobills e do backend /api/mobile/dashboard-summary.
   // totalBalance é mantido como alias para compatibilidade com código existente.
-  const cashBalance = computedAccounts.filter((a) => !a.archived && a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+  const realAccountIds = new Set(
+    computedAccounts
+      .filter((a) => !a.archived && a.type !== 'credit')
+      .map((a) => a.id)
+  );
+  const cashBalance = monthlyTx
+    .filter((t) => t.isPaid && !t.creditCardId && realAccountIds.has(t.accountId))
+    .reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
   const totalBalance = cashBalance;
   const totalInvestments = investments.reduce((s, i) => s + i.quantity * i.currentPrice, 0);
   const totalCreditUsed = computedCreditCards.filter((c) => !c.archived).reduce((s, c) => s + (c.used || 0), 0);
