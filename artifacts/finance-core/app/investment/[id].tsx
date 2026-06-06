@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, RefreshControl,
 } from 'react-native';
+import { confirmDestructive } from '@/utils/confirm';
 import { useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -143,21 +144,12 @@ export default function InvestmentDetailScreen() {
     }
   };
 
-  const removeTx = (tx: InvestmentTransaction) => {
-    Alert.alert('Excluir operação', `Excluir ${KIND_LABELS[tx.kind]} de ${formatLocalDate(tx.date)}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive',
-        onPress: async () => {
-          const ok = await removeInvestmentTransaction(tx.id);
-          if (!ok) {
-            Alert.alert('Erro', 'Não foi possível excluir.');
-            return;
-          }
-          await Promise.all([loadHistory(), refresh()]);
-        },
-      },
-    ]);
+  const removeTx = async (tx: InvestmentTransaction) => {
+    const ok = await confirmDestructive('Excluir operação', `Excluir ${KIND_LABELS[tx.kind]} de ${formatLocalDate(tx.date)}?`);
+    if (!ok) return;
+    const success = await removeInvestmentTransaction(tx.id);
+    if (!success) { Alert.alert('Erro', 'Não foi possível excluir.'); return; }
+    await Promise.all([loadHistory(), refresh()]);
   };
 
   const colorByKind = (k: InvestmentTxKind): string => {

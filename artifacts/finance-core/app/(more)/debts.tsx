@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl,
 } from 'react-native';
+import { confirmDestructive } from '@/utils/confirm';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -138,16 +139,10 @@ export default function DebtsScreen() {
     }
   };
 
-  const deleteDebt = (debt: Debt) => {
-    Alert.alert('Excluir dívida', `Deseja excluir "${debt.creditor}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive',
-        onPress: async () => {
-          try { await apiDelete(`/api/debts/${debt.id}`); await load(); } catch {}
-        },
-      },
-    ]);
+  const deleteDebt = async (debt: Debt) => {
+    const ok = await confirmDestructive('Excluir dívida', `Deseja excluir "${debt.creditor}"?`);
+    if (!ok) return;
+    try { await apiDelete(`/api/debts/${debt.id}`); await load(); } catch {}
   };
 
   const renderDebt = ({ item }: { item: Debt }) => {

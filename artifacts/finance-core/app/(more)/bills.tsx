@@ -4,6 +4,7 @@ import {
   TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl, Switch,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { confirmDestructive } from '@/utils/confirm';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -167,18 +168,12 @@ export default function BillsScreen() {
     }
   };
 
-  const removeBill = (bill: Bill) => {
-    Alert.alert('Excluir conta', `Deseja excluir "${bill.description}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive',
-        onPress: async () => {
-          const ok = await deleteBillApi(bill.id);
-          if (!ok) Alert.alert('Erro', 'Não foi possível excluir.');
-          await load();
-        },
-      },
-    ]);
+  const removeBill = async (bill: Bill) => {
+    const ok = await confirmDestructive('Excluir conta', `Deseja excluir "${bill.description}"?`);
+    if (!ok) return;
+    const success = await deleteBillApi(bill.id);
+    if (!success) Alert.alert('Erro', 'Não foi possível excluir.');
+    await load();
   };
 
   const filteredBills = bills.filter((b) => {

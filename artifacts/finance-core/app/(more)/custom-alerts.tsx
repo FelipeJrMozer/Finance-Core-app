@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
+import { confirmDestructive } from '@/utils/confirm';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -124,21 +125,16 @@ export default function CustomAlertsScreen() {
     }
   };
 
-  const deleteAlert = (id: string) => {
-    Alert.alert('Remover alerta?', 'O alerta será excluído permanentemente.', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover', style: 'destructive', onPress: async () => {
-          try {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            await apiDelete(`/api/alert-rules/${id}`);
-            setAlerts((prev) => prev.filter((a) => a.id !== id));
-          } catch (e: any) {
-            Alert.alert('Erro', e?.message ?? 'Não foi possível remover.');
-          }
-        }
-      }
-    ]);
+  const deleteAlert = async (id: string) => {
+    const ok = await confirmDestructive('Remover alerta', 'O alerta será excluído permanentemente.', 'Remover');
+    if (!ok) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await apiDelete(`/api/alert-rules/${id}`);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message ?? 'Não foi possível remover.');
+    }
   };
 
   const toggleAlert = async (id: string) => {

@@ -23,6 +23,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { queryClient } from "@/lib/queryClient";
+import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -83,24 +84,25 @@ function RootLayoutNav() {
         headerTintColor: theme.text,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: theme.background },
+        animation: 'slide_from_right',
       }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="transaction/[id]" options={{ title: 'Transação' }} />
-        <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação' }} />
+        <Stack.Screen name="transaction/add" options={{ title: 'Nova Transação', presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="account/[id]" options={{ title: 'Conta' }} />
-        <Stack.Screen name="account/add" options={{ title: 'Nova Conta' }} />
+        <Stack.Screen name="account/add" options={{ title: 'Nova Conta', presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="investment/[id]" options={{ title: 'Ativo' }} />
-        <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo' }} />
+        <Stack.Screen name="investment/add" options={{ title: 'Novo Ativo', presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="goal/[id]" options={{ title: 'Meta' }} />
-        <Stack.Screen name="goal/add" options={{ title: 'Nova Meta' }} />
+        <Stack.Screen name="goal/add" options={{ title: 'Nova Meta', presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="card/[id]" options={{ title: 'Cartão de Crédito', headerBackTitle: 'Voltar' }} />
-        <Stack.Screen name="card/add" options={{ title: 'Novo Cartão' }} />
+        <Stack.Screen name="card/add" options={{ title: 'Novo Cartão', presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="chat" options={{ title: 'Assistente IA', headerShown: true }} />
         <Stack.Screen name="wallets/index" options={{ title: 'Carteiras' }} />
-        <Stack.Screen name="wallets/add" options={{ title: 'Carteira' }} />
-        <Stack.Screen name="transfer" options={{ title: 'Transferir' }} />
-        <Stack.Screen name="scan" options={{ title: 'Escanear', headerShown: false }} />
+        <Stack.Screen name="wallets/add" options={{ title: 'Carteira', presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="transfer" options={{ title: 'Transferir', presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="scan" options={{ title: 'Escanear', headerShown: false, presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="share-import" options={{ title: 'Importar SMS' }} />
       </Stack>
     </>
@@ -143,6 +145,7 @@ export default function RootLayout() {
                       <DeepLinksGate />
                       <RootLayoutNav />
                       <CookieBanner />
+                      <ToastContainer />
                     </KeyboardProvider>
                   </GestureHandlerRootView>
                 </FinanceProvider>

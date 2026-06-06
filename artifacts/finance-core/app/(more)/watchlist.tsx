@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Alert, Modal, TextInput, FlatList,
 } from 'react-native';
+import { confirmDestructive } from '@/utils/confirm';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -82,20 +83,14 @@ export default function WatchlistScreen() {
     }
   };
 
-  const handleRemove = (item: WatchlistItem) => {
-    Alert.alert('Remover', `Deseja remover ${item.ticker} da watchlist?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover', style: 'destructive',
-        onPress: async () => {
-          const ok = await removeFromWatchlist(item.id);
-          if (ok) {
-            setItems((prev) => prev.filter((i) => i.id !== item.id));
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        },
-      },
-    ]);
+  const handleRemove = async (item: WatchlistItem) => {
+    const ok = await confirmDestructive('Remover da watchlist', `Deseja remover ${item.ticker}?`, 'Remover');
+    if (!ok) return;
+    const success = await removeFromWatchlist(item.id);
+    if (success) {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   };
 
   const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);

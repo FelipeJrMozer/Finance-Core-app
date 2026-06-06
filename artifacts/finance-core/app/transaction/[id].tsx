@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { useFinance, InstallmentEntry } from '@/context/FinanceContext';
+import { confirmDestructive } from '@/utils/confirm';
 import { Button } from '@/components/ui/Button';
 import { CategoryBadge, getCategoryInfo } from '@/components/CategoryBadge';
 import { formatBRL, formatDate } from '@/utils/formatters';
@@ -65,17 +66,12 @@ export default function TransactionDetailScreen() {
       ? [colors.primary, colors.primaryDark]
       : [colors.danger, '#CC0000'];
 
-  const handleDelete = () => {
-    Alert.alert('Excluir', 'Deseja excluir esta transação?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir', style: 'destructive', onPress: () => {
-          deleteTransaction(transaction.id);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          router.back();
-        }
-      }
-    ]);
+  const handleDelete = async () => {
+    const ok = await confirmDestructive('Excluir transação', 'Esta ação não pode ser desfeita.');
+    if (!ok) return;
+    deleteTransaction(transaction.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.back();
   };
 
   const handleAdvance = () => {

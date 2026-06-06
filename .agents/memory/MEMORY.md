@@ -1,2 +1,3 @@
-- [Pilar Financeiro Phase Progress](pilar-phase-progress.md) — Phases 1–8 complete; Phases 9–10 pending.
+- [Pilar Financeiro Phase Progress](pilar-phase-progress.md) — Phases 1–9 complete; Phase 10 pending.
 - [Pilar Persist-Client Gotcha](pilar-persist-client.md) — @tanstack/react-query-persist-client symlinks not created by pnpm in Expo; use plain QueryClientProvider + lib/queryClient.ts pattern.
+- [Phase 9 toast + confirm patterns](phase9-toast-confirm.md) — global toast singleton via event emitter; confirmDestructive uses ActionSheetIOS on iOS, Alert on Android.

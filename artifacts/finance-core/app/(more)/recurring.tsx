@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, Pressable, Modal,
   TextInput, ActivityIndicator, Alert, ScrollView, RefreshControl, Switch,
 } from 'react-native';
+import { confirmDestructive } from '@/utils/confirm';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
@@ -161,19 +162,12 @@ export default function RecurringScreen() {
     await load();
   };
 
-  const removeItem = (item: Recurring) => {
-    Alert.alert('Excluir recorrência', `Excluir "${item.description}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          const ok = await deleteRecurring(item.id);
-          if (!ok) Alert.alert('Erro', 'Não foi possível excluir.');
-          await load();
-        },
-      },
-    ]);
+  const removeItem = async (item: Recurring) => {
+    const ok = await confirmDestructive('Excluir recorrência', `Excluir "${item.description}"?`);
+    if (!ok) return;
+    const success = await deleteRecurring(item.id);
+    if (!success) Alert.alert('Erro', 'Não foi possível excluir.');
+    await load();
   };
 
   const filteredItems = items
