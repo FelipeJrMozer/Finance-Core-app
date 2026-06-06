@@ -1,0 +1,119 @@
+Tarefa: Corrigir cálculo de "Saldo Atual" para usar saldo do período (igual ao Mobills)
+Contexto
+O "Saldo Atual" está mostrando o saldo histórico acumulado de todos os meses. Precisa mostrar apenas as transações pagas no mês selecionado (saldo do período), igual ao comportamento do Mobills. Exemplo: Itaú com salário R$8.780 recebido em junho e empréstimos R$2.881,11 pagos em junho → Saldo Atual = R$5.898,89, não o acumulado histórico.
+
+Mudança 1 — server/routes/reports.routes.ts
+No handler GET /api/dashboard/metrics, localize o bloco que calcula totalBalance somando todas as transações pagas. Ele provavelmente inclui um initialBalanceSum (soma de account.balance) adicionado ao paidSum sem filtro de data. Substitua por:
+
+// Calcular saldo do período: soma das transações pagas no mês selecionado
+// (mesmo critério do Mobills — não inclui histórico de meses anteriores).
+let totalBalance = 0;
+if (activeAccountIds.length > 0) {
+  const balanceRows = await db
+    .select({
+      computedBalance: sql<string>`
+        COALESCE(SUM(
+          CASE
+            WHEN ${transactions.type} = 'income' AND ${transactions.isPaid} = true THEN ${transactions.amount}::numeric
+            WHEN ${transactions.type} = 'expense' AND ${transactions.isPaid} = true THEN -${transactions.amount}::numeric
+            ELSE 0
+          END
+        ), 0)
+      `,
+    })
+    .from(transactions)
+    .where(and(
+      eq(transactions.userId, userId),
+      inArray(transactions.accountId, activeAccountIds),
+      gte(transactions.date, start),   // <-- ADICIONAR filtro de data início do mês
+      lte(transactions.date, end),     // <-- ADICIONAR filtro de data fim do mês
+    ));
+  totalBalance = parseFloat(balanceRows[0]?.computedBalance || '0');
+  // NÃO adicionar initialBalanceSum — saldo do período não inclui offset histórico
+}
+
+As variáveis start e end já devem existir no mesmo handler (usadas para monthlyIncome/monthlyExpenses). Remova a soma de initialBalanceSum se existir.
+
+Mudança 2 — server/routes/mobile.routes.ts
+Localize onde cashBalance é calculado — provavelmente usa accountsRows.reduce(... a.balance ...). Substitua por:
+
+// cashBalance = saldo do período (transações pagas no mês atual em contas reais)
+const realAccountIds = new Set(
+  accountsRows.filter((a: any) => !a.archived && a.type !== "credit").map((a: any) => a.id)
+);
+const cashBalance = currentMonthTx
+  .filter((t: any) => t.isPaid && !t.cardId && realAccountIds.has(t.accountId))
+  .reduce((sum: number, t: any) => sum + (t.type === "income" ? num(t.amount) : -num(t.amount)), 0);
+
+currentMonthTx deve já existir no handler como a lista de transações do mês atual.
+
+Mudança 3 — client/src/pages/Accounts.tsx
+3a. Total "Saldo Atual" — localize totalCurrentBalance (soma de computedBalance das contas reais). Substitua por:
+
+const totalCurrentBalance = realAccountsActive.reduce((sum: number, a: any) => {
+  const act = getAccountActivity(a.id);
+  return sum + act.paidBalance;
+}, 0);
+
+3b. Saldo por card — localize o IIFE {(() => { const realBalance = parseFloat((account as any).computedBalance ... dentro do loop de cards. Substitua por:
+
+{(() => {
+  const realBalance = activity.paidBalance;
+  const pendingNet = activity.balance - activity.paidBalance;
+  const unpaidInvoice = getAccountUnpaidInvoiceAmount(account.id);
+  const forecast = realBalance + pendingNet - unpaidInvoice;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-muted-foreground">Saldo atual</span>
+        <span className={`text-sm font-bold ${realBalance >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          {formatCurrency(realBalance.toString())}
+        </span>
+      </div>
+      {(pendingNet !== 0 || unpaidInvoice > 0) && (
+        <div className="flex justify-between items-center">
+          <span className="text-xs text-muted-foreground">Saldo previsto</span>
+          <span className={`text-xs font-semibold ${forecast >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            {formatCurrency(forecast.toString())}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+})()}
+
+3c. getAccountForecastBalance — troque computedBalance por paidBalance:
+
+const getAccountForecastBalance = (accountId: string): number => {
+  const act = getAccountActivity(accountId);
+  const realBalance = act.paidBalance;  // <-- era: computedBalance
+  const accountUnpaidIncome = ...
+  const accountUnpaidExpenses = ...
+  const unpaidInvoice = getAccountUnpaidInvoiceAmount(accountId);
+  return realBalance + accountUnpaidIncome - accountUnpaidExpenses - unpaidInvoice;
+};
+
+Mudança 4 — client/src/components/DailyView.tsx
+Localize const totalBalance = accounts.reduce(... computedBalance ...). Substitua por uma query do mês atual + cálculo do período:
+
+const realAccountIds = new Set(
+  accounts.filter((a: any) => !a.archived && a.type !== "credit").map((a: any) => a.id)
+);
+const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split("T")[0];
+const { data: monthTransactions = [] } = useQuery<Transaction[]>({
+  queryKey: ["/api/transactions", "month", startOfMonth, endOfMonth],
+  queryFn: async () => {
+    const res = await fetch(`/api/transactions?startDate=${startOfMonth}&endDate=${endOfMonth}`, { credentials: "include", headers: getWalletHeaders() });
+    if (!res.ok) throw new Error("Erro");
+    return res.json();
+  },
+});
+const totalBalance = (monthTransactions as any[])
+  .filter((t: any) => t.isPaid && !t.cardId && realAccountIds.has(t.accountId))
+  .reduce((sum: number, t: any) => sum + (t.type === "income" ? parseFloat(t.amount) : -parseFloat(t.amount)), 0);
+
+Resultado esperado após as mudanças
+Itaú: Saldo Atual = R$5.898,89 (salário pago − empréstimos pagos em junho)
+Conta BB Daiane: Saldo Atual = R$3.100,00 (Bolsa paga em junho)
+Total: R$8.998,89 — idêntico ao Mobills
