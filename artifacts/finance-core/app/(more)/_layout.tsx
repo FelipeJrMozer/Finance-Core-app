@@ -29,16 +29,7 @@ export default function MoreSubLayout() {
       <Stack.Screen name="bills" options={{ title: 'Contas a Pagar' }} />
       <Stack.Screen name="recurring" options={{ title: 'Recorrências' }} />
       <Stack.Screen name="sinking-funds" options={{ title: 'Reservas Programadas' }} />
-      <Stack.Screen name="pj/index" options={{ title: 'Módulo PJ / MEI' }} />
-      <Stack.Screen name="pj/receitas" options={{ title: 'Receitas PJ' }} />
-      <Stack.Screen name="pj/despesas" options={{ title: 'Despesas PJ' }} />
-      <Stack.Screen name="pj/clientes" options={{ title: 'Clientes' }} />
-      <Stack.Screen name="pj/das" options={{ title: 'DAS / Guias' }} />
-      <Stack.Screen name="pj/retiradas" options={{ title: 'Pró-labore e Retiradas' }} />
-      <Stack.Screen name="pj/notas-fiscais" options={{ title: 'Notas Fiscais' }} />
-      <Stack.Screen name="pj/fluxo-caixa" options={{ title: 'Fluxo de Caixa' }} />
-      <Stack.Screen name="pj/saude-negocio" options={{ title: 'Saúde do Negócio' }} />
-      <Stack.Screen name="pj/dasn-simei" options={{ title: 'DASN-SIMEI' }} />
+      <Stack.Screen name="pj" options={{ headerShown: false }} />
       <Stack.Screen name="familia" options={{ title: 'Família' }} />
       <Stack.Screen name="lgpd" options={{ title: 'Privacidade e LGPD' }} />
       <Stack.Screen name="sessions" options={{ title: 'Dispositivos e Sessões' }} />
