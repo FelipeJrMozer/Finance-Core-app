@@ -23,21 +23,31 @@ export interface CheckoutResponse {
 }
 
 /**
- * Normaliza nomes legados (`FREE` → `ESSENCIAL`).
+ * Normaliza nomes de plano do backend para o conjunto interno.
+ * Planos desconhecidos mas não-nulos recebem acesso total (INVESTIDOR_PRO)
+ * para evitar falsos bloqueios em planos admin/owner/lifetime.
  */
 export function normalizePlanName(plan: string | undefined | null): PlanName {
-  const n = (plan || 'ESSENCIAL').toString().toUpperCase();
-  if (n === 'FREE') return 'ESSENCIAL';
+  if (!plan) return 'ESSENCIAL';
+  const n = plan.toString().toUpperCase().trim();
+  if (n === 'FREE' || n === 'ESSENCIAL' || n === '') return 'ESSENCIAL';
+  if (n === 'PREMIUM') return 'PREMIUM';
+  if (n === 'FAMILY') return 'FAMILY';
+  if (n === 'PJ') return 'PJ';
+  if (n === 'INVESTIDOR_PRO' || n === 'INVESTIDORPRO' || n === 'INVESTOR_PRO') return 'INVESTIDOR_PRO';
+  // Planos admin/owner/lifetime/pro/business/enterprise → acesso total
   if (
-    n === 'ESSENCIAL' ||
-    n === 'PREMIUM' ||
-    n === 'FAMILY' ||
-    n === 'PJ' ||
-    n === 'INVESTIDOR_PRO'
-  ) {
-    return n;
-  }
-  return 'ESSENCIAL';
+    n === 'ADMIN' ||
+    n === 'OWNER' ||
+    n === 'LIFETIME' ||
+    n === 'PRO' ||
+    n === 'BUSINESS' ||
+    n === 'ENTERPRISE' ||
+    n === 'MASTER' ||
+    n === 'FULL'
+  ) return 'INVESTIDOR_PRO';
+  // Qualquer outro plano pago desconhecido → acesso total (fail open)
+  return 'INVESTIDOR_PRO';
 }
 
 export async function getSubscriptionInfo(): Promise<SubscriptionInfo> {
