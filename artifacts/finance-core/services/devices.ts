@@ -1,9 +1,19 @@
 import { Platform } from 'react-native';
-import { apiPost } from './api';
+import { apiGet, apiPost, apiDelete } from './api';
 
 let lastRegisteredToken: string | null = null;
 
 export type DevicePlatform = 'ios' | 'android' | 'web';
+
+export interface RegisteredDevice {
+  id: string;
+  platform?: string;
+  deviceModel?: string;
+  token?: string;
+  createdAt?: string;
+  lastActiveAt?: string;
+  current?: boolean;
+}
 
 export function currentDevicePlatform(): DevicePlatform {
   if (Platform.OS === 'ios') return 'ios';
@@ -11,9 +21,6 @@ export function currentDevicePlatform(): DevicePlatform {
   return 'web';
 }
 
-/**
- * Registra o token de push no backend. Deduplica chamadas com o mesmo token na sessão.
- */
 export async function registerPushToken(token: string): Promise<void> {
   if (!token) return;
   if (token === lastRegisteredToken) return;
@@ -32,21 +39,19 @@ export function resetRegisteredPushToken() {
   lastRegisteredToken = null;
 }
 
-/**
- * Obtém o Expo Push Token (formato esperado pelo backend para enviar
- * notificações via Expo Push API) e o registra. Idempotente por sessão.
- * No-op em web ou Expo Go (necessita projectId e dev build).
- */
 export async function registerPushTokenWithBackend(): Promise<void> {
   if (Platform.OS === 'web') return;
   try {
     const Constants: any = (await import('expo-constants')).default;
     const Device: any = await import('expo-device').catch(() => null);
     if (!Device || Device.isDevice === false) return;
-    if (Constants?.appOwnership === 'expo') return; // Expo Go não suporta push tokens reais
+    if (Constants?.appOwnership === 'expo') return;
 
     const Notifications: any = await import('expo-notifications').catch(() => null);
     if (!Notifications) return;
+
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') return;
 
     const projectId =
       Constants?.expoConfig?.extra?.eas?.projectId ??
@@ -59,5 +64,24 @@ export async function registerPushTokenWithBackend(): Promise<void> {
     if (token) await registerPushToken(String(token));
   } catch (err) {
     console.warn('[Push] Falha ao registrar token:', err);
+  }
+}
+
+export async function listDevices(): Promise<RegisteredDevice[]> {
+  try {
+    const data = await apiGet<RegisteredDevice[] | { devices?: RegisteredDevice[]; data?: RegisteredDevice[] }>('/api/devices');
+    if (Array.isArray(data)) return data;
+    return (data as any).devices ?? (data as any).data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function removeDevice(id: string): Promise<boolean> {
+  try {
+    await apiDelete(`/api/devices/${id}`);
+    return true;
+  } catch {
+    return false;
   }
 }

@@ -25,6 +25,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "@/lib/queryClient";
 import { ToastContainer } from "@/components/ui/ToastContainer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { registerPushTokenWithBackend } from "@/services/devices";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { WalletProvider } from "@/context/WalletContext";
@@ -63,6 +64,12 @@ function TransactionIntentGate() {
 function RootLayoutNav() {
   const { theme } = useTheme();
   const { isAuthenticated, isLoading, requireBiometric, user } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated && !requireBiometric) {
+      registerPushTokenWithBackend().catch(() => {});
+    }
+  }, [isAuthenticated, requireBiometric]);
 
   useEffect(() => {
     if (isLoading) return;

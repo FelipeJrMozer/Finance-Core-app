@@ -134,7 +134,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     init();
 
-    // Poll API every 30s to pick up web changes
+    // Poll API every 60s to pick up web changes
     if (API_URL && !DISABLE_BACKGROUND_TASKS) {
       syncIntervalRef.current = setInterval(async () => {
         const remote = await fetchRemotePrefs();
@@ -167,7 +167,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             return prev;
           });
         }
-      }, 30000);
+      }, 60000);
     }
 
     return () => {

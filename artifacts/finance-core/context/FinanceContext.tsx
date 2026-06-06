@@ -141,6 +141,7 @@ export interface AppSettings {
   investmentsEnabled?: boolean;
   pjEnabled?: boolean;
   taxAlerts?: boolean;
+  taxEnabled?: boolean;
   weeklyDigest?: boolean;
   darfAlerts?: boolean;
   hideValuesOnSplash?: boolean;
@@ -474,6 +475,7 @@ function transformSettings(raw: Record<string, unknown>): AppSettings {
     investmentsEnabled: raw.investmentsEnabled != null ? (raw.investmentsEnabled as boolean) : true,
     pjEnabled: raw.pjEnabled != null ? (raw.pjEnabled as boolean) : false,
     taxAlerts: (raw.taxAlerts as boolean) ?? true,
+    taxEnabled: raw.taxEnabled != null ? (raw.taxEnabled as boolean) : true,
     weeklyDigest: (raw.weeklyDigest as boolean) ?? false,
     darfAlerts: (raw.darfAlerts as boolean) ?? true,
     hideValuesOnSplash: (raw.hideValuesOnSplash as boolean) ?? false,

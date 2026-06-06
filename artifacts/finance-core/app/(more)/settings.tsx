@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Switch, Alert, TextInput, Platform, Share, ActivityIndicator, Linking
+  Switch, Alert, TextInput, Platform, Share, ActivityIndicator, Linking, ActionSheetIOS,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -234,6 +234,54 @@ export default function SettingsScreen() {
     }
     setNotifySetting(key, value);
     Haptics.selectionAsync();
+  };
+
+  const handlePickCurrency = () => {
+    const currencies = ['BRL (R$)', 'USD ($)', 'EUR (€)', 'GBP (£)'];
+    const vals = ['BRL', 'USD', 'EUR', 'GBP'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancelar', ...currencies], cancelButtonIndex: 0, title: 'Selecionar moeda' },
+        (idx) => { if (idx > 0) updateSettings({ currency: vals[idx - 1] }); }
+      );
+    } else {
+      Alert.alert('Moeda', 'Selecionar moeda padrão', [
+        ...currencies.map((label, i) => ({ text: label, onPress: () => updateSettings({ currency: vals[i] }) })),
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const handlePickWeekStart = () => {
+    const options = ['Domingo', 'Segunda-feira'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancelar', ...options], cancelButtonIndex: 0, title: 'Primeiro dia da semana' },
+        (idx) => { if (idx > 0) updateSettings({ firstDayOfWeek: (idx - 1) as 0 | 1 }); }
+      );
+    } else {
+      Alert.alert('Primeiro dia da semana', undefined, [
+        { text: 'Domingo', onPress: () => updateSettings({ firstDayOfWeek: 0 }) },
+        { text: 'Segunda-feira', onPress: () => updateSettings({ firstDayOfWeek: 1 }) },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const handlePickDateFormat = () => {
+    const fmts = ['DD/MM/AAAA', 'MM/DD/AAAA', 'AAAA-MM-DD'];
+    const vals = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancelar', ...fmts], cancelButtonIndex: 0, title: 'Formato de data' },
+        (idx) => { if (idx > 0) updateSettings({ dateFormat: vals[idx - 1] }); }
+      );
+    } else {
+      Alert.alert('Formato de data', undefined, [
+        ...fmts.map((label, i) => ({ text: label, onPress: () => updateSettings({ dateFormat: vals[i] }) })),
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+    }
   };
 
   const handleSaveName = () => {
@@ -610,6 +658,31 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Regional Preferences */}
+        <SectionTitle title="Preferências Regionais" />
+        <View style={[styles.group, { borderColor: theme.border }]}>
+          <SettingsRow
+            icon="dollar-sign"
+            label="Moeda"
+            subtitle={settings?.currency || 'BRL'}
+            onPress={handlePickCurrency}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsRow
+            icon="calendar"
+            label="Primeiro dia da semana"
+            subtitle={(settings?.firstDayOfWeek ?? 0) === 1 ? 'Segunda-feira' : 'Domingo'}
+            onPress={handlePickWeekStart}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <SettingsRow
+            icon="type"
+            label="Formato de data"
+            subtitle={settings?.dateFormat === 'MM/DD/YYYY' ? 'MM/DD/AAAA' : settings?.dateFormat === 'YYYY-MM-DD' ? 'AAAA-MM-DD' : 'DD/MM/AAAA'}
+            onPress={handlePickDateFormat}
+          />
+        </View>
+
         {/* Modules */}
         <SectionTitle title="Módulos" />
         <View style={[styles.group, { borderColor: theme.border }]}>
@@ -643,6 +716,14 @@ export default function SettingsScreen() {
             subtitle="Faturamento, DAS, clientes e retiradas"
             value={settings?.pjEnabled === true}
             onChange={(v) => updateSettings({ pjEnabled: v })}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <ToggleRow
+            icon="percent"
+            label="Imposto de Renda"
+            subtitle="Controle de IRPF, DARF e deduções"
+            value={settings?.taxEnabled !== false}
+            onChange={(v) => updateSettings({ taxEnabled: v })}
           />
         </View>
 
